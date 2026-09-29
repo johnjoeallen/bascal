@@ -17271,3 +17271,9 @@ Iteration 5698 added a regression proving BASIC codegen ignores contradictory DI
 Iteration 5699 refreshed Graphify after changing the BASIC typed-IR consumer path.
 
 Iteration 5700 validated the complete locked workspace suite after BASIC DIM type emission changes.
+
+Iteration 5701 removed BASIC semantic array element-type reconstruction from annotation strings and identifier suffixes.
+
+Iteration 5702 removed the obsolete annotation-to-suffix codegen helper after semantic array typing switched to typed IR.
+
+Iteration 5703 validated the complete locked workspace suite after removing BASIC array type fallbacks.

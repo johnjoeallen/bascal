@@ -8156,17 +8156,6 @@ fn basic_semantic_expression_statement(
     Some(lines)
 }
 
-fn semantic_dim_type_suffix(annotation: &str) -> Option<TypeSuffix> {
-    match annotation.to_ascii_uppercase().as_str() {
-        "STRING" => Some(TypeSuffix::String),
-        "INTEGER" | "INT16" => Some(TypeSuffix::Integer),
-        "LONG" | "INT32" => Some(TypeSuffix::Long),
-        "SINGLE" => Some(TypeSuffix::Single),
-        "DOUBLE" => Some(TypeSuffix::Double),
-        _ => None,
-    }
-}
-
 fn semantic_dim_type_name(
     value_type: crate::semantic_ir::SemanticValueType,
 ) -> Option<&'static str> {
@@ -11308,17 +11297,11 @@ impl CodeGenerator {
             if let Some(declaration) = function.semantic_dim_declarations.get(&key) {
                 return suffix_from_type(declaration.element_type);
             }
-            if let Some(annotation) = function.local_dim_types.get(&key) {
-                return semantic_dim_type_suffix(annotation);
-            }
         }
         if let Some(declaration) = self.semantic_top_level_dims.get(&key) {
             return suffix_from_type(declaration.element_type);
         }
-        if let Some(annotation) = self.top_level_dim_types.get(&key) {
-            return semantic_dim_type_suffix(annotation);
-        }
-        Some(name.suffix.unwrap_or(TypeSuffix::Single))
+        None
     }
 
     /// Bound text for one axis of a known array: a frozen DIM-time bound
