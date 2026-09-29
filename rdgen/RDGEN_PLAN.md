@@ -17563,3 +17563,5 @@ Iteration 5844 added JVM regression tests for the string and numeric built-ins.
 Iteration 5845 rendered `tab(n)` and `spc(n)` print directives in the C and JVM typed-IR print emitters, matching the AST escape/space sequences byte for byte.
 
 Iteration 5846 added C and JVM regression tests for print directives. Remaining AST emission is dominated by the record DSL: the `LSET`/`GET`/`PUT`/`FIELD` siblings that record transpilation expands from one source statement have no typed-IR counterpart, so every backend still emits them from the AST. Representing record file reads and writes in the typed IR is the prerequisite for retiring `ResolvedProgram::program` (Stage 68).
+
+Iteration 5847 gave BASIC backend diagnostics about typed callable parameters and result types their real source position (via `SemanticModule::callable_position`) instead of the synthetic `<validation>:1:1`. The AST compatibility path keeps the synthetic position, so the semantic/AST diagnostic differential now compares message and severity exactly and requires the typed-IR position to be a real location in the same file.

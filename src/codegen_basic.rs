@@ -4036,6 +4036,24 @@ mod tests {
     }
 
     #[test]
+    fn basic_parameter_rank_diagnostic_points_at_the_typed_parameter() {
+        let source = "function f%(a%(?))\nreturn a%(1) + a%(1, 2)\nend function\nx% = 0\nprint f%(x%)\nend\n";
+        let parsed = crate::parse_source("rank_position.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("rank_position.bcl", source).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        let rank = diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.message.contains("different numbers of subscripts"))
+            .expect("rank diagnostic");
+        assert_eq!(rank.pos.filename, "rank_position.bcl", "{rank:?}");
+        assert_eq!((rank.pos.line, rank.pos.column), (1, 13), "{rank:?}");
+    }
+
+    #[test]
     fn omitted_semantic_array_declaration_does_not_reuse_ast_capacity() {
         let ast_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
         let semantic_source =
@@ -8599,9 +8617,14 @@ impl CodeGenerator {
                 let (ranks, observed) = callable.parameter_array_ranks();
                 for (index, uses) in observed.iter().enumerate() {
                     let parameter = &callable.parameters[index];
+                    let position = semantic_callable_diagnostic_pos(
+                        resolved.semantic_module.as_ref(),
+                        semantic_callable,
+                        parameter.span,
+                    );
                     if uses.len() > 1 {
                         self.diagnostics.push(Diagnostic::error(
-                            SourcePos::new("<validation>", 1, 1),
+                            position.clone(),
                             format!(
                                 "parameter `{}` of `{}` is indexed with different numbers of subscripts in different places -- BASCAL can't tell how many dimensions it has",
                                 parameter.name, callable.name
@@ -8610,14 +8633,14 @@ impl CodeGenerator {
                     } else if let Some(used) = uses.first() {
                         match parameter.array_axes {
                             0 => self.diagnostics.push(Diagnostic::error(
-                                SourcePos::new("<validation>", 1, 1),
+                                position.clone(),
                                 format!(
                                     "parameter `{}` of `{}` is indexed as an array, but its declaration doesn't say so. Give it an explicit rank, e.g. `{}(?)`",
                                     parameter.name, callable.name, parameter.name
                                 ),
                             )),
                             declared if declared != *used => self.diagnostics.push(Diagnostic::error(
-                                SourcePos::new("<validation>", 1, 1),
+                                position.clone(),
                                 format!(
                                     "parameter `{}` of `{}` is declared with {declared} dimensions but indexed with {used} subscript{} in the body",
                                     parameter.name, callable.name, if *used == 1 { "" } else { "s" }
@@ -8648,6 +8671,7 @@ impl CodeGenerator {
                 semantic_globals,
                 semantic_callable.map(|callable| callable.parameters.clone()),
                 semantic_callable,
+                resolved.semantic_module.as_ref(),
             );
             if let Some(callable) = semantic_callable {
                 function_info.semantic_const_initializers = callable.const_initializers();
@@ -11962,6 +11986,7 @@ impl FunctionInfo {
         semantic_globals: Option<HashSet<String>>,
         semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
         semantic_signature: Option<&crate::semantic_ir::CallableSignature>,
+        semantic_module: Option<&crate::semantic_ir::SemanticModule>,
     ) -> Self {
         // A scalar method's semantic name is bare; keep the result suffix the
         // callable table and call sites are keyed by.
@@ -12001,7 +12026,11 @@ impl FunctionInfo {
                             .and_then(TypeSuffix::from_char);
                         if suffix.is_none() {
                             diagnostics.push(Diagnostic::error(
-                                SourcePos::new("<validation>", 1, 1),
+                                semantic_callable_diagnostic_pos(
+                                    semantic_module,
+                                    semantic_signature,
+                                    parameter.span,
+                                ),
                                 format!(
                                     "parameter `{}` of `{}` has no resolved BASIC scalar type",
                                     parameter.name, source_name
@@ -12121,7 +12150,14 @@ impl FunctionInfo {
             .unwrap_or(function.is_procedure);
         if semantic_signature.is_some() && !is_procedure && result_suffix.is_none() {
             diagnostics.push(Diagnostic::error(
-                SourcePos::new("<validation>", 1, 1),
+                semantic_callable_diagnostic_pos(
+                    semantic_module,
+                    semantic_signature,
+                    semantic_signature.map_or_else(
+                        || crate::rdgen_frontend::SourceSpan { start: 0, end: 0 },
+                        |callable| callable.name_span,
+                    ),
+                ),
                 format!("function `{source_name}` has no resolved BASIC result type"),
             ));
         }
@@ -13518,6 +13554,19 @@ fn flatten_semantic_chain<'a>(
         }
     }
     out.push(expression);
+}
+
+/// The source position of `span` inside a typed callable, falling back to the
+/// synthetic validation position when the module cannot place it.
+fn semantic_callable_diagnostic_pos(
+    module: Option<&crate::semantic_ir::SemanticModule>,
+    callable: Option<&crate::semantic_ir::CallableSignature>,
+    span: crate::rdgen_frontend::SourceSpan,
+) -> SourcePos {
+    module
+        .zip(callable)
+        .and_then(|(module, callable)| module.callable_position(callable, span))
+        .unwrap_or_else(|| SourcePos::new("<validation>", 1, 1))
 }
 
 /// The scalar type a value of this semantic type has as a method receiver.

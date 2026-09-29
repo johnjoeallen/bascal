@@ -1646,6 +1646,18 @@ impl SemanticModule {
         })
     }
 
+    /// The real source position of `span` within `callable`'s own file, for
+    /// diagnostics about its parameters or name.
+    pub fn callable_position(
+        &self,
+        callable: &CallableSignature,
+        span: SourceSpan,
+    ) -> Option<crate::diagnostics::SourcePos> {
+        self.sources
+            .get(callable.source_index)?
+            .source_position_at(span.start)
+    }
+
     /// Merge a dependency module ahead of this module's executable content.
     /// This mirrors the driver's legacy dependency order while preserving the
     /// root module header and source span.
