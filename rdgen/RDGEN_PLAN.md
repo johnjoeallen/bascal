@@ -17397,3 +17397,11 @@ Iteration 5761 preserved callable-local DIM types as the most specific FOR varia
 Iteration 5762 added resolver coverage for parameter shadowing of module DIM types.
 
 Iteration 5763 refreshed Graphify and validated the complete locked workspace suite after FOR parameter scope changes.
+
+Iteration 5764 made BASIC top-level semantic FOR identifier suffixes consume the resolved typed-IR variable type.
+
+Iteration 5765 made BASIC callable semantic FOR identifier suffixes consume the resolved typed-IR variable type.
+
+Iteration 5766 added a callable FOR regression that overrides the source identifier suffix and verifies typed-IR emission.
+
+Iteration 5767 refreshed Graphify and validated the complete locked workspace suite after BASIC FOR codegen changes.

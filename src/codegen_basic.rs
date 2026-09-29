@@ -2965,6 +2965,41 @@ mod tests {
             !output.contains("ast for") && !output.contains("ast while"),
             "AST callable loops replaced semantic IR: {output}"
         );
+
+        let semantic_module = resolved.semantic_module.as_mut().unwrap();
+        fn find_for(
+            statements: &mut [crate::semantic_ir::SemanticStatement],
+        ) -> Option<&mut crate::semantic_ir::SemanticStatement> {
+            for statement in statements {
+                if matches!(statement.kind, crate::semantic_ir::SemanticStatementKind::For { .. }) {
+                    return Some(statement);
+                }
+                match &mut statement.kind {
+                    crate::semantic_ir::SemanticStatementKind::Line(body)
+                    | crate::semantic_ir::SemanticStatementKind::While { body, .. }
+                    | crate::semantic_ir::SemanticStatementKind::Do { body, .. } => {
+                        if let Some(statement) = find_for(body) {
+                            return Some(statement);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        let for_statement = find_for(&mut semantic_module.callables[0].body).unwrap();
+        if let crate::semantic_ir::SemanticStatementKind::For { variable_type, .. } =
+            &mut for_statement.kind
+        {
+            *variable_type = crate::semantic_ir::SemanticValueType::Long;
+        } else {
+            unreachable!()
+        }
+        let typed_output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            typed_output.contains("FOR countI0& = 1 TO 3 STEP 1"),
+            "semantic FOR identifier suffix should come from typed IR: {typed_output}"
+        );
     }
 
     #[test]
@@ -4920,7 +4955,7 @@ fn basic_semantic_intrinsics(
                 }
                 Kind::For {
                     variable,
-                    variable_type: _,
+                    variable_type,
                     start,
                     bounds,
                     body,
@@ -5044,7 +5079,11 @@ fn basic_semantic_intrinsics(
                     if !body_supported {
                         return false;
                     }
-                    let variable = generator.ident(&BasicIdent::parse(variable), None);
+                    let mut variable_ident = BasicIdent::parse(variable);
+                    variable_ident.suffix = variable_type
+                        .suffix()
+                        .and_then(crate::ast::TypeSuffix::from_char);
+                    let variable = generator.ident(&variable_ident, None);
                     output.push(format!("FOR {variable} = {start} TO {limit}{step}"));
                     output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
                     output.push(format!("{continue_label}:"));
@@ -7390,6 +7429,7 @@ fn basic_semantic_callable_statement_inner(
         }
         Kind::For {
             variable,
+            variable_type,
             start,
             bounds,
             body,
@@ -7500,7 +7540,11 @@ fn basic_semantic_callable_statement_inner(
             generator.loop_continue_stack.pop();
             generator.loop_exit_stack.pop();
             body_result?;
-            let variable = generator.ident(&BasicIdent::parse(variable), Some(function));
+            let mut variable_ident = BasicIdent::parse(variable);
+            variable_ident.suffix = variable_type
+                .suffix()
+                .and_then(crate::ast::TypeSuffix::from_char);
+            let variable = generator.ident(&variable_ident, Some(function));
             for_prelude.push(format!("FOR {variable} = {start} TO {limit}{step}"));
             let mut lines = for_prelude;
             lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
