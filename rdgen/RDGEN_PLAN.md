@@ -17571,3 +17571,9 @@ Iteration 5848 added `record_transpile`, a pass over the typed IR that expands t
 Iteration 5849 made the BASIC backend consume a transpiled module directly: the top-level stream no longer needs the AST record-operation gate, and a callable whose module was transpiled emits its whole typed body (falling back to the AST body if any statement is unsupported). `inventory`, `card_catalog` and `random_and_record_files` now come from typed IR; their BASIC differs from the AST path only in call temporaries, comment placement and the form of the `LOF` guard.
 
 Iteration 5850 fixed a latent bug this exposed: the callable `do...loop` emitter wrote its top label without a colon, so the label never became a line number.
+
+Iteration 5851 extended `record_transpile` to sequential `file` handles (channels counted in the AST pass's traversal order and checked against its facts; `write`, `read`, `eof`, `close`) and to record methods, which become ordinary functions whose leading `byref` parameters are the receiver's fields, with call sites passing the record variable's field scalars. The pass now runs for any program that declares a record type or a `file`.
+
+Iteration 5852 relaxed the BASIC semantic method-call check to accept a numeric argument for a differently typed numeric parameter (BASIC converts on assignment), which was declining `price!.percent(15)`.
+
+Iteration 5853 restricted the pass to the BASIC targets: C and JVM lower the record DSL through their own typed record helpers and would change output under primitive `LSET`/`PUT`. All BASIC top-level statements now come from the typed IR; a test clears the AST's top-level statements and checks the record operations are still emitted.

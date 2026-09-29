@@ -29,13 +29,16 @@ use crate::semantic_ir::*;
 /// was rewritten, `false` (with `module` unchanged) if the program uses
 /// nothing the pass handles or uses something it does not yet model.
 pub fn transpile(module: &mut SemanticModule) -> bool {
-    if std::env::var_os("BCC_NO_TRANSPILE").is_some() { return false; } // TEMP-DEBUG
-    if module.records.is_empty() || module.lowered_record_files.is_empty() {
+    if module.records.is_empty()
+        && !declares_file(&module.statements)
+        && !module
+            .callables
+            .iter()
+            .any(|callable| declares_file(&callable.body))
+    {
         return false;
     }
-    let result = Transpiler::run(module);
-    if std::env::var_os("BCC_TRANSPILE_LOG").is_some() { eprintln!("TRANSPILE {}", if result.is_some() { "applied" } else { "declined" }); } // TEMP-DEBUG
-    match result {
+    match Transpiler::run(module) {
         Some(rewritten) => {
             *module = rewritten;
             module.records_transpiled = true;
@@ -57,9 +60,24 @@ struct EffectiveRecord {
 }
 
 #[derive(Clone)]
+enum FileKind {
+    Record(String),
+    Sequential,
+}
+
+#[derive(Clone)]
 struct FileInfo {
     channel: i64,
-    record_type: String,
+    kind: FileKind,
+}
+
+/// A record method after desugaring: an ordinary function whose leading
+/// `byref` parameters are the receiver's fields.
+#[derive(Clone)]
+struct MethodInfo {
+    real_name: String,
+    result: Option<TypeSuffix>,
+    fields: Vec<EffectiveField>,
 }
 
 /// Whether an expression is a string or numeric value for the purpose of the
@@ -75,6 +93,10 @@ struct Transpiler<'a> {
     records: HashMap<String, EffectiveRecord>,
     files: HashMap<String, FileInfo>,
     record_vars: HashMap<String, String>,
+    methods: HashMap<(String, String), MethodInfo>,
+    /// The next channel the AST pass would allocate; every `file` declaration,
+    /// record or sequential, takes one in traversal order.
+    next_channel: i64,
     current_function: Option<String>,
     current_globals: HashSet<String>,
     unsupported: bool,
@@ -87,26 +109,19 @@ impl<'a> Transpiler<'a> {
             records: HashMap::new(),
             files: HashMap::new(),
             record_vars: HashMap::new(),
+            methods: HashMap::new(),
+            next_channel: 1,
             current_function: None,
             current_globals: HashSet::new(),
             unsupported: false,
         };
-        // Record methods are desugared into ordinary functions with per-field
-        // `byref` parameters; that is not modeled yet.
-        if source.callables.iter().any(|callable| {
-            matches!(callable.kind, CallableKind::InlineMethod)
-                || callable.receiver.as_deref().is_some_and(|receiver| {
-                    source
-                        .records
-                        .iter()
-                        .any(|record| record.name.eq_ignore_ascii_case(receiver))
-                })
-        }) {
-            return None;
-        }
         transpiler.build_records()?;
+        let record_methods = transpiler.build_methods()?;
 
         let mut module = source.clone();
+        // Traversal order matches `records::lower`: top-level statements, then
+        // ordinary functions, then the desugared record methods. Channels are
+        // allocated in that order.
         module.statements = source
             .statements
             .iter()
@@ -124,6 +139,9 @@ impl<'a> Transpiler<'a> {
             })
             .collect();
         for index in 0..module.callables.len() {
+            if record_methods.contains(&index) {
+                continue;
+            }
             let name = base_name(&module.callables[index].name);
             let body = std::mem::take(&mut module.callables[index].body);
             transpiler.current_globals = collect_globals(&body);
@@ -132,11 +150,117 @@ impl<'a> Transpiler<'a> {
             transpiler.current_function = None;
             transpiler.current_globals.clear();
         }
+        // Record methods become ordinary functions appended after the rest.
+        let mut desugared = Vec::new();
+        for &index in &record_methods {
+            desugared.push(transpiler.desugar_method(&source.callables[index])?);
+        }
+        let mut kept = 0;
+        module.callables.retain(|_| {
+            let keep = !record_methods.contains(&kept);
+            kept += 1;
+            keep
+        });
+        module.callables.extend(desugared);
         if transpiler.unsupported {
             None
         } else {
             Some(module)
         }
+    }
+
+    /// Indices of the record-method callables, with the method table built.
+    fn build_methods(&mut self) -> Option<Vec<usize>> {
+        let mut indices = Vec::new();
+        for (index, callable) in self.source.callables.iter().enumerate() {
+            let record_type = match (callable.kind, callable.receiver.as_deref()) {
+                (CallableKind::InlineMethod, Some(receiver)) => receiver,
+                (CallableKind::Method | CallableKind::FluentMethod, Some(receiver))
+                    if self.records.contains_key(&receiver.to_ascii_lowercase()) =>
+                {
+                    receiver
+                }
+                _ => continue,
+            };
+            let record = self.records.get(&record_type.to_ascii_lowercase())?;
+            let result = callable
+                .result_type
+                .as_deref()
+                .and_then(|suffix| suffix.chars().next())
+                .and_then(TypeSuffix::from_char);
+            let bare = base_name_keep_case(&callable.name);
+            let real_name = format!(
+                "{}{}",
+                camel_join(&[record_type, &bare]),
+                result.map(|suffix| suffix.to_string()).unwrap_or_default()
+            );
+            self.methods.insert(
+                (record_type.to_ascii_lowercase(), bare.to_ascii_lowercase()),
+                MethodInfo {
+                    real_name,
+                    result,
+                    fields: record.fields.clone(),
+                },
+            );
+            indices.push(index);
+        }
+        Some(indices)
+    }
+
+    /// `method name[Record](args)` as an ordinary function: `self` flattened
+    /// into one `byref` parameter per field, the body transpiled with `self`
+    /// registered as a record variable.
+    fn desugar_method(&mut self, method: &CallableSignature) -> Option<CallableSignature> {
+        let record_type = method.receiver.clone()?;
+        let bare = base_name_keep_case(&method.name);
+        let info = self
+            .methods
+            .get(&(record_type.to_ascii_lowercase(), bare.to_ascii_lowercase()))?
+            .clone();
+        let span = method.name_span;
+        let mut parameters: Vec<Parameter> = info
+            .fields
+            .iter()
+            .map(|field| Parameter {
+                name: format!("{}{}", camel_join(&["self", &field.name]), field.suffix),
+                name_span: span,
+                value_type: value_type_of(field.suffix),
+                type_suffix: Some(field.suffix.to_string()),
+                type_annotation: None,
+                passing: Some(Passing::ByRef),
+                array_axes: 0,
+                dimensions: Vec::new(),
+                default: None,
+                span,
+            })
+            .collect();
+        parameters.extend(method.parameters.iter().cloned());
+
+        self.record_vars
+            .insert("self".to_string(), record_type.to_ascii_lowercase());
+        self.current_function = Some(bare.to_ascii_lowercase());
+        self.current_globals = collect_globals(&method.body);
+        let body = self.list(method.body.clone());
+        self.current_function = None;
+        self.current_globals.clear();
+        self.record_vars.remove("self");
+
+        Some(CallableSignature {
+            kind: if info.result.is_some() {
+                CallableKind::Function
+            } else {
+                CallableKind::Procedure
+            },
+            name: info.real_name,
+            name_span: method.name_span,
+            result_type: method.result_type.clone(),
+            receiver: None,
+            receiver_span: None,
+            parameters,
+            body,
+            span: method.span,
+            source_index: method.source_index,
+        })
     }
 
     fn build_records(&mut self) -> Option<()> {
@@ -159,10 +283,9 @@ impl<'a> Transpiler<'a> {
             for field in &record.fields {
                 let suffix = match &field.field_type {
                     RecordFieldType::String { .. } => TypeSuffix::String,
-                    RecordFieldType::Int16 { .. } | RecordFieldType::Int { .. } => {
-                        TypeSuffix::Integer
-                    }
-                    RecordFieldType::Int32 { .. } => TypeSuffix::Long,
+                    RecordFieldType::Int16 { .. } => TypeSuffix::Integer,
+                    // `int` is an alias for `int32`.
+                    RecordFieldType::Int { .. } | RecordFieldType::Int32 { .. } => TypeSuffix::Long,
                     RecordFieldType::Float32 { .. } => TypeSuffix::Single,
                     RecordFieldType::Float64 { .. } => TypeSuffix::Double,
                     RecordFieldType::Record { .. } => return None,
@@ -215,14 +338,12 @@ impl<'a> Transpiler<'a> {
                 name,
                 record_type,
                 mut path,
-                ..
+                mode,
             } => {
-                let Some(record_type) = record_type else {
-                    // Sequential file handles are not modeled yet.
-                    self.unsupported = true;
-                    return Vec::new();
-                };
                 self.expression(&mut path);
+                let Some(record_type) = record_type else {
+                    return self.sequential_declaration(&name.name, mode, path, span);
+                };
                 return self.file_declaration(&name.name, &record_type.name, path, span);
             }
             SemanticStatementKind::Global { ref name, .. }
@@ -239,6 +360,28 @@ impl<'a> Transpiler<'a> {
                 return self.assignment(target, operator, value, span);
             }
             SemanticStatementKind::Expression(expression) => {
+                if let Some((file, method, channel, mut arguments)) =
+                    self.sequential_call(&expression)
+                {
+                    for argument in arguments.iter_mut() {
+                        self.expression(argument);
+                    }
+                    let statement = if method == "write" {
+                        SemanticStatementKind::Write {
+                            channel: int(channel, span),
+                            values: WriteValues::Values(arguments),
+                        }
+                    } else {
+                        SemanticStatementKind::Input {
+                            source: InputSource::Channel(int(channel, span)),
+                            targets: arguments,
+                        }
+                    };
+                    return vec![
+                        comment(format!("' {file}.{method}(...)"), span),
+                        statement_of(statement, span),
+                    ];
+                }
                 if let Some(channel) = self.close_call(&expression) {
                     return vec![
                         comment(format!("' {}.close()", close_target(&expression)), span),
@@ -331,11 +474,18 @@ impl<'a> Transpiler<'a> {
             self.unsupported = true;
             return Vec::new();
         }
+        // The AST pass numbered this file; our traversal must agree.
+        let channel = self.next_channel;
+        self.next_channel += 1;
+        if channel != fact.channel {
+            self.unsupported = true;
+            return Vec::new();
+        }
         self.files.insert(
             name.to_ascii_lowercase(),
             FileInfo {
-                channel: fact.channel,
-                record_type: record_type.to_string(),
+                channel,
+                kind: FileKind::Record(record_type.to_string()),
             },
         );
         let bindings = record
@@ -381,6 +531,65 @@ impl<'a> Transpiler<'a> {
                 span,
             ),
         ]
+    }
+
+    /// `file f = open(path) for input|output|append`: a plain channel with no
+    /// record layout.
+    fn sequential_declaration(
+        &mut self,
+        name: &str,
+        mode: Option<FileModeKind>,
+        path: Expression,
+        span: SourceSpan,
+    ) -> Vec<SemanticStatement> {
+        let Some(mode) = mode else {
+            self.unsupported = true;
+            return Vec::new();
+        };
+        let channel = self.next_channel;
+        self.next_channel += 1;
+        self.files.insert(
+            name.to_ascii_lowercase(),
+            FileInfo {
+                channel,
+                kind: FileKind::Sequential,
+            },
+        );
+        let (word, kind) = match mode {
+            FileModeKind::Input => ("input", OpenModeKind::Input),
+            FileModeKind::Output => ("output", OpenModeKind::Output),
+            FileModeKind::Append => ("append", OpenModeKind::Append),
+        };
+        vec![
+            comment(format!("' file {name} = open(...) for {word}"), span),
+            statement_of(
+                SemanticStatementKind::Open {
+                    path,
+                    mode: OpenMode { kind, span },
+                    channel: int(channel, span),
+                    length: None,
+                },
+                span,
+            ),
+        ]
+    }
+
+    /// `x.write(...)` / `x.read(...)` on a sequential file: the file's
+    /// channel, the method, and its arguments.
+    fn sequential_call(&mut self, expression: &Expression) -> Option<(String, String, i64, Vec<Expression>)> {
+        let ExpressionKind::Call { name, arguments } = &expression.kind else {
+            return None;
+        };
+        let (file, method) = name.rsplit_once('.')?;
+        let method = method.to_ascii_lowercase();
+        if method != "write" && method != "read" {
+            return None;
+        }
+        let info = self.files.get(&file.to_ascii_lowercase())?;
+        let FileKind::Sequential = info.kind else {
+            return None;
+        };
+        Some((file.to_string(), method, info.channel, arguments.clone()))
     }
 
     /// `x.close()` on a declared file: its channel.
@@ -580,7 +789,10 @@ impl<'a> Transpiler<'a> {
 
     fn file_and_record(&mut self, file: &str) -> Option<(FileInfo, Vec<EffectiveField>)> {
         let info = self.files.get(&file.to_ascii_lowercase())?.clone();
-        let record = self.records.get(&info.record_type.to_ascii_lowercase())?;
+        let FileKind::Record(record_type) = &info.kind else {
+            return None;
+        };
+        let record = self.records.get(&record_type.to_ascii_lowercase())?;
         Some((info, record.fields.clone()))
     }
 
@@ -850,8 +1062,10 @@ impl<'a> Transpiler<'a> {
                 )),
             }
         }
-        self.record_vars
-            .insert(variable.to_ascii_lowercase(), info.record_type);
+        if let FileKind::Record(record_type) = info.kind {
+            self.record_vars
+                .insert(variable.to_ascii_lowercase(), record_type);
+        }
         out
     }
 
@@ -895,6 +1109,41 @@ impl<'a> Transpiler<'a> {
     }
 
     // ── expressions ───────────────────────────────────────────────────────
+
+    /// `recordVar.method(args)`: an ordinary call to the desugared method, the
+    /// receiver's field scalars leading the arguments.
+    fn method_call(
+        &mut self,
+        variable: &str,
+        method: &str,
+        arguments: &mut Vec<Expression>,
+        span: SourceSpan,
+    ) -> Option<(Expression, Option<FieldKind>)> {
+        let record_type = self.record_vars.get(&variable.to_ascii_lowercase())?.clone();
+        let key = (record_type.to_ascii_lowercase(), method.to_ascii_lowercase());
+        let info = self.methods.get(&key)?.clone();
+        for argument in arguments.iter_mut() {
+            self.expression(argument);
+        }
+        let mut all_arguments: Vec<Expression> = info
+            .fields
+            .iter()
+            .map(|field| self.scalar_for(variable, field, span))
+            .collect();
+        all_arguments.append(arguments);
+        let value_type = info
+            .result
+            .map(value_type_of)
+            .unwrap_or(SemanticValueType::Unknown);
+        let kind = info.result.map(|suffix| {
+            if suffix == TypeSuffix::String {
+                FieldKind::Stringy
+            } else {
+                FieldKind::Numeric
+            }
+        });
+        Some((call(&info.real_name, all_arguments, value_type, span), kind))
+    }
 
     /// Rewrites `recordVar.field` names to their unpacked scalars and wraps
     /// the numeric side of a string/number `+` in `STR$`.
@@ -972,9 +1221,30 @@ impl<'a> Transpiler<'a> {
                 }
                 None
             }
-            ExpressionKind::Call { arguments, .. } => {
+            ExpressionKind::Call { name, arguments } => {
                 for argument in arguments.iter_mut() {
                     self.expression(argument);
+                }
+                // `file.eof()` is the builtin on the file's channel.
+                if let Some((file, method)) = name.rsplit_once('.') {
+                    if method.eq_ignore_ascii_case("eof") && arguments.is_empty() {
+                        if let Some(info) = self.files.get(&file.to_ascii_lowercase()) {
+                            let span = expression.span;
+                            *expression = call(
+                                "eof",
+                                vec![int(info.channel, span)],
+                                SemanticValueType::Integer,
+                                span,
+                            );
+                            return None;
+                        }
+                    }
+                    if let Some((rewritten, kind)) =
+                        self.method_call(file, method, arguments, expression.span)
+                    {
+                        *expression = rewritten;
+                        return kind;
+                    }
                 }
                 None
             }
@@ -989,8 +1259,22 @@ impl<'a> Transpiler<'a> {
                 None
             }
             ExpressionKind::Member {
-                base, arguments, ..
+                base,
+                member,
+                arguments,
             } => {
+                if let (Some(receiver), Some(arguments)) = (base.as_deref(), arguments.as_mut()) {
+                    if let ExpressionKind::Name(variable) = &receiver.kind {
+                        let variable = variable.clone();
+                        let member = member.clone();
+                        if let Some((rewritten, kind)) =
+                            self.method_call(&variable, &member, arguments, expression.span)
+                        {
+                            *expression = rewritten;
+                            return kind;
+                        }
+                    }
+                }
                 if let Some(base) = base {
                     self.expression(base);
                 }
@@ -1332,11 +1616,45 @@ fn trim_statements(
     vec![init, while_loop, finalize]
 }
 
+/// Whether any statement, at any depth, declares a `file`.
+fn declares_file(statements: &[SemanticStatement]) -> bool {
+    statements.iter().any(|statement| match &statement.kind {
+        SemanticStatementKind::FileDeclaration { .. } => true,
+        SemanticStatementKind::Line(body)
+        | SemanticStatementKind::While { body, .. }
+        | SemanticStatementKind::For { body, .. }
+        | SemanticStatementKind::Do { body, .. } => declares_file(body),
+        SemanticStatementKind::If {
+            then_body,
+            else_body,
+            ..
+        } => declares_file(then_body) || declares_file(else_body),
+        SemanticStatementKind::SelectCase {
+            cases, else_body, ..
+        } => cases.iter().any(|case| declares_file(&case.body)) || declares_file(else_body),
+        SemanticStatementKind::Try {
+            body,
+            catch,
+            finally_body,
+        } => {
+            declares_file(body)
+                || catch.as_ref().is_some_and(|catch| declares_file(&catch.body))
+                || declares_file(finally_body)
+        }
+        _ => false,
+    })
+}
+
 /// A callable's name without its type suffix, lowercased -- how the AST pass
 /// records a function as a file's owner.
 fn base_name(name: &str) -> String {
     name.trim_end_matches(['$', '%', '!', '#', '&'])
         .to_ascii_lowercase()
+}
+
+/// A callable name without its type suffix, case preserved.
+fn base_name_keep_case(name: &str) -> String {
+    name.trim_end_matches(['$', '%', '!', '#', '&']).to_string()
 }
 
 fn close_target_name(expression: &Expression) -> Option<String> {
@@ -1544,6 +1862,78 @@ mod tests {
             shape(&module)[3..],
             ["assign", "assign", "assign", "assign", "assign", "assign", "assign", "assign", "end"]
         );
+    }
+
+    #[test]
+    fn record_methods_become_functions_with_per_field_byref_parameters() {
+        let module = transpiled(
+            "program rt\nrecord Card\n    title: string(20)\n    qty: int16\nend record\n\
+             method display[Card](): string\n    return self.title + \" x\" + str$(self.qty)\nend method\n\
+             method bump[Card](amount%)\n    self.qty = self.qty + amount%\nend method\n\
+             file cards as Card = open(\"cards.dat\")\n\
+             c = { title: \"Dune\", qty: 2 }\nc.bump(3)\nprint c.display()\nend\n",
+        )
+        .expect("pass applies");
+        let display = module
+            .callables
+            .iter()
+            .find(|callable| callable.name == "cardDisplay$")
+            .expect("desugared display");
+        assert_eq!(display.kind, CallableKind::Function);
+        assert_eq!(display.receiver, None);
+        let names: Vec<_> = display.parameters.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["selfTitle$", "selfQty%"]);
+        assert!(display
+            .parameters
+            .iter()
+            .all(|parameter| parameter.passing == Some(Passing::ByRef)));
+        let bump = module
+            .callables
+            .iter()
+            .find(|callable| callable.name == "cardBump")
+            .expect("desugared bump");
+        assert_eq!(bump.kind, CallableKind::Procedure);
+        assert_eq!(
+            bump.parameters.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            ["selfTitle$", "selfQty%", "amount%"]
+        );
+        // The original receiver-bearing declarations are gone.
+        assert!(module.callables.iter().all(|callable| callable.receiver.is_none()));
+        // `self.qty` inside the body reads the flattened parameter.
+        assert!(format!("{:?}", bump.body).contains("selfQty%"));
+        // The call sites pass the receiver's field scalars first.
+        let main = format!("{:?}", module.statements);
+        assert!(main.contains("name: \"cardBump\""), "{main}");
+        assert!(main.contains("name: \"cardDisplay$\""), "{main}");
+        assert!(main.contains("cTitle$") && main.contains("cQty%"), "{main}");
+    }
+
+    #[test]
+    fn sequential_files_take_the_next_channel_and_expand_write_read_eof() {
+        let module = transpiled(
+            "program rt\nrecord R\n    v: int16\nend record\n\
+             file db as R = open(\"db.dat\")\n\
+             file log = open(\"log.txt\") for output\n\
+             log.write(\"a\", 1)\nlog.close()\n\
+             file back = open(\"log.txt\") for input\n\
+             while back.eof() = 0\n    back.read(x$)\nend while\nback.close()\nend\n",
+        )
+        .expect("pass applies");
+        let shape = shape(&module);
+        let expected = [
+            "comment", "open", "field", // db (channel 1)
+            "comment", "open", // log (channel 2)
+            "comment", "other", // log.write
+            "comment", "close", // log.close
+            "comment", "open", // back (channel 3)
+            "while", // the read loop
+            "comment", "close", // back.close
+            "end",
+        ];
+        assert_eq!(shape, expected, "{shape:?}");
+        let text = format!("{:?}", module.statements);
+        // eof() became the builtin on channel 3.
+        assert!(text.contains("name: \"eof\"") && text.contains("Literal(\"3\")"), "{text}");
     }
 
     #[test]

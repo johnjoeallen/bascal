@@ -211,6 +211,8 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;
+        // Only BASIC consumes the expanded primitives. C and JVM lower the
+        // record DSL through their own typed record helpers.
         if matches!(options.target, Target::Basic | Target::Fbc) {
             record_transpile::transpile(&mut module);
         }

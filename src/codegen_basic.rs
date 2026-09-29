@@ -2113,6 +2113,46 @@ mod tests {
     }
 
     #[test]
+    fn basic_record_program_is_emitted_from_typed_ir_without_the_ast_statements() {
+        let source = "record Part\n    desc: string(20)\n    qty: int16\nend record\n\
+             file inv as Part = open(\"inven.dat\")\n\
+             inv[1] = { desc: \"x\", qty: 3 }\n\
+             let p = inv[1]\nprint p.desc\ninv.close()\nend\n";
+        let parsed = crate::parse_source("record_typed_only.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered {
+            program,
+            lowered_record_files,
+            ..
+        } = crate::lower::lower(parsed).unwrap();
+        let mut semantic =
+            crate::semantic_ir::parse_and_adapt_named("record_typed_only.bcl", source).unwrap();
+        semantic.lowered_record_files = lowered_record_files;
+        assert!(crate::record_transpile::transpile(&mut semantic));
+        let mut resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        // Everything the AST would emit at top level is gone; the record
+        // operations must still come from the typed module.
+        resolved.program.statements.clear();
+
+        let output = super::CodeGenerator::new()
+            .generate(&resolved)
+            .expect("typed record program generates");
+        // Buffer names are case-folded here (the driver supplies the
+        // synthesized-name set that preserves their case), so compare folded.
+        let folded = output.to_ascii_lowercase();
+        for expected in [
+            "open \"inven.dat\" for random as #1 len = 22",
+            "field #1, 20 as invdescbuf$, 2 as invqtybuf$",
+            "lset invdescbuf$ = \"x\"",
+            "put #1, 1",
+            "get #1, 1",
+            "pdesc$ = left$(invdescbuf$",
+            "close #1",
+        ] {
+            assert!(folded.contains(expected), "missing {expected}:\n{output}");
+        }
+    }
+
+    #[test]
     fn basic_callable_generation_dispatches_semantic_terminal_and_error_statements() {
         let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nreturn 0\nend function\nprint value%()\nend\n";
         let semantic_source = "function value%()\ncls\nbeep\nclear\nstop\nsystem\nerror 9\nthrow\nreturn 0\nend function\nprint value%()\nend\n";
@@ -3201,8 +3241,12 @@ mod tests {
             .unwrap(),
         );
         let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        // The loop's top label resolves to a line number that the closing
+        // jump targets; a symbolic label must not survive numbering.
         assert!(
-            output.contains("DO_0001_TOP") && output.contains("GOTO DO_0001_TOP"),
+            !output.contains("DO_0001_TOP")
+                && output.contains("10 IF (countValue0% < 2) = 0 THEN GOTO 30")
+                && output.contains("GOTO 10"),
             "semantic callable DO labels missing: {output}"
         );
         assert!(
@@ -10789,11 +10833,13 @@ impl CodeGenerator {
                         .value_type
                         .suffix()
                         .and_then(TypeSuffix::from_char)?;
-                    if argument
+                    // BASIC converts between numeric types on assignment, so
+                    // only a string/number mismatch is a real type error here.
+                    let supplied = argument
                         .value_type
                         .suffix()
-                        .and_then(TypeSuffix::from_char)?
-                        != expected
+                        .and_then(TypeSuffix::from_char)?;
+                    if (supplied == TypeSuffix::String) != (expected == TypeSuffix::String)
                         || info
                             .param_ranks
                             .get(index + 1)
