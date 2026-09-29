@@ -17389,3 +17389,11 @@ Iteration 5757 refreshed Graphify and validated the complete locked workspace su
 Iteration 5758 added BASIC codegen coverage for the resolver-materialized result type of unsuffixed functions.
 
 Iteration 5759 validated the complete locked workspace suite after BASIC callable result coverage.
+
+Iteration 5760 made callable parameter types shadow same-named module DIM types during FOR resolution.
+
+Iteration 5761 preserved callable-local DIM types as the most specific FOR variable declarations.
+
+Iteration 5762 added resolver coverage for parameter shadowing of module DIM types.
+
+Iteration 5763 refreshed Graphify and validated the complete locked workspace suite after FOR parameter scope changes.

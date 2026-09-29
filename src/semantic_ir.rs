@@ -1085,6 +1085,12 @@ impl SemanticModule {
         annotate(&mut self.statements, &top_level_types);
         for callable in &mut self.callables {
             let mut callable_types = top_level_types.clone();
+            for parameter in &callable.parameters {
+                callable_types.insert(
+                    parameter.name.to_ascii_lowercase(),
+                    parameter.value_type,
+                );
+            }
             collect_types(&callable.body, &mut callable_types);
             annotate(&mut callable.body, &callable_types);
         }
