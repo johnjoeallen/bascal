@@ -3682,6 +3682,11 @@ fn emit_jvm_semantic_numeric_expression_inner(
                 _ => Err("unsupported typed JVM semantic numeric operator".to_string()),
             }
         }
+        Kind::Call { name, arguments }
+            if jvm_semantic_numeric_builtin(name, arguments).is_some() =>
+        {
+            emit_jvm_semantic_numeric_builtin(name, arguments, out, context)
+        }
         Kind::Call { name, arguments } => {
             let result = jvm_semantic_numeric_type(expression.value_type)
                 .ok_or_else(|| "typed JVM function result isn't numeric".to_string())?;
@@ -4064,6 +4069,208 @@ fn emit_jvm_semantic_normalize_truth(out: &mut String, ty: NumericType, context:
     ));
 }
 
+/// A call name without its type suffix, lowercased (`MID$` -> `mid`).
+fn jvm_semantic_builtin_name(name: &str) -> String {
+    name.trim_end_matches(['$', '%', '!', '#', '&'])
+        .to_ascii_lowercase()
+}
+
+/// The string built-ins the typed JVM emitter renders itself, by name and
+/// argument count. A user function of the same name takes precedence at
+/// resolve time, so reaching here means the name is the BASIC built-in.
+fn jvm_semantic_string_builtin(name: &str, argument_count: usize) -> Option<&'static str> {
+    match (jvm_semantic_builtin_name(name).as_str(), argument_count) {
+        ("chr", 1) => Some("chr"),
+        ("str", 1) => Some("str"),
+        ("mid", 2) => Some("mid2"),
+        ("mid", 3) => Some("mid3"),
+        ("left", 2) => Some("left"),
+        ("right", 2) => Some("right"),
+        _ => None,
+    }
+}
+
+fn emit_jvm_semantic_int_argument(
+    expression: &crate::semantic_ir::Expression,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    let numeric = emit_jvm_semantic_numeric_expression(expression, out, context)?;
+    match numeric {
+        NumericType::Int => {}
+        NumericType::Long => out.push_str("    l2i\n"),
+        NumericType::Double => out.push_str("    d2i\n"),
+    }
+    Ok(())
+}
+
+fn emit_jvm_semantic_string_builtin(
+    name: &str,
+    arguments: &[crate::semantic_ir::Expression],
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    match jvm_semantic_string_builtin(name, arguments.len()) {
+        Some("chr") => {
+            emit_jvm_semantic_int_argument(&arguments[0], out, context)?;
+            out.push_str(
+                "    i2c\n    invokestatic java/lang/String/valueOf (C)Ljava/lang/String;\n",
+            );
+        }
+        Some("str") => emit_jvm_semantic_str_builtin(&arguments[0], out, context)?,
+        Some("mid3") => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            emit_jvm_semantic_int_argument(&arguments[1], out, context)?;
+            out.push_str("    iconst_1\n    isub\n    dup\n");
+            emit_jvm_semantic_int_argument(&arguments[2], out, context)?;
+            out.push_str(
+                "    iadd\n    invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n",
+            );
+        }
+        Some("mid2") => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            emit_jvm_semantic_int_argument(&arguments[1], out, context)?;
+            out.push_str(
+                "    iconst_1\n    isub\n    invokevirtual java/lang/String/substring (I)Ljava/lang/String;\n",
+            );
+        }
+        Some("left") => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            out.push_str("    iconst_0\n");
+            emit_jvm_semantic_int_argument(&arguments[1], out, context)?;
+            out.push_str("    invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n");
+        }
+        Some("right") => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            out.push_str("    dup\n    invokevirtual java/lang/String/length ()I\n");
+            emit_jvm_semantic_int_argument(&arguments[1], out, context)?;
+            out.push_str(
+                "    isub\n    invokevirtual java/lang/String/substring (I)Ljava/lang/String;\n",
+            );
+        }
+        _ => return Err(format!("`{name}` is not a typed JVM string built-in")),
+    }
+    Ok(())
+}
+
+/// The numeric built-ins the typed JVM emitter renders itself. `len`, `asc`,
+/// `instr` and `val` take strings; the rest take one numeric argument.
+fn jvm_semantic_numeric_builtin(
+    name: &str,
+    arguments: &[crate::semantic_ir::Expression],
+) -> Option<&'static str> {
+    use crate::semantic_ir::SemanticValueType as ValueType;
+    let is_string = |index: usize| arguments[index].value_type == ValueType::String;
+    let is_numeric = |index: usize| {
+        !matches!(
+            arguments[index].value_type,
+            ValueType::String | ValueType::Unknown
+        )
+    };
+    match (jvm_semantic_builtin_name(name).as_str(), arguments.len()) {
+        ("len", 1) if is_string(0) => Some("len"),
+        ("asc", 1) if is_string(0) => Some("asc"),
+        ("val", 1) if is_string(0) => Some("val"),
+        ("instr", 2) if is_string(0) && is_string(1) => Some("instr"),
+        ("abs", 1) if is_numeric(0) => Some("abs"),
+        ("sqr", 1) if is_numeric(0) => Some("sqr"),
+        ("int", 1) if is_numeric(0) => Some("int"),
+        ("fix", 1) if is_numeric(0) => Some("fix"),
+        ("sgn", 1) if is_numeric(0) => Some("sgn"),
+        ("sin", 1) if is_numeric(0) => Some("sin"),
+        ("cos", 1) if is_numeric(0) => Some("cos"),
+        ("tan", 1) if is_numeric(0) => Some("tan"),
+        ("atn", 1) if is_numeric(0) => Some("atn"),
+        ("log", 1) if is_numeric(0) => Some("log"),
+        ("exp", 1) if is_numeric(0) => Some("exp"),
+        _ => None,
+    }
+}
+
+fn emit_jvm_semantic_numeric_builtin(
+    name: &str,
+    arguments: &[crate::semantic_ir::Expression],
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<NumericType, String> {
+    let builtin = jvm_semantic_numeric_builtin(name, arguments)
+        .ok_or_else(|| format!("`{name}` is not a typed JVM numeric built-in"))?;
+    match builtin {
+        "len" => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            out.push_str("    invokevirtual java/lang/String/length ()I\n");
+            Ok(NumericType::Int)
+        }
+        "asc" => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            out.push_str("    iconst_0\n    invokevirtual java/lang/String/charAt (I)C\n");
+            Ok(NumericType::Int)
+        }
+        "val" => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            out.push_str("    invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D\n");
+            Ok(NumericType::Double)
+        }
+        "instr" => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            emit_jvm_semantic_string_expression(&arguments[1], out, context)?;
+            out.push_str(
+                "    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    iconst_1\n    iadd\n",
+            );
+            Ok(NumericType::Int)
+        }
+        "abs" => {
+            let numeric = emit_jvm_semantic_numeric_expression(&arguments[0], out, context)?;
+            let descriptor = match numeric {
+                NumericType::Int => "(I)I",
+                NumericType::Long => "(J)J",
+                NumericType::Double => "(D)D",
+            };
+            out.push_str(&format!("    invokestatic java/lang/Math/abs {descriptor}\n"));
+            Ok(numeric)
+        }
+        other => {
+            let numeric = emit_jvm_semantic_numeric_expression(&arguments[0], out, context)?;
+            coerce_top(numeric, NumericType::Double, out);
+            match other {
+                "sqr" => out.push_str("    invokestatic java/lang/Math/sqrt (D)D\n"),
+                "int" => out.push_str("    invokestatic java/lang/Math/floor (D)D\n"),
+                "fix" => out.push_str("    d2l\n    l2d\n"),
+                "sgn" => out.push_str("    invokestatic java/lang/Math/signum (D)D\n"),
+                "sin" => out.push_str("    invokestatic java/lang/Math/sin (D)D\n"),
+                "cos" => out.push_str("    invokestatic java/lang/Math/cos (D)D\n"),
+                "tan" => out.push_str("    invokestatic java/lang/Math/tan (D)D\n"),
+                "atn" => out.push_str("    invokestatic java/lang/Math/atan (D)D\n"),
+                "log" => out.push_str("    invokestatic java/lang/Math/log (D)D\n"),
+                "exp" => out.push_str("    invokestatic java/lang/Math/exp (D)D\n"),
+                _ => return Err(format!("`{name}` is not a typed JVM numeric built-in")),
+            }
+            Ok(NumericType::Double)
+        }
+    }
+}
+
+/// `STR$(n)`: the string form of a numeric argument.
+fn emit_jvm_semantic_str_builtin(
+    argument: &crate::semantic_ir::Expression,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    match emit_jvm_semantic_numeric_expression(argument, out, context)? {
+        NumericType::Int => {
+            out.push_str("    invokestatic java/lang/String/valueOf (I)Ljava/lang/String;\n")
+        }
+        NumericType::Long => {
+            out.push_str("    invokestatic java/lang/String/valueOf (J)Ljava/lang/String;\n")
+        }
+        NumericType::Double => out.push_str(&format!(
+            "    invokestatic {}/bccStr (D)Ljava/lang/String;\n",
+            context.class_name
+        )),
+    }
+    Ok(())
+}
+
 fn emit_jvm_semantic_string_expression(
     expression: &crate::semantic_ir::Expression,
     out: &mut String,
@@ -4104,6 +4311,12 @@ fn emit_jvm_semantic_string_expression(
             }
             emit_load(variable, out, context);
             Ok(())
+        }
+        Kind::Call { name, arguments }
+            if expression.value_type == ValueType::String
+                && jvm_semantic_string_builtin(name, arguments.len()).is_some() =>
+        {
+            emit_jvm_semantic_string_builtin(name, arguments, out, context)
         }
         Kind::Call { name, arguments } if expression.value_type == ValueType::String => {
             emit_jvm_semantic_function_call(name, arguments, JvmType::String, context, out)
@@ -16000,6 +16213,55 @@ mod tests {
             super::jvm_type_for_semantic_suffix(Some("%")),
             Some(super::JvmType::Numeric(super::NumericType::Int))
         );
+    }
+
+    fn generate_jvm_with_diverging_semantic_source(ast_source: &str, semantic_source: &str) -> String {
+        let parsed = crate::parse_source("jvm_diverging.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("jvm_diverging.bcl", semantic_source)
+                .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        super::generate(&resolved).unwrap()
+    }
+
+    #[test]
+    fn jvm_semantic_string_builtins_are_emitted_from_typed_ir() {
+        let output = generate_jvm_with_diverging_semantic_source(
+            "s$ = \"a\"\nprint \"ast marker\"\nprint \"ast marker\"\nprint \"ast marker\"\nend\n",
+            "s$ = \"hello\"\nprint len(s$)\nprint chr$(72) + mid$(s$, 2, 3) + left$(s$, 2) + right$(s$, 2) + str$(asc(s$))\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        for expected in [
+            "java/lang/String/length ()I",
+            "java/lang/String/charAt (I)C",
+            "java/lang/String/substring (II)Ljava/lang/String;",
+            "java/lang/String/substring (I)Ljava/lang/String;",
+            "java/lang/String/valueOf (C)Ljava/lang/String;",
+            "java/lang/String/valueOf (I)Ljava/lang/String;",
+        ] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
+    }
+
+    #[test]
+    fn jvm_semantic_numeric_builtins_are_emitted_from_typed_ir() {
+        let output = generate_jvm_with_diverging_semantic_source(
+            "print \"ast marker\"\nprint \"ast marker\"\nend\n",
+            "print abs(-3) + sgn(2) + int(2.5) + fix(2.5)\nprint sqr(16) + sin(0) + instr(\"hello\", \"l\") + val(\"7\")\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        for expected in [
+            "java/lang/Math/abs (I)I",
+            "java/lang/Math/signum (D)D",
+            "java/lang/Math/floor (D)D",
+            "java/lang/Math/sqrt (D)D",
+            "java/lang/Math/sin (D)D",
+            "java/lang/String/indexOf (Ljava/lang/String;)I",
+            "java/lang/Double/parseDouble (Ljava/lang/String;)D",
+        ] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
     }
 
     #[test]

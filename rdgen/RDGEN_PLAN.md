@@ -17555,3 +17555,7 @@ Iteration 5840 registered scalar methods in the C function map under a collision
 Iteration 5841 added string comparison (`strcmp`) to both C semantic numeric renderers, which had declined every `if`/`while`/`do` condition and assignment comparing strings.
 
 Iteration 5842 added regression tests for the member-call rewrite, C string comparison, and C string-method prints. C AST-emitted statements outside the record-DSL programs fell from 887 to 491 over this stretch (`while` conditions and `print` of method calls were the main sources).
+
+Iteration 5843 added the BASIC string and numeric built-ins that the JVM typed-IR emitter lacked (`len`, `asc`, `chr$`, `mid$`, `left$`, `right$`, `str$`, `val`, `instr`, `abs`, `sqr`, `int`, `fix`, `sgn`, `sin`, `cos`, `tan`, `atn`, `log`, `exp`), using the same bytecode sequences as the AST emitter. Every string-manipulating stdlib method body and most prints moved onto typed IR for JVM; AST-emitted statements outside the record-DSL programs fell from 273 to 146.
+
+Iteration 5844 added JVM regression tests for the string and numeric built-ins.
