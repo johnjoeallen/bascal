@@ -17241,3 +17241,9 @@ Iteration 5683 removed unresolved C array predeclaration and DIM suffix fallback
 Iteration 5684 added a regression for rejected unresolved semantic array element types.
 
 Iteration 5685 validated the complete locked workspace suite after C array collector changes.
+
+Iteration 5686 removed BASIC array suffix fallback for unresolved typed-IR element types.
+
+Iteration 5687 validated typed BASIC array DIM emission after resolver type materialization.
+
+Iteration 5688 validated the complete locked workspace test suite after BASIC array changes.

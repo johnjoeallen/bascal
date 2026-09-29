@@ -11248,13 +11248,13 @@ impl CodeGenerator {
     ) -> Option<TypeSuffix> {
         let key = name.as_basic().to_ascii_lowercase();
         let suffix_from_type = |value_type: crate::semantic_ir::SemanticValueType| match value_type {
-            crate::semantic_ir::SemanticValueType::String => TypeSuffix::String,
-            crate::semantic_ir::SemanticValueType::Integer => TypeSuffix::Integer,
-            crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
-            crate::semantic_ir::SemanticValueType::Single => TypeSuffix::Single,
-            crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
+            crate::semantic_ir::SemanticValueType::String => Some(TypeSuffix::String),
+            crate::semantic_ir::SemanticValueType::Integer => Some(TypeSuffix::Integer),
+            crate::semantic_ir::SemanticValueType::Long => Some(TypeSuffix::Long),
+            crate::semantic_ir::SemanticValueType::Single => Some(TypeSuffix::Single),
+            crate::semantic_ir::SemanticValueType::Double => Some(TypeSuffix::Double),
             crate::semantic_ir::SemanticValueType::Unknown
-            | crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
+            | crate::semantic_ir::SemanticValueType::Boolean => None,
         };
         if let Some(function) = current_function {
             if let Some(index) = function
@@ -11274,14 +11274,14 @@ impl CodeGenerator {
                 }
             }
             if let Some(declaration) = function.semantic_dim_declarations.get(&key) {
-                return Some(suffix_from_type(declaration.element_type));
+                return suffix_from_type(declaration.element_type);
             }
             if let Some(annotation) = function.local_dim_types.get(&key) {
                 return semantic_dim_type_suffix(annotation);
             }
         }
         if let Some(declaration) = self.semantic_top_level_dims.get(&key) {
-            return Some(suffix_from_type(declaration.element_type));
+            return suffix_from_type(declaration.element_type);
         }
         if let Some(annotation) = self.top_level_dim_types.get(&key) {
             return semantic_dim_type_suffix(annotation);
