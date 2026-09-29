@@ -8646,6 +8646,34 @@ fn emit_c_semantic_print_tokens(
                 args.push(text);
                 needs_newline = true;
             }
+            // `TAB(n)` moves to column n (ANSI CHA); `SPC(n)` prints n spaces.
+            PrintToken::Expression(crate::semantic_ir::Expression {
+                kind: crate::semantic_ir::ExpressionKind::Call { name, arguments },
+                ..
+            }) if arguments.len() == 1
+                && (name.eq_ignore_ascii_case("tab") || name.eq_ignore_ascii_case("spc")) =>
+            {
+                let Some((text, is_float)) = render_c_semantic_numeric_expression_with_methods(
+                    &arguments[0],
+                    needs_math,
+                    supports_float,
+                    arrays,
+                    function_map,
+                    methods,
+                ) else {
+                    return false;
+                };
+                let text = coerce_numeric(text, is_float, false, needs_math);
+                needs_newline = true;
+                if name.eq_ignore_ascii_case("tab") {
+                    format.push_str("\\x1b[%dG");
+                    args.push(text);
+                } else {
+                    format.push_str("%*s");
+                    args.push(text);
+                    args.push("\"\"".to_string());
+                }
+            }
             PrintToken::Expression(expression) => {
                 let rendered = render_c_semantic_numeric_expression_with_methods(
                     expression,
@@ -29453,6 +29481,17 @@ mod dialect_tests {
         assert!(output.contains("strcmp("), "{output}");
         assert!(output.contains("#include <string.h>"), "{output}");
         assert!(!output.contains("printf(\"%d"), "AST print leaked: {output}");
+    }
+
+    #[test]
+    fn c_semantic_print_renders_tab_and_spc_directives() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\nprint \"ast marker\"\nprint \"ast marker\"\nend\n",
+            "program p\nprint tab(10) \"a\"\nprint spc(3) \"b\"\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "AST print leaked: {output}");
+        assert!(output.contains("\\x1b[%dG"), "{output}");
+        assert!(output.contains("%*s"), "{output}");
     }
 
     #[test]

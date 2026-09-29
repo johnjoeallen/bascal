@@ -17559,3 +17559,7 @@ Iteration 5842 added regression tests for the member-call rewrite, C string comp
 Iteration 5843 added the BASIC string and numeric built-ins that the JVM typed-IR emitter lacked (`len`, `asc`, `chr$`, `mid$`, `left$`, `right$`, `str$`, `val`, `instr`, `abs`, `sqr`, `int`, `fix`, `sgn`, `sin`, `cos`, `tan`, `atn`, `log`, `exp`), using the same bytecode sequences as the AST emitter. Every string-manipulating stdlib method body and most prints moved onto typed IR for JVM; AST-emitted statements outside the record-DSL programs fell from 273 to 146.
 
 Iteration 5844 added JVM regression tests for the string and numeric built-ins.
+
+Iteration 5845 rendered `tab(n)` and `spc(n)` print directives in the C and JVM typed-IR print emitters, matching the AST escape/space sequences byte for byte.
+
+Iteration 5846 added C and JVM regression tests for print directives. Remaining AST emission is dominated by the record DSL: the lowered `LSET`/`GET`/`PUT`/`FIELD` siblings that `records::lower` expands from one source statement have no typed-IR counterpart, so every backend still emits them from the AST. Representing record file reads and writes in the typed IR is the prerequisite for retiring `ResolvedProgram::program` (Stage 68).

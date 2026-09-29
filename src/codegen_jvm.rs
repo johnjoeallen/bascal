@@ -1860,7 +1860,38 @@ fn emit_jvm_semantic_print_tokens(
             continue;
         };
         rendered.push_str("    getstatic java/lang/System/out Ljava/io/PrintStream;\n");
-        let descriptor = if expression.value_type == SemanticValueType::String {
+        // `TAB(n)` / `SPC(n)` are print-position directives, not values.
+        let print_directive = match &expression.kind {
+            crate::semantic_ir::ExpressionKind::Call { name, arguments }
+                if arguments.len() == 1 && name.eq_ignore_ascii_case("tab") =>
+            {
+                Some(("tab", &arguments[0]))
+            }
+            crate::semantic_ir::ExpressionKind::Call { name, arguments }
+                if arguments.len() == 1 && name.eq_ignore_ascii_case("spc") =>
+            {
+                Some(("spc", &arguments[0]))
+            }
+            _ => None,
+        };
+        let descriptor = if let Some((directive, argument)) = print_directive {
+            if directive == "tab" {
+                rendered.push_str("    new java/lang/StringBuilder\n    dup\n    invokespecial java/lang/StringBuilder/<init> ()V\n");
+                rendered.push_str("    ldc \"\u{1b}[\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+                if emit_jvm_semantic_int_argument(argument, &mut rendered, context).is_err() {
+                    return false;
+                }
+                rendered.push_str("    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;\n");
+                rendered.push_str("    ldc \"G\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+                rendered.push_str("    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;\n");
+            } else {
+                if emit_jvm_semantic_int_argument(argument, &mut rendered, context).is_err() {
+                    return false;
+                }
+                emit_space_string_runtime(&mut rendered);
+            }
+            "(Ljava/lang/String;)V"
+        } else if expression.value_type == SemanticValueType::String {
             if emit_jvm_semantic_string_expression(expression, &mut rendered, context).is_err() {
                 return false;
             }
@@ -16242,6 +16273,17 @@ mod tests {
         ] {
             assert!(output.contains(expected), "missing {expected}: {output}");
         }
+    }
+
+    #[test]
+    fn jvm_semantic_print_renders_tab_and_spc_directives() {
+        let output = generate_jvm_with_diverging_semantic_source(
+            "print \"ast marker\"\nprint \"ast marker\"\nend\n",
+            "print tab(10) \"a\"\nprint spc(3) \"b\"\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        assert!(output.contains("java/lang/StringBuilder"), "{output}");
+        assert!(output.contains("newarray char"), "{output}");
     }
 
     #[test]
