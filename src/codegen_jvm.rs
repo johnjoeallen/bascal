@@ -6575,9 +6575,16 @@ fn function_table(
                 receiver_ident.as_ref().map(type_for_ident)
             };
             let semantic_parameter_type = |position: usize| {
-                semantic_param(position)
-                    .and_then(|parameter| jvm_type_for_semantic_value(parameter.value_type))
-                    .unwrap_or_else(|| type_for_ident(&semantic_param_ident(position)))
+                match (semantic_callable, semantic_param(position)) {
+                    (Some(_), Some(parameter)) => {
+                        jvm_type_for_semantic_value(parameter.value_type)
+                            .expect("typed callable parameter type must be resolved")
+                    }
+                    (None, None) => type_for_ident(&semantic_param_ident(position)),
+                    _ => unreachable!(
+                        "parameter position comes from the selected callable signature"
+                    ),
+                }
             };
             (
                 function_key(&result_ident),
@@ -15860,6 +15867,29 @@ mod tests {
         assert_eq!(
             super::jvm_type_for_semantic_suffix(Some("%")),
             Some(super::JvmType::Numeric(super::NumericType::Int))
+        );
+    }
+
+    #[test]
+    fn jvm_semantic_parameter_descriptor_uses_typed_ir_type() {
+        let source = "function read%(value)\nreturn value\nend function\nprint read%(1)\nend\n";
+        let semantic_source = "function read%(value as long)\nreturn value\nend function\nprint read%(1)\nend\n";
+        let parsed = crate::parse_source("typed_parameter_descriptor.bcl".to_string(), source)
+            .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "typed_parameter_descriptor.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        assert_eq!(
+            semantic.callables[0].parameters[0].value_type,
+            crate::semantic_ir::SemanticValueType::Long
+        );
+        let signatures = super::function_table(&program.functions, Some(&semantic));
+        assert_eq!(
+            signatures.values().next().unwrap().params,
+            [super::JvmType::Numeric(super::NumericType::Long)]
         );
     }
 

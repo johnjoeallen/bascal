@@ -3552,6 +3552,8 @@ pub struct Parameter {
     pub value_type: SemanticValueType,
     /// Explicit source suffix, retained for syntax-sensitive target constraints.
     pub type_suffix: Option<String>,
+    /// Explicit declaration type, retained after the frontend parse.
+    pub type_annotation: Option<String>,
     pub passing: Option<Passing>,
     pub array_axes: usize,
     /// Per-axis capacity facts from the parameter declaration. `Inferred`
@@ -5582,6 +5584,7 @@ fn adapt_parameter(parameter: &rdgen_frontend::Param) -> Parameter {
         name,
         axes,
         default,
+        type_annotation,
         span,
         ..
     } = parameter;
@@ -5596,16 +5599,27 @@ fn adapt_parameter(parameter: &rdgen_frontend::Param) -> Parameter {
     let array_axes = dimensions.len();
     let typed_name = typed_identifier(name);
     let type_suffix = suffix_from_name(&typed_name);
-    let value_type = type_suffix
+    let type_annotation = type_annotation
+        .as_ref()
+        .map(|(_, value)| identifier(value));
+    let suffix_type = type_suffix
         .as_deref()
         .and_then(|suffix| suffix.chars().next())
         .map(|suffix| SemanticValueType::from_suffix(Some(suffix)))
-        .unwrap_or(SemanticValueType::Single);
+        .unwrap_or(SemanticValueType::Unknown);
+    let value_type = if suffix_type != SemanticValueType::Unknown {
+        suffix_type
+    } else if let Some(annotation) = type_annotation.as_deref() {
+        semantic_type_from_annotation(annotation)
+    } else {
+        SemanticValueType::Single
+    };
     Parameter {
         name: typed_name,
         name_span: name.span(),
         value_type,
         type_suffix,
+        type_annotation,
         passing,
         array_axes,
         dimensions,
