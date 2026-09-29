@@ -19480,9 +19480,14 @@ fn reject_float(
                         }
                     }
                     Kind::LineInput { target, .. } => add_target(target, suffixes),
-                    Kind::For { variable, body, .. } => {
+                    Kind::For {
+                        variable,
+                        variable_type,
+                        body,
+                        ..
+                    } => {
                         let ident = BasicIdent::parse(variable);
-                        if let Some(suffix) = ident.suffix {
+                        if let Some(suffix) = semantic_value_type_suffix(*variable_type) {
                             suffixes.insert(ident.name.to_ascii_lowercase(), suffix);
                         }
                         collect_semantic_target_suffixes(body, suffixes);
@@ -28641,7 +28646,7 @@ mod dialect_tests {
 
     #[test]
     fn target_c64_uses_semantic_for_variable_type() {
-        let ast_source = "program p\ndim index\nfor index = 1 to 2\nprint index\nend for\nend\n";
+        let ast_source = "program p\ndim index#\nfor index = 1 to 2\nprint index\nend for\nend\n";
         let semantic_source =
             "program p\ndim index as long\nfor index = 1 to 2\nprint index\nend for\nend\n";
         let parsed = parse_source("semantic_c64_for_type.bcl".to_string(), ast_source)

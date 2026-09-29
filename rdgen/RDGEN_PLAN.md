@@ -17501,3 +17501,7 @@ Iteration 5813 added a C64 regression where a stale AST Double suffix is overrid
 Iteration 5814 removed the remaining C callable-global suffix fallback and sourced the binding type from typed-IR names in the callable body.
 
 Iteration 5815 validated callable-global suffix selection with the C64 stale-suffix regression and the complete locked workspace suite.
+
+Iteration 5816 sourced C FOR-variable storage suffixes from the typed-IR `variable_type` field instead of reparsing the loop-variable spelling.
+
+Iteration 5817 expanded C64 FOR-variable coverage with a stale AST Double suffix and a typed-IR Long DIM annotation.
