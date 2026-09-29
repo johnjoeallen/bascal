@@ -17377,3 +17377,11 @@ Iteration 5751 aligned C callable symbol mangling with resolved result types for
 Iteration 5752 added C and JVM codegen regressions for unsuffixed function result defaults.
 
 Iteration 5753 refreshed Graphify and validated the complete locked workspace suite after callable-key changes.
+
+Iteration 5754 made callable FOR variable resolution inherit module-scope typed DIM declarations.
+
+Iteration 5755 preserved callable-local DIM shadowing over module-scope FOR variable types.
+
+Iteration 5756 added resolver coverage for module and callable FOR variable type scopes.
+
+Iteration 5757 refreshed Graphify and validated the complete locked workspace suite after FOR scope resolution changes.

@@ -1084,7 +1084,7 @@ impl SemanticModule {
             .collect::<HashMap<_, _>>();
         annotate(&mut self.statements, &top_level_types);
         for callable in &mut self.callables {
-            let mut callable_types = HashMap::new();
+            let mut callable_types = top_level_types.clone();
             collect_types(&callable.body, &mut callable_types);
             annotate(&mut callable.body, &callable_types);
         }

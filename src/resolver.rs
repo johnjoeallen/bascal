@@ -2875,7 +2875,7 @@ mod legacy_form_tests {
 
     #[test]
     fn resolver_populates_for_variable_types_from_typed_dim_declarations() {
-        let source = "procedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nend procedure\ndim index as long\nfor index = 1 to 2\nprint index\nend for\nend\n";
+        let source = "dim globalIndex as long\nprocedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend\n";
         let program = parse(source);
         let semantic =
             crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
@@ -2885,16 +2885,24 @@ mod legacy_form_tests {
 
         fn find_for(
             statements: &[crate::semantic_ir::SemanticStatement],
+            variable: &str,
         ) -> Option<crate::semantic_ir::SemanticValueType> {
             for statement in statements {
                 match &statement.kind {
                     crate::semantic_ir::SemanticStatementKind::For {
-                        variable_type, ..
-                    } => return Some(*variable_type),
+                        variable: name,
+                        variable_type,
+                        ..
+                    } if name.eq_ignore_ascii_case(variable) => return Some(*variable_type),
+                    crate::semantic_ir::SemanticStatementKind::For { body, .. } => {
+                        if let Some(value_type) = find_for(body, variable) {
+                            return Some(value_type);
+                        }
+                    }
                     crate::semantic_ir::SemanticStatementKind::Line(body)
                     | crate::semantic_ir::SemanticStatementKind::While { body, .. }
                     | crate::semantic_ir::SemanticStatementKind::Do { body, .. } => {
-                        if let Some(value_type) = find_for(body) {
+                        if let Some(value_type) = find_for(body, variable) {
                             return Some(value_type);
                         }
                     }
@@ -2905,12 +2913,16 @@ mod legacy_form_tests {
         }
 
         assert_eq!(
-            find_for(&module.statements),
+            find_for(&module.statements, "globalIndex"),
             Some(crate::semantic_ir::SemanticValueType::Long)
         );
         assert_eq!(
-            find_for(&module.callables[0].body),
+            find_for(&module.callables[0].body, "localIndex"),
             Some(crate::semantic_ir::SemanticValueType::Double)
+        );
+        assert_eq!(
+            find_for(&module.callables[0].body, "globalIndex"),
+            Some(crate::semantic_ir::SemanticValueType::Long)
         );
     }
 
