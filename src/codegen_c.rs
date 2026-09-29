@@ -19424,7 +19424,7 @@ fn reject_float(
                     string_vars.remove(&candidate);
                 }
             }
-            let typed_suffix = ident.suffix.unwrap_or(value_type);
+            let typed_suffix = value_type;
             let typed_name = c_var_name(&ident, typed_suffix);
             match typed_suffix {
                 TypeSuffix::String => {
@@ -29190,7 +29190,7 @@ mod dialect_tests {
 
     #[test]
     fn target_c64_semantic_global_uses_module_dim_type() {
-        let ast_source = "program p\ndim value\nprocedure worker()\nvalue = value + 1\nend procedure\nworker()\nend\n";
+        let ast_source = "program p\ndim value#\nprocedure worker()\nvalue = value + 1\nend procedure\nworker()\nend\n";
         let semantic_source = "program p\ndim value as integer\nprocedure worker()\nglobal value\nvalue = value + 1\nend procedure\nworker()\nend\n";
         let parsed = parse_source("semantic_c64_global_dim.bcl".to_string(), ast_source)
             .expect("legacy source parses");

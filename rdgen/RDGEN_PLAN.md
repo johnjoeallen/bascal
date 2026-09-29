@@ -17493,3 +17493,7 @@ Iteration 5809 populated C semantic storage filters from typed-IR variable refer
 Iteration 5810 derived C lowered record-file buffer suffixes from `LoweredRecordFieldKind` and added mapping coverage for every field kind.
 
 Iteration 5811 refreshed Graphify and validated the complete locked workspace suite after C semantic storage-name filtering changes.
+
+Iteration 5812 made C top-level annotated DIM storage use the typed-IR element type when it conflicts with the compatibility-AST identifier suffix.
+
+Iteration 5813 added a C64 regression where a stale AST Double suffix is overridden by the typed-IR Integer DIM annotation.
