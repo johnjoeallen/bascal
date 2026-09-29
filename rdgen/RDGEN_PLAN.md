@@ -17285,3 +17285,11 @@ Iteration 5705 added regression coverage that Unknown semantic CONST types do no
 Iteration 5706 refreshed Graphify after changing C declaration collection dependencies.
 
 Iteration 5707 validated the complete locked workspace suite after C CONST storage changes.
+
+Iteration 5708 removed JVM catch-source storage fallback to String for unresolved typed-IR types.
+
+Iteration 5709 added regression coverage that Unknown catch-source types do not allocate JVM storage.
+
+Iteration 5710 refreshed Graphify after changing JVM declaration collection dependencies.
+
+Iteration 5711 validated the complete locked workspace suite after JVM catch storage changes.

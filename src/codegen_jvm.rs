@@ -5635,13 +5635,10 @@ fn collect_semantic_scalar_declarations(
                                 .source_type
                                 .and_then(crate::semantic_ir::SemanticValueType::suffix)
                                 .and_then(TypeSuffix::from_char);
-                            declarations.insert(
-                                variable_key(&source),
-                                catch
-                                    .source_type
-                                    .and_then(jvm_type_for_semantic_value)
-                                    .unwrap_or(JvmType::String),
-                            );
+                            if let Some(ty) = catch.source_type.and_then(jvm_type_for_semantic_value)
+                            {
+                                declarations.insert(variable_key(&source), ty);
+                            }
                         }
                         visit(&catch.body, callables, declarations);
                     }
@@ -15891,20 +15888,22 @@ mod tests {
             "try\nbeep\ncatch error%, line%, file$\nbeep\nend try\n",
         )
         .unwrap();
-        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
-            &mut semantic.statements[0].kind
-        else {
-            panic!()
-        };
-        let crate::semantic_ir::SemanticStatementKind::Try {
-            catch: Some(catch), ..
-        } = &mut statements[0].kind
-        else {
-            panic!()
-        };
-        catch.error = "error$".to_string();
-        catch.line = "line&".to_string();
-        catch.source = Some("file%".to_string());
+        {
+            let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+                &mut semantic.statements[0].kind
+            else {
+                panic!()
+            };
+            let crate::semantic_ir::SemanticStatementKind::Try {
+                catch: Some(catch), ..
+            } = &mut statements[0].kind
+            else {
+                panic!()
+            };
+            catch.error = "error$".to_string();
+            catch.line = "line&".to_string();
+            catch.source = Some("file%".to_string());
+        }
         let mut declarations = std::collections::BTreeMap::new();
         super::collect_semantic_scalar_declarations(&semantic, &mut declarations);
         assert_eq!(
@@ -15916,6 +15915,23 @@ mod tests {
             Some(&super::JvmType::Numeric(super::NumericType::Int))
         );
         assert_eq!(declarations.get("file$"), Some(&super::JvmType::String));
+
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &mut semantic.statements[0].kind
+        else {
+            panic!()
+        };
+        let crate::semantic_ir::SemanticStatementKind::Try {
+            catch: Some(catch), ..
+        } = &mut statements[0].kind
+        else {
+            panic!()
+        };
+        catch.source_type = Some(crate::semantic_ir::SemanticValueType::Unknown);
+        let _ = catch;
+        let mut declarations = std::collections::BTreeMap::new();
+        super::collect_semantic_scalar_declarations(&semantic, &mut declarations);
+        assert!(!declarations.contains_key("file$"), "{declarations:?}");
 
         let suffixless = crate::semantic_ir::parse_and_adapt(
             "try\nbeep\ncatch error, line\nbeep\nend try\n",
