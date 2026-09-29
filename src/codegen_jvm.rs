@@ -5321,7 +5321,9 @@ fn collect_semantic_scalar_declarations(
             if expression.value_type != crate::semantic_ir::SemanticValueType::Unknown {
                 if let ExpressionKind::Name(name) = &expression.kind {
                     let ident = BasicIdent::parse(name);
-                    let ty = jvm_type_for_semantic_value(expression.value_type);
+                    let Some(ty) = jvm_type_for_semantic_value(expression.value_type) else {
+                        return;
+                    };
                     declarations.insert(variable_key(&ident), ty);
                 }
             }
@@ -5351,8 +5353,9 @@ fn collect_semantic_scalar_declarations(
                                 continue;
                             };
                             let ident = BasicIdent::parse(argument_name);
-                            let ty = jvm_type_for_semantic_value(argument.value_type);
-                            declarations.insert(variable_key(&ident), ty);
+                            if let Some(ty) = jvm_type_for_semantic_value(argument.value_type) {
+                                declarations.insert(variable_key(&ident), ty);
+                            }
                         }
                     }
                     for argument in arguments {
@@ -5402,8 +5405,9 @@ fn collect_semantic_scalar_declarations(
                                     continue;
                                 };
                                 let ident = BasicIdent::parse(argument_name);
-                                let ty = jvm_type_for_semantic_value(argument.value_type);
-                                declarations.insert(variable_key(&ident), ty);
+                                if let Some(ty) = jvm_type_for_semantic_value(argument.value_type) {
+                                    declarations.insert(variable_key(&ident), ty);
+                                }
                             }
                         }
                     }
@@ -5445,10 +5449,9 @@ fn collect_semantic_scalar_declarations(
                 } => {
                     register_byref_call_targets(value, callables, declarations);
                     let ident = BasicIdent::parse(&name.name);
-                    declarations.insert(
-                        variable_key(&ident),
-                        jvm_type_for_semantic_value(*value_type),
-                    );
+                    if let Some(ty) = jvm_type_for_semantic_value(*value_type) {
+                        declarations.insert(variable_key(&ident), ty);
+                    }
                 }
                 Kind::Assignment { target, value, .. } => {
                     register_target(target, declarations);
@@ -5534,9 +5537,9 @@ fn collect_semantic_scalar_declarations(
                     body,
                 } => {
                     let ident = BasicIdent::parse(variable);
-                    declarations
-                        .entry(variable_key(&ident))
-                        .or_insert_with(|| jvm_type_for_semantic_value(*variable_type));
+                    if let Some(ty) = jvm_type_for_semantic_value(*variable_type) {
+                        declarations.entry(variable_key(&ident)).or_insert(ty);
+                    }
                     register_byref_call_targets(start, callables, declarations);
                     match bounds {
                         crate::semantic_ir::ForBounds::To { limit, step } => {
@@ -5617,14 +5620,12 @@ fn collect_semantic_scalar_declarations(
                             .suffix()
                             .and_then(TypeSuffix::from_char);
                         line.suffix = catch.line_type.suffix().and_then(TypeSuffix::from_char);
-                        declarations.insert(
-                            variable_key(&error),
-                            jvm_type_for_semantic_value(catch.error_type),
-                        );
-                        declarations.insert(
-                            variable_key(&line),
-                            jvm_type_for_semantic_value(catch.line_type),
-                        );
+                        if let Some(ty) = jvm_type_for_semantic_value(catch.error_type) {
+                            declarations.insert(variable_key(&error), ty);
+                        }
+                        if let Some(ty) = jvm_type_for_semantic_value(catch.line_type) {
+                            declarations.insert(variable_key(&line), ty);
+                        }
                         for filter in &catch.filters {
                             register_byref_call_targets(filter, callables, declarations);
                         }
@@ -5638,7 +5639,7 @@ fn collect_semantic_scalar_declarations(
                                 variable_key(&source),
                                 catch
                                     .source_type
-                                    .map(jvm_type_for_semantic_value)
+                                    .and_then(jvm_type_for_semantic_value)
                                     .unwrap_or(JvmType::String),
                             );
                         }
@@ -5809,9 +5810,9 @@ fn collect_semantic_scalar_declarations(
                 name: local.name.clone(),
                 suffix: TypeSuffix::from_char(suffix),
             };
-            declarations
-                .entry(variable_key(&ident))
-                .or_insert_with(|| jvm_type_for_semantic_value(local.value_type));
+            if let Some(ty) = jvm_type_for_semantic_value(local.value_type) {
+                declarations.entry(variable_key(&ident)).or_insert(ty);
+            }
         }
         for field in &file.fields {
             let ty = jvm_type_for_record_field(field.kind);
@@ -6587,7 +6588,7 @@ fn function_table(
             };
             let semantic_parameter_type = |position: usize| {
                 semantic_param(position)
-                    .map(|parameter| jvm_type_for_semantic_value(parameter.value_type))
+                    .and_then(|parameter| jvm_type_for_semantic_value(parameter.value_type))
                     .unwrap_or_else(|| type_for_ident(&semantic_param_ident(position)))
             };
             (
@@ -8676,7 +8677,7 @@ impl JvmContext {
                     .global_types
                     .get(&name.to_ascii_lowercase())
                     .copied()
-                    .map(jvm_type_for_semantic_value)
+                    .and_then(jvm_type_for_semantic_value)
                     .unwrap_or_else(|| type_for_ident(&ident));
                 declarations.insert(variable_key(&ident), ty);
             }
@@ -8685,10 +8686,9 @@ impl JvmContext {
             for name in module.top_level_const_names() {
                 let mut ident = BasicIdent::parse(&name);
                 let previous_key = variable_key(&ident);
-                let value_type = const_types
-                    .get(&name)
-                    .copied()
-                    .unwrap_or(crate::semantic_ir::SemanticValueType::Integer);
+                let Some(value_type) = const_types.get(&name).copied() else {
+                    continue;
+                };
                 if let Some(suffix) = value_type
                     .suffix()
                     .and_then(TypeSuffix::from_char)
@@ -8699,9 +8699,10 @@ impl JvmContext {
                         declarations.remove(&previous_key);
                     }
                 }
-                let ty = jvm_type_for_semantic_value(value_type);
-                declarations.insert(variable_key(&ident), ty);
-                constant_names.insert(variable_key(&ident));
+                if let Some(ty) = jvm_type_for_semantic_value(value_type) {
+                    declarations.insert(variable_key(&ident), ty);
+                    constant_names.insert(variable_key(&ident));
+                }
             }
         } else {
             collect_scalar_declarations(
@@ -9462,15 +9463,19 @@ fn jvm_type_for_type_suffix(suffix: TypeSuffix) -> JvmType {
     }
 }
 
-fn jvm_type_for_semantic_value(value_type: crate::semantic_ir::SemanticValueType) -> JvmType {
+fn jvm_type_for_semantic_value(
+    value_type: crate::semantic_ir::SemanticValueType,
+) -> Option<JvmType> {
     match value_type {
-        crate::semantic_ir::SemanticValueType::String => JvmType::String,
-        crate::semantic_ir::SemanticValueType::Integer => JvmType::Numeric(NumericType::Int),
-        crate::semantic_ir::SemanticValueType::Long => JvmType::Numeric(NumericType::Long),
+        crate::semantic_ir::SemanticValueType::String => Some(JvmType::String),
+        crate::semantic_ir::SemanticValueType::Integer => Some(JvmType::Numeric(NumericType::Int)),
+        crate::semantic_ir::SemanticValueType::Long => Some(JvmType::Numeric(NumericType::Long)),
         crate::semantic_ir::SemanticValueType::Single
-        | crate::semantic_ir::SemanticValueType::Double => JvmType::Numeric(NumericType::Double),
-        crate::semantic_ir::SemanticValueType::Boolean
-        | crate::semantic_ir::SemanticValueType::Unknown => JvmType::Numeric(NumericType::Int),
+        | crate::semantic_ir::SemanticValueType::Double => {
+            Some(JvmType::Numeric(NumericType::Double))
+        }
+        crate::semantic_ir::SemanticValueType::Boolean => Some(JvmType::Numeric(NumericType::Int)),
+        crate::semantic_ir::SemanticValueType::Unknown => None,
     }
 }
 
@@ -9479,7 +9484,7 @@ fn jvm_type_for_semantic_suffix(suffix: Option<&str>) -> JvmType {
         .and_then(|suffix| suffix.chars().next())
         .map(|character| crate::semantic_ir::SemanticValueType::from_suffix(Some(character)))
         .unwrap_or(crate::semantic_ir::SemanticValueType::Single);
-    jvm_type_for_semantic_value(value_type)
+    jvm_type_for_semantic_value(value_type).expect("JVM callable suffix has a resolved type")
 }
 
 fn type_for_const_expr(expr: &Expr, name: &BasicIdent) -> JvmType {
@@ -15863,6 +15868,14 @@ mod tests {
         let mut arrays = std::collections::BTreeMap::new();
         super::collect_semantic_array_declarations(&module, &mut arrays);
         assert!(arrays.is_empty(), "unexpected array declarations: {}", arrays.len());
+    }
+
+    #[test]
+    fn jvm_semantic_value_type_mapping_rejects_unknown() {
+        assert_eq!(
+            super::jvm_type_for_semantic_value(crate::semantic_ir::SemanticValueType::Unknown),
+            None
+        );
     }
 
     #[test]

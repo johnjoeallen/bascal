@@ -17247,3 +17247,11 @@ Iteration 5686 removed BASIC array suffix fallback for unresolved typed-IR eleme
 Iteration 5687 validated typed BASIC array DIM emission after resolver type materialization.
 
 Iteration 5688 validated the complete locked workspace test suite after BASIC array changes.
+
+Iteration 5689 changed JVM semantic type mapping to preserve Unknown as unresolved.
+
+Iteration 5690 removed JVM Int fallback from typed scalar, callable, catch, and record declaration consumers.
+
+Iteration 5691 added direct regression coverage for Unknown JVM type mapping.
+
+Iteration 5692 validated the complete locked workspace suite after JVM typed storage changes.
