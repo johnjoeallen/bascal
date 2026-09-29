@@ -5457,7 +5457,7 @@ fn adapt_subprogram(value: &rdgen_frontend::Subprogram) -> CallableSignature {
                 kind: CallableKind::Function,
                 name: name_text.clone(),
                 name_span: name.span(),
-                result_type: suffix_from_name(&name_text),
+                result_type: suffix_from_name(&name_text).or_else(|| Some("!".to_string())),
                 receiver: None,
                 receiver_span: None,
                 parameters: adapt_parameters(parameters),
@@ -6199,6 +6199,19 @@ mod tests {
         );
         assert_eq!(SemanticValueType::Integer.suffix(), Some('%'));
         assert_eq!(SemanticValueType::Boolean.suffix(), None);
+    }
+
+    #[test]
+    fn unsuffixed_function_result_defaults_to_single_in_typed_ir() {
+        let module = adapt_module(
+            &rdgen_frontend::parse("function total()\nreturn 1\nend function\n").unwrap(),
+        );
+
+        assert_eq!(module.callables[0].result_type.as_deref(), Some("!"));
+        assert_eq!(
+            module.callable_value_type("total"),
+            SemanticValueType::Single
+        );
     }
 
     #[test]
