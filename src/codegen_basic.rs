@@ -3239,6 +3239,31 @@ mod tests {
     }
 
     #[test]
+    fn basic_dim_emission_uses_resolved_element_type() {
+        let source = "dim values(2) as long\nend\n";
+        let parsed = crate::parse_source("typed_array_ir.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let module = resolved.semantic_module.as_mut().unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
+        else {
+            panic!("expected statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Dim(items) = &mut body[0].kind else {
+            panic!("expected DIM")
+        };
+        items[0].type_annotation = Some("STRING".to_string());
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM values(2) AS LONG"), "{output}");
+        assert!(!output.contains("DIM values(2) AS STRING"), "{output}");
+    }
+
+    #[test]
     fn basic_generation_retains_callable_local_array_type_annotations() {
         for type_name in ["long", "single", "double", "string"] {
             let source = format!(
@@ -4588,9 +4613,9 @@ fn basic_semantic_dim(
         let type_clause = ident
             .suffix
             .is_none()
-            .then(|| declaration.type_annotation.as_deref())
+            .then(|| semantic_dim_type_name(declaration.element_type))
             .flatten()
-            .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
+            .map(|value| format!(" AS {value}"))
             .unwrap_or_default();
         if declaration.array_axes == 0 {
             let base = generator.ident(&ident, current_function);
@@ -8142,6 +8167,20 @@ fn semantic_dim_type_suffix(annotation: &str) -> Option<TypeSuffix> {
     }
 }
 
+fn semantic_dim_type_name(
+    value_type: crate::semantic_ir::SemanticValueType,
+) -> Option<&'static str> {
+    match value_type {
+        crate::semantic_ir::SemanticValueType::String => Some("STRING"),
+        crate::semantic_ir::SemanticValueType::Integer => Some("INTEGER"),
+        crate::semantic_ir::SemanticValueType::Long => Some("LONG"),
+        crate::semantic_ir::SemanticValueType::Single => Some("SINGLE"),
+        crate::semantic_ir::SemanticValueType::Double => Some("DOUBLE"),
+        crate::semantic_ir::SemanticValueType::Unknown
+        | crate::semantic_ir::SemanticValueType::Boolean => None,
+    }
+}
+
 fn source_position(
     source: &crate::semantic_ir::SemanticSource,
     span: crate::rdgen_frontend::SourceSpan,
@@ -8760,16 +8799,9 @@ impl CodeGenerator {
                     let type_clause = name
                         .suffix
                         .is_none()
-                        .then(|| {
-                            declaration.type_annotation.as_deref().or_else(|| {
-                                current_function
-                                    .and_then(|function| function.local_dim_types.get(&key))
-                                    .or_else(|| self.top_level_dim_types.get(&key))
-                                    .map(String::as_str)
-                            })
-                        })
+                        .then(|| semantic_dim_type_name(declaration.element_type))
                         .flatten()
-                        .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
+                        .map(|value| format!(" AS {value}"))
                         .unwrap_or_default();
                     if declaration.array_axes == 0 {
                         self.line(&format!("DIM {base}{type_clause}"));
