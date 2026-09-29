@@ -1185,6 +1185,35 @@ mod tests {
             "CONTINUE needs a line-numbered label before NEXT: {output}"
         );
         assert!(!output.contains("BEEP"), "{output}");
+
+        let semantic_module = resolved.semantic_module.as_mut().unwrap();
+        fn find_for(
+            statements: &mut [crate::semantic_ir::SemanticStatement],
+        ) -> Option<&mut crate::semantic_ir::SemanticStatement> {
+            for statement in statements {
+                if matches!(statement.kind, crate::semantic_ir::SemanticStatementKind::For { .. }) {
+                    return Some(statement);
+                }
+                if let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut statement.kind {
+                    if let Some(statement) = find_for(body) {
+                        return Some(statement);
+                    }
+                }
+            }
+            None
+        }
+        let for_statement = find_for(&mut semantic_module.statements).unwrap();
+        let crate::semantic_ir::SemanticStatementKind::For { variable_type, .. } =
+            &mut for_statement.kind
+        else {
+            unreachable!()
+        };
+        *variable_type = crate::semantic_ir::SemanticValueType::Long;
+        let typed_output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            typed_output.contains("FOR i& = 1 TO 3 STEP 2"),
+            "top-level semantic FOR suffix should come from typed IR: {typed_output}"
+        );
     }
 
     #[test]

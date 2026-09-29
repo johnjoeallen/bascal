@@ -17405,3 +17405,7 @@ Iteration 5765 made BASIC callable semantic FOR identifier suffixes consume the 
 Iteration 5766 added a callable FOR regression that overrides the source identifier suffix and verifies typed-IR emission.
 
 Iteration 5767 refreshed Graphify and validated the complete locked workspace suite after BASIC FOR codegen changes.
+
+Iteration 5768 added top-level BASIC semantic FOR regression coverage for a typed-IR variable type that differs from the parsed identifier suffix.
+
+Iteration 5769 validated the focused top-level BASIC semantic FOR regression.
