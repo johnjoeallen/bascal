@@ -9657,6 +9657,31 @@ fn emit_c_semantic_throw(
     true
 }
 
+fn emit_c_semantic_callable_throw(
+    value: &crate::semantic_ir::ThrowValue,
+    source_pos: &SourcePos,
+    out: &mut String,
+    needs_math: &mut bool,
+    supports_float: bool,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+    signature: &FnSig,
+) -> bool {
+    let Some(code) =
+        render_c_semantic_throw_code(value, needs_math, supports_float, arrays, functions)
+    else {
+        return false;
+    };
+    emit_raise_in_callable_block(
+        out,
+        &code,
+        source_pos.line,
+        &source_pos.filename,
+        signature,
+    );
+    true
+}
+
 fn emit_c_semantic_nested_output_open(
     path: &crate::semantic_ir::Expression,
     mode: crate::semantic_ir::OpenModeKind,
@@ -12943,23 +12968,16 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                     ),
                     Kind::Throw(value) if ctx.current_function_reachable => {
-                        let Some(code) = render_c_semantic_throw_code(
+                        emit_c_semantic_callable_throw(
                             value,
+                            &stmt.pos,
+                            &mut body,
                             needs_math,
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
-                        ) else {
-                            return false;
-                        };
-                        emit_raise_in_callable_block(
-                            &mut body,
-                            &code,
-                            stmt.pos.line,
-                            &stmt.pos.filename,
                             sig,
-                        );
-                        true
+                        )
                     }
                     Kind::Return(crate::semantic_ir::ReturnValue::Default) if sig.is_void => {
                         emit_byref_scalar_copyback(sig, &mut body);

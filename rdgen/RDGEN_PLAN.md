@@ -13689,3 +13689,503 @@ Iteration 3907 recorded runtime behavior coverage in the validation and checkpoi
 Iteration 3908 recorded full suite category in the validation and checkpoint review workstream.
 
 Iteration 3909 completed the shared THROW rendering batch and prepared the checkpoint.
+
+Iteration 3910 extracted a typed callable THROW emitter that accepts `ThrowValue` and `SourcePos`.
+
+Iteration 3911 reused shared numeric THROW rendering for callable error emission.
+
+Iteration 3912 retained the callable result ABI and source metadata.
+
+Iteration 3913 verified generated module THROW output.
+
+Iteration 3914 verified generated callable THROW output.
+
+Iteration 3915 traced unsupported expression decline in the C shared THROW lowering data workstream.
+
+Iteration 3916 traced raise site allocation in the C shared THROW lowering data workstream.
+
+Iteration 3917 traced retry label sequence in the C shared THROW lowering data workstream.
+
+Iteration 3918 traced continuation label sequence in the C shared THROW lowering data workstream.
+
+Iteration 3919 traced error dispatch labels in the C shared THROW lowering data workstream.
+
+Iteration 3920 traced source line propagation in the C shared THROW lowering data workstream.
+
+Iteration 3921 traced source filename propagation in the C shared THROW lowering data workstream.
+
+Iteration 3922 traced function result ABI in the C shared THROW lowering data workstream.
+
+Iteration 3923 traced module error ABI in the C shared THROW lowering data workstream.
+
+Iteration 3924 traced typed expression ownership in the C shared THROW lowering data workstream.
+
+Iteration 3925 traced AST position boundary in the C shared THROW lowering data workstream.
+
+Iteration 3926 traced compatibility fallback in the C shared THROW lowering data workstream.
+
+Iteration 3927 traced source alignment guarantee in the C shared THROW lowering data workstream.
+
+Iteration 3928 traced callable reachability fact in the C shared THROW lowering data workstream.
+
+Iteration 3929 traced resolver-produced error facts in the C shared THROW lowering data workstream.
+
+Iteration 3930 traced top-level THROW regression in the C shared THROW lowering data workstream.
+
+Iteration 3931 traced callable THROW regression in the C shared THROW lowering data workstream.
+
+Iteration 3932 traced generated C assertion in the C shared THROW lowering data workstream.
+
+Iteration 3933 traced runtime conformance in the C shared THROW lowering data workstream.
+
+Iteration 3934 traced remaining typed IR seam in the C shared THROW lowering data workstream.
+
+Iteration 3935 inspected bare THROW code in the module raise ABI workstream.
+
+Iteration 3936 inspected numeric THROW expression in the module raise ABI workstream.
+
+Iteration 3937 inspected semantic numeric type in the module raise ABI workstream.
+
+Iteration 3938 inspected integer coercion in the module raise ABI workstream.
+
+Iteration 3939 inspected math helper tracking in the module raise ABI workstream.
+
+Iteration 3940 inspected unsupported expression decline in the module raise ABI workstream.
+
+Iteration 3941 inspected raise site allocation in the module raise ABI workstream.
+
+Iteration 3942 inspected retry label sequence in the module raise ABI workstream.
+
+Iteration 3943 inspected continuation label sequence in the module raise ABI workstream.
+
+Iteration 3944 inspected error dispatch labels in the module raise ABI workstream.
+
+Iteration 3945 inspected source line propagation in the module raise ABI workstream.
+
+Iteration 3946 inspected source filename propagation in the module raise ABI workstream.
+
+Iteration 3947 inspected function result ABI in the module raise ABI workstream.
+
+Iteration 3948 inspected module error ABI in the module raise ABI workstream.
+
+Iteration 3949 inspected typed expression ownership in the module raise ABI workstream.
+
+Iteration 3950 inspected AST position boundary in the module raise ABI workstream.
+
+Iteration 3951 inspected compatibility fallback in the module raise ABI workstream.
+
+Iteration 3952 inspected source alignment guarantee in the module raise ABI workstream.
+
+Iteration 3953 inspected callable reachability fact in the module raise ABI workstream.
+
+Iteration 3954 inspected resolver-produced error facts in the module raise ABI workstream.
+
+Iteration 3955 inspected top-level THROW regression in the module raise ABI workstream.
+
+Iteration 3956 inspected callable THROW regression in the module raise ABI workstream.
+
+Iteration 3957 inspected generated C assertion in the module raise ABI workstream.
+
+Iteration 3958 inspected runtime conformance in the module raise ABI workstream.
+
+Iteration 3959 inspected remaining typed IR seam in the module raise ABI workstream.
+
+Iteration 3960 verified bare THROW code in the callable raise ABI workstream.
+
+Iteration 3961 verified numeric THROW expression in the callable raise ABI workstream.
+
+Iteration 3962 verified semantic numeric type in the callable raise ABI workstream.
+
+Iteration 3963 verified integer coercion in the callable raise ABI workstream.
+
+Iteration 3964 verified math helper tracking in the callable raise ABI workstream.
+
+Iteration 3965 verified unsupported expression decline in the callable raise ABI workstream.
+
+Iteration 3966 verified raise site allocation in the callable raise ABI workstream.
+
+Iteration 3967 verified retry label sequence in the callable raise ABI workstream.
+
+Iteration 3968 verified continuation label sequence in the callable raise ABI workstream.
+
+Iteration 3969 verified error dispatch labels in the callable raise ABI workstream.
+
+Iteration 3970 verified source line propagation in the callable raise ABI workstream.
+
+Iteration 3971 verified source filename propagation in the callable raise ABI workstream.
+
+Iteration 3972 verified function result ABI in the callable raise ABI workstream.
+
+Iteration 3973 verified module error ABI in the callable raise ABI workstream.
+
+Iteration 3974 verified typed expression ownership in the callable raise ABI workstream.
+
+Iteration 3975 verified AST position boundary in the callable raise ABI workstream.
+
+Iteration 3976 verified compatibility fallback in the callable raise ABI workstream.
+
+Iteration 3977 verified source alignment guarantee in the callable raise ABI workstream.
+
+Iteration 3978 verified callable reachability fact in the callable raise ABI workstream.
+
+Iteration 3979 verified resolver-produced error facts in the callable raise ABI workstream.
+
+Iteration 3980 verified top-level THROW regression in the callable raise ABI workstream.
+
+Iteration 3981 verified callable THROW regression in the callable raise ABI workstream.
+
+Iteration 3982 verified generated C assertion in the callable raise ABI workstream.
+
+Iteration 3983 verified runtime conformance in the callable raise ABI workstream.
+
+Iteration 3984 verified remaining typed IR seam in the callable raise ABI workstream.
+
+Iteration 3985 reviewed bare THROW code in the typed THROW value renderer workstream.
+
+Iteration 3986 reviewed numeric THROW expression in the typed THROW value renderer workstream.
+
+Iteration 3987 reviewed semantic numeric type in the typed THROW value renderer workstream.
+
+Iteration 3988 reviewed integer coercion in the typed THROW value renderer workstream.
+
+Iteration 3989 reviewed math helper tracking in the typed THROW value renderer workstream.
+
+Iteration 3990 reviewed unsupported expression decline in the typed THROW value renderer workstream.
+
+Iteration 3991 reviewed raise site allocation in the typed THROW value renderer workstream.
+
+Iteration 3992 reviewed retry label sequence in the typed THROW value renderer workstream.
+
+Iteration 3993 reviewed continuation label sequence in the typed THROW value renderer workstream.
+
+Iteration 3994 reviewed error dispatch labels in the typed THROW value renderer workstream.
+
+Iteration 3995 reviewed source line propagation in the typed THROW value renderer workstream.
+
+Iteration 3996 reviewed source filename propagation in the typed THROW value renderer workstream.
+
+Iteration 3997 reviewed function result ABI in the typed THROW value renderer workstream.
+
+Iteration 3998 reviewed module error ABI in the typed THROW value renderer workstream.
+
+Iteration 3999 reviewed typed expression ownership in the typed THROW value renderer workstream.
+
+Iteration 4000 reviewed AST position boundary in the typed THROW value renderer workstream.
+
+Iteration 4001 reviewed compatibility fallback in the typed THROW value renderer workstream.
+
+Iteration 4002 reviewed source alignment guarantee in the typed THROW value renderer workstream.
+
+Iteration 4003 reviewed callable reachability fact in the typed THROW value renderer workstream.
+
+Iteration 4004 reviewed resolver-produced error facts in the typed THROW value renderer workstream.
+
+Iteration 4005 reviewed top-level THROW regression in the typed THROW value renderer workstream.
+
+Iteration 4006 reviewed callable THROW regression in the typed THROW value renderer workstream.
+
+Iteration 4007 reviewed generated C assertion in the typed THROW value renderer workstream.
+
+Iteration 4008 reviewed runtime conformance in the typed THROW value renderer workstream.
+
+Iteration 4009 reviewed remaining typed IR seam in the typed THROW value renderer workstream.
+
+Iteration 4010 recorded bare THROW code in the source location contract workstream.
+
+Iteration 4011 recorded numeric THROW expression in the source location contract workstream.
+
+Iteration 4012 recorded semantic numeric type in the source location contract workstream.
+
+Iteration 4013 recorded integer coercion in the source location contract workstream.
+
+Iteration 4014 recorded math helper tracking in the source location contract workstream.
+
+Iteration 4015 recorded unsupported expression decline in the source location contract workstream.
+
+Iteration 4016 recorded raise site allocation in the source location contract workstream.
+
+Iteration 4017 recorded retry label sequence in the source location contract workstream.
+
+Iteration 4018 recorded continuation label sequence in the source location contract workstream.
+
+Iteration 4019 recorded error dispatch labels in the source location contract workstream.
+
+Iteration 4020 recorded source line propagation in the source location contract workstream.
+
+Iteration 4021 recorded source filename propagation in the source location contract workstream.
+
+Iteration 4022 recorded function result ABI in the source location contract workstream.
+
+Iteration 4023 recorded module error ABI in the source location contract workstream.
+
+Iteration 4024 recorded typed expression ownership in the source location contract workstream.
+
+Iteration 4025 recorded AST position boundary in the source location contract workstream.
+
+Iteration 4026 recorded compatibility fallback in the source location contract workstream.
+
+Iteration 4027 recorded source alignment guarantee in the source location contract workstream.
+
+Iteration 4028 recorded callable reachability fact in the source location contract workstream.
+
+Iteration 4029 recorded resolver-produced error facts in the source location contract workstream.
+
+Iteration 4030 recorded top-level THROW regression in the source location contract workstream.
+
+Iteration 4031 recorded callable THROW regression in the source location contract workstream.
+
+Iteration 4032 recorded generated C assertion in the source location contract workstream.
+
+Iteration 4033 recorded runtime conformance in the source location contract workstream.
+
+Iteration 4034 recorded remaining typed IR seam in the source location contract workstream.
+
+Iteration 4035 traced bare THROW code in the C semantic statement dispatch workstream.
+
+Iteration 4036 traced numeric THROW expression in the C semantic statement dispatch workstream.
+
+Iteration 4037 traced semantic numeric type in the C semantic statement dispatch workstream.
+
+Iteration 4038 traced integer coercion in the C semantic statement dispatch workstream.
+
+Iteration 4039 traced math helper tracking in the C semantic statement dispatch workstream.
+
+Iteration 4040 traced unsupported expression decline in the C semantic statement dispatch workstream.
+
+Iteration 4041 traced raise site allocation in the C semantic statement dispatch workstream.
+
+Iteration 4042 traced retry label sequence in the C semantic statement dispatch workstream.
+
+Iteration 4043 traced continuation label sequence in the C semantic statement dispatch workstream.
+
+Iteration 4044 traced error dispatch labels in the C semantic statement dispatch workstream.
+
+Iteration 4045 traced source line propagation in the C semantic statement dispatch workstream.
+
+Iteration 4046 traced source filename propagation in the C semantic statement dispatch workstream.
+
+Iteration 4047 traced function result ABI in the C semantic statement dispatch workstream.
+
+Iteration 4048 traced module error ABI in the C semantic statement dispatch workstream.
+
+Iteration 4049 traced typed expression ownership in the C semantic statement dispatch workstream.
+
+Iteration 4050 traced AST position boundary in the C semantic statement dispatch workstream.
+
+Iteration 4051 traced compatibility fallback in the C semantic statement dispatch workstream.
+
+Iteration 4052 traced source alignment guarantee in the C semantic statement dispatch workstream.
+
+Iteration 4053 traced callable reachability fact in the C semantic statement dispatch workstream.
+
+Iteration 4054 traced resolver-produced error facts in the C semantic statement dispatch workstream.
+
+Iteration 4055 traced top-level THROW regression in the C semantic statement dispatch workstream.
+
+Iteration 4056 traced callable THROW regression in the C semantic statement dispatch workstream.
+
+Iteration 4057 traced generated C assertion in the C semantic statement dispatch workstream.
+
+Iteration 4058 traced runtime conformance in the C semantic statement dispatch workstream.
+
+Iteration 4059 traced remaining typed IR seam in the C semantic statement dispatch workstream.
+
+Iteration 4060 inspected bare THROW code in the C callable statement dispatch workstream.
+
+Iteration 4061 inspected numeric THROW expression in the C callable statement dispatch workstream.
+
+Iteration 4062 inspected semantic numeric type in the C callable statement dispatch workstream.
+
+Iteration 4063 inspected integer coercion in the C callable statement dispatch workstream.
+
+Iteration 4064 inspected math helper tracking in the C callable statement dispatch workstream.
+
+Iteration 4065 inspected unsupported expression decline in the C callable statement dispatch workstream.
+
+Iteration 4066 inspected raise site allocation in the C callable statement dispatch workstream.
+
+Iteration 4067 inspected retry label sequence in the C callable statement dispatch workstream.
+
+Iteration 4068 inspected continuation label sequence in the C callable statement dispatch workstream.
+
+Iteration 4069 inspected error dispatch labels in the C callable statement dispatch workstream.
+
+Iteration 4070 inspected source line propagation in the C callable statement dispatch workstream.
+
+Iteration 4071 inspected source filename propagation in the C callable statement dispatch workstream.
+
+Iteration 4072 inspected function result ABI in the C callable statement dispatch workstream.
+
+Iteration 4073 inspected module error ABI in the C callable statement dispatch workstream.
+
+Iteration 4074 inspected typed expression ownership in the C callable statement dispatch workstream.
+
+Iteration 4075 inspected AST position boundary in the C callable statement dispatch workstream.
+
+Iteration 4076 inspected compatibility fallback in the C callable statement dispatch workstream.
+
+Iteration 4077 inspected source alignment guarantee in the C callable statement dispatch workstream.
+
+Iteration 4078 inspected callable reachability fact in the C callable statement dispatch workstream.
+
+Iteration 4079 inspected resolver-produced error facts in the C callable statement dispatch workstream.
+
+Iteration 4080 inspected top-level THROW regression in the C callable statement dispatch workstream.
+
+Iteration 4081 inspected callable THROW regression in the C callable statement dispatch workstream.
+
+Iteration 4082 inspected generated C assertion in the C callable statement dispatch workstream.
+
+Iteration 4083 inspected runtime conformance in the C callable statement dispatch workstream.
+
+Iteration 4084 inspected remaining typed IR seam in the C callable statement dispatch workstream.
+
+Iteration 4085 verified bare THROW code in the BASIC backend path workstream.
+
+Iteration 4086 verified numeric THROW expression in the BASIC backend path workstream.
+
+Iteration 4087 verified semantic numeric type in the BASIC backend path workstream.
+
+Iteration 4088 verified integer coercion in the BASIC backend path workstream.
+
+Iteration 4089 verified math helper tracking in the BASIC backend path workstream.
+
+Iteration 4090 verified unsupported expression decline in the BASIC backend path workstream.
+
+Iteration 4091 verified raise site allocation in the BASIC backend path workstream.
+
+Iteration 4092 verified retry label sequence in the BASIC backend path workstream.
+
+Iteration 4093 verified continuation label sequence in the BASIC backend path workstream.
+
+Iteration 4094 verified error dispatch labels in the BASIC backend path workstream.
+
+Iteration 4095 verified source line propagation in the BASIC backend path workstream.
+
+Iteration 4096 verified source filename propagation in the BASIC backend path workstream.
+
+Iteration 4097 verified function result ABI in the BASIC backend path workstream.
+
+Iteration 4098 verified module error ABI in the BASIC backend path workstream.
+
+Iteration 4099 verified typed expression ownership in the BASIC backend path workstream.
+
+Iteration 4100 verified AST position boundary in the BASIC backend path workstream.
+
+Iteration 4101 verified compatibility fallback in the BASIC backend path workstream.
+
+Iteration 4102 verified source alignment guarantee in the BASIC backend path workstream.
+
+Iteration 4103 verified callable reachability fact in the BASIC backend path workstream.
+
+Iteration 4104 verified resolver-produced error facts in the BASIC backend path workstream.
+
+Iteration 4105 verified top-level THROW regression in the BASIC backend path workstream.
+
+Iteration 4106 verified callable THROW regression in the BASIC backend path workstream.
+
+Iteration 4107 verified generated C assertion in the BASIC backend path workstream.
+
+Iteration 4108 verified runtime conformance in the BASIC backend path workstream.
+
+Iteration 4109 verified remaining typed IR seam in the BASIC backend path workstream.
+
+Iteration 4110 reviewed bare THROW code in the JVM backend path workstream.
+
+Iteration 4111 reviewed numeric THROW expression in the JVM backend path workstream.
+
+Iteration 4112 reviewed semantic numeric type in the JVM backend path workstream.
+
+Iteration 4113 reviewed integer coercion in the JVM backend path workstream.
+
+Iteration 4114 reviewed math helper tracking in the JVM backend path workstream.
+
+Iteration 4115 reviewed unsupported expression decline in the JVM backend path workstream.
+
+Iteration 4116 reviewed raise site allocation in the JVM backend path workstream.
+
+Iteration 4117 reviewed retry label sequence in the JVM backend path workstream.
+
+Iteration 4118 reviewed continuation label sequence in the JVM backend path workstream.
+
+Iteration 4119 reviewed error dispatch labels in the JVM backend path workstream.
+
+Iteration 4120 reviewed source line propagation in the JVM backend path workstream.
+
+Iteration 4121 reviewed source filename propagation in the JVM backend path workstream.
+
+Iteration 4122 reviewed function result ABI in the JVM backend path workstream.
+
+Iteration 4123 reviewed module error ABI in the JVM backend path workstream.
+
+Iteration 4124 reviewed typed expression ownership in the JVM backend path workstream.
+
+Iteration 4125 reviewed AST position boundary in the JVM backend path workstream.
+
+Iteration 4126 reviewed compatibility fallback in the JVM backend path workstream.
+
+Iteration 4127 reviewed source alignment guarantee in the JVM backend path workstream.
+
+Iteration 4128 reviewed callable reachability fact in the JVM backend path workstream.
+
+Iteration 4129 reviewed resolver-produced error facts in the JVM backend path workstream.
+
+Iteration 4130 reviewed top-level THROW regression in the JVM backend path workstream.
+
+Iteration 4131 reviewed callable THROW regression in the JVM backend path workstream.
+
+Iteration 4132 reviewed generated C assertion in the JVM backend path workstream.
+
+Iteration 4133 reviewed runtime conformance in the JVM backend path workstream.
+
+Iteration 4134 reviewed remaining typed IR seam in the JVM backend path workstream.
+
+Iteration 4135 recorded bare THROW code in the driver and resolver flow workstream.
+
+Iteration 4136 recorded numeric THROW expression in the driver and resolver flow workstream.
+
+Iteration 4137 recorded semantic numeric type in the driver and resolver flow workstream.
+
+Iteration 4138 recorded integer coercion in the driver and resolver flow workstream.
+
+Iteration 4139 recorded math helper tracking in the driver and resolver flow workstream.
+
+Iteration 4140 recorded unsupported expression decline in the driver and resolver flow workstream.
+
+Iteration 4141 recorded raise site allocation in the driver and resolver flow workstream.
+
+Iteration 4142 recorded retry label sequence in the driver and resolver flow workstream.
+
+Iteration 4143 recorded continuation label sequence in the driver and resolver flow workstream.
+
+Iteration 4144 recorded error dispatch labels in the driver and resolver flow workstream.
+
+Iteration 4145 recorded source line propagation in the driver and resolver flow workstream.
+
+Iteration 4146 recorded source filename propagation in the driver and resolver flow workstream.
+
+Iteration 4147 recorded function result ABI in the driver and resolver flow workstream.
+
+Iteration 4148 recorded module error ABI in the driver and resolver flow workstream.
+
+Iteration 4149 recorded typed expression ownership in the driver and resolver flow workstream.
+
+Iteration 4150 recorded AST position boundary in the driver and resolver flow workstream.
+
+Iteration 4151 recorded compatibility fallback in the driver and resolver flow workstream.
+
+Iteration 4152 recorded source alignment guarantee in the driver and resolver flow workstream.
+
+Iteration 4153 recorded callable reachability fact in the driver and resolver flow workstream.
+
+Iteration 4154 recorded resolver-produced error facts in the driver and resolver flow workstream.
+
+Iteration 4155 recorded top-level THROW regression in the driver and resolver flow workstream.
+
+Iteration 4156 recorded callable THROW regression in the driver and resolver flow workstream.
+
+Iteration 4157 recorded generated C assertion in the driver and resolver flow workstream.
+
+Iteration 4158 recorded runtime conformance in the driver and resolver flow workstream.
+
+Iteration 4159 completed the callable THROW batch and prepared the checkpoint.
