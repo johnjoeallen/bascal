@@ -17537,3 +17537,13 @@ Iteration 5831 rewrote built-in scalar methods (`s$.left(2)`) to their ordinary 
 Iteration 5832 fixed the generated frontend so `if ... then // comment` still selects the block-if form: the grammar accepts a same-line comment before the newline, and the generated `expect_newline` skips trailing blanks. This had been declining whole streams to the AST for any block `if` with a trailing comment or stray blank.
 
 Iteration 5833 refreshed three stale rdgen-codegen-rust tests (corpus size 83 to 87, SelectCase shape, downto round trip) that already failed on the branch before this work, and added trailing-blank coverage for `newline`.
+
+Iteration 5834 re-annotated a merged module's expression types after every `prepend_dependency`, so root-module calls to a dependency's methods (chains like `s.ltrim().rtrim()`) resolve instead of staying Unknown.
+
+Iteration 5835 rendered ordinary-syntax scalar-method calls (`ucase$(s$)`) in the BASIC print and I/O paths by recognizing them in `semantic_expression_contains_callable_call`.
+
+Iteration 5836 added `SemanticCondition` to the BASIC semantic emitters: a `&&`/`||` chain lowers to one short-circuit guard per operand at every `if`, `while` and `do`, top level and callable. This was the last construct sending stdlib method bodies (`ucase`, `lcase`, `ltrim`, `rtrim`) and `short_circuit.bcl` to the AST; outside the record-DSL programs every top-level BASIC statement is now emitted from typed IR.
+
+Iteration 5837 made the JVM semantic dispatchers decline any compound statement containing a record `file` declaration. Its `open` exists only as a lowered AST sibling, so a `try` around `file x = open(...)` compiled to a program that never opened the file (found by `jvm_inventory_list_all...` once alignment started succeeding for `inventory.bcl`).
+
+Iteration 5838 added regression tests for chain lowering, chained and ordinary scalar-method prints, dependency re-annotation, and the JVM nested file declaration.

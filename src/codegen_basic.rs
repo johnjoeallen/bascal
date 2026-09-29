@@ -2062,6 +2062,57 @@ mod tests {
     }
 
     #[test]
+    fn basic_semantic_if_lowers_and_chain_to_one_guard_per_operand() {
+        let output = generate_with_diverging_semantic_source(
+            "x% = 1\nprint \"ast marker\"\n\n\nend\n",
+            "x% = 1\nif x% > 0 && x% < 5 then\nprint 1\nend if\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        assert_eq!(output.matches("THEN GOTO").count(), 2, "{output}");
+        assert!(!output.contains("SC_"), "AND chain needs no skip label: {output}");
+    }
+
+    #[test]
+    fn basic_semantic_if_lowers_or_chain_with_a_skip_label() {
+        let output = generate_with_diverging_semantic_source(
+            "x% = 1\nprint \"ast marker\"\n\n\nend\n",
+            "x% = 1\nif x% < 0 || x% > 5 then\nprint 1\nend if\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        assert_eq!(output.matches("<> 0 THEN GOTO").count(), 2, "{output}");
+        assert!(
+            output.lines().any(|line| line.trim_start().starts_with("GOTO ")),
+            "OR chain must skip the body when no operand held: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_semantic_loops_lower_short_circuit_chains() {
+        let output = generate_with_diverging_semantic_source(
+            "x% = 1\nprint \"ast marker\"\nprint \"ast marker\"\n\n\n\nend\n",
+            "x% = 1\nwhile x% > 0 && x% < 5\nx% = x% + 1\nend while\ndo until x% > 9 || x% = 7\nx% = x% + 1\nloop\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        assert!(output.contains("REM END WHILE"), "{output}");
+        assert!(output.contains("REM END DO"), "{output}");
+    }
+
+    #[test]
+    fn basic_semantic_print_of_ordinary_and_chained_scalar_method_calls() {
+        let method = "method shout[string]()\nreturn self$ + \"!\"\nend method\n";
+        let output = generate_with_diverging_semantic_source(
+            &format!("{method}print \"ast marker\"\nprint \"ast marker\"\nend\n"),
+            &format!("{method}print shout$(\"a\")\nprint \"b\".shout().shout()\nend\n"),
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        let calls = output
+            .lines()
+            .filter(|line| line.trim_start().starts_with("GOSUB"))
+            .count();
+        assert_eq!(calls, 3, "{output}");
+    }
+
+    #[test]
     fn basic_callable_generation_dispatches_semantic_terminal_and_error_statements() {
         let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nreturn 0\nend function\nprint value%()\nend\n";
         let semantic_source = "function value%()\ncls\nbeep\nclear\nstop\nsystem\nerror 9\nthrow\nreturn 0\nend function\nprint value%()\nend\n";
@@ -5003,6 +5054,7 @@ fn basic_semantic_try_stream_is_typed(
 }
 
 
+
 fn basic_semantic_intrinsics(
     generator: &mut CodeGenerator,
     module: &crate::semantic_ir::SemanticModule,
@@ -5090,15 +5142,7 @@ fn basic_semantic_intrinsics(
                     else_body,
                     ..
                 } => {
-                    let (condition_prelude, condition) = if let Some(condition) =
-                        generator.semantic_const_expression(condition, None)
-                    {
-                        (Vec::new(), condition)
-                    } else if let Some(rendered) =
-                        generator.semantic_expression_with_prelude(condition, None)
-                    {
-                        rendered
-                    } else {
+                    let Some(condition) = generator.semantic_condition(condition, None) else {
                         return false;
                     };
                     let mut then_lines = Vec::new();
@@ -5122,14 +5166,13 @@ fn basic_semantic_intrinsics(
                     generator.next_label += 1;
                     let else_label = format!("IF_{id:04}_ELSE");
                     let end_label = format!("IF_{id:04}_END");
-                    output.extend(condition_prelude);
                     if else_body.is_empty() {
-                        output.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                        output.extend(condition.jump_lines(&end_label, false));
                         output.extend(then_lines.into_iter().map(|line| format!("    {line}")));
                         output.push(format!("{end_label}:"));
                         output.push("REM END IF".to_string());
                     } else {
-                        output.push(format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+                        output.extend(condition.jump_lines(&else_label, false));
                         output.extend(then_lines.into_iter().map(|line| format!("    {line}")));
                         output.push(format!("GOTO {end_label}"));
                         output.push(format!("{else_label}:"));
@@ -5275,15 +5318,7 @@ fn basic_semantic_intrinsics(
                     output.push(format!("NEXT {variable}"));
                 }
                 Kind::While { condition, body } => {
-                    let (condition_prelude, condition) = if let Some(condition) =
-                        generator.semantic_const_expression(condition, None)
-                    {
-                        (Vec::new(), condition)
-                    } else if let Some(rendered) =
-                        generator.semantic_expression_with_prelude(condition, None)
-                    {
-                        rendered
-                    } else {
+                    let Some(condition) = generator.semantic_condition(condition, None) else {
                         return false;
                     };
                     let id = generator.next_label;
@@ -5308,8 +5343,7 @@ fn basic_semantic_intrinsics(
                         return false;
                     }
                     output.push(format!("{top_label}:"));
-                    output.extend(condition_prelude);
-                    output.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                    output.extend(condition.jump_lines(&end_label, false));
                     output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
                     output.push(format!("GOTO {top_label}"));
                     output.push(format!("{end_label}:"));
@@ -5322,35 +5356,21 @@ fn basic_semantic_intrinsics(
                 } => {
                     let pre = match pre_condition {
                         Some(condition) => {
-                            let (prelude, value) = if let Some(value) =
-                                generator.semantic_const_expression(&condition.value, None)
-                            {
-                                (Vec::new(), value)
-                            } else if let Some(rendered) =
-                                generator.semantic_expression_with_prelude(&condition.value, None)
-                            {
-                                rendered
-                            } else {
+                            let Some(rendered) = generator.semantic_condition(&condition.value, None)
+                            else {
                                 return false;
                             };
-                            Some((condition.kind, prelude, value))
+                            Some((condition.kind, rendered))
                         }
                         None => None,
                     };
                     let post = match post_condition {
                         Some(condition) => {
-                            let (prelude, value) = if let Some(value) =
-                                generator.semantic_const_expression(&condition.value, None)
-                            {
-                                (Vec::new(), value)
-                            } else if let Some(rendered) =
-                                generator.semantic_expression_with_prelude(&condition.value, None)
-                            {
-                                rendered
-                            } else {
+                            let Some(rendered) = generator.semantic_condition(&condition.value, None)
+                            else {
                                 return false;
                             };
-                            Some((condition.kind, prelude, value))
+                            Some((condition.kind, rendered))
                         }
                         None => None,
                     };
@@ -5377,25 +5397,20 @@ fn basic_semantic_intrinsics(
                         return false;
                     }
                     output.push(format!("{top_label}:"));
-                    if let Some((kind, prelude, condition)) = pre {
-                        output.extend(prelude);
-                        let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
-                            "= 0"
-                        } else {
-                            "<> 0"
-                        };
-                        output.push(format!("IF ({condition}) {operator} THEN GOTO {end_label}"));
+                    if let Some((kind, condition)) = pre {
+                        let invert = kind != crate::semantic_ir::LoopConditionKind::While;
+                        output.extend(condition.jump_lines(&end_label, invert));
                     }
                     output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
                     output.push(format!("{continue_label}:"));
-                    if let Some((kind, prelude, condition)) = post {
-                        output.extend(prelude.into_iter().map(|line| format!("    {line}")));
-                        let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
-                            "<> 0"
-                        } else {
-                            "= 0"
-                        };
-                        output.push(format!("IF ({condition}) {operator} THEN GOTO {top_label}"));
+                    if let Some((kind, condition)) = post {
+                        let invert = kind == crate::semantic_ir::LoopConditionKind::While;
+                        output.extend(
+                            condition
+                                .jump_lines(&top_label, invert)
+                                .into_iter()
+                                .map(|line| format!("    {line}")),
+                        );
                     } else {
                         output.push(format!("GOTO {top_label}"));
                     }
@@ -7594,13 +7609,7 @@ fn basic_semantic_callable_statement_inner(
             else_body,
             ..
         } => {
-            let (condition_prelude, condition) = if let Some(condition) =
-                generator.semantic_const_expression(condition, Some(function))
-            {
-                (Vec::new(), condition)
-            } else {
-                generator.semantic_expression_with_prelude(condition, Some(function))?
-            };
+            let condition = generator.semantic_condition(condition, Some(function))?;
             let mut then_lines = Vec::new();
             let mut else_lines = Vec::new();
             for statement in then_body {
@@ -7617,13 +7626,13 @@ fn basic_semantic_callable_statement_inner(
             generator.next_label += 1;
             let else_label = format!("IF_{id:04}_ELSE");
             let end_label = format!("IF_{id:04}_END");
-            let mut lines = condition_prelude;
+            let mut lines = Vec::new();
             if else_body.is_empty() {
-                lines.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                lines.extend(condition.jump_lines(&end_label, false));
                 lines.extend(then_lines.into_iter().map(|line| format!("    {line}")));
                 lines.push(format!("{end_label}:"));
             } else {
-                lines.push(format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+                lines.extend(condition.jump_lines(&else_label, false));
                 lines.extend(then_lines.into_iter().map(|line| format!("    {line}")));
                 lines.push(format!("GOTO {end_label}"));
                 lines.push(format!("{else_label}:"));
@@ -7759,13 +7768,7 @@ fn basic_semantic_callable_statement_inner(
             Some(lines)
         }
         Kind::While { condition, body } => {
-            let (condition_prelude, condition) = if let Some(condition) =
-                generator.semantic_const_expression(condition, Some(function))
-            {
-                (Vec::new(), condition)
-            } else {
-                generator.semantic_expression_with_prelude(condition, Some(function))?
-            };
+            let condition = generator.semantic_condition(condition, Some(function))?;
             let id = generator.next_label;
             generator.next_label += 1;
             let top_label = format!("WHILE_{id:04}_TOP");
@@ -7785,8 +7788,7 @@ fn basic_semantic_callable_statement_inner(
             generator.loop_exit_stack.pop();
             body_result?;
             let mut lines = vec![format!("{top_label}:")];
-            lines.extend(condition_prelude);
-            lines.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+            lines.extend(condition.jump_lines(&end_label, false));
             lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
             lines.push(format!("GOTO {top_label}"));
             lines.push(format!("{end_label}:"));
@@ -7800,15 +7802,9 @@ fn basic_semantic_callable_statement_inner(
         } => {
             let render_condition =
                 |generator: &mut CodeGenerator, condition: &crate::semantic_ir::LoopCondition| {
-                    if let Some(value) =
-                        generator.semantic_const_expression(&condition.value, Some(function))
-                    {
-                        Some((condition.kind, Vec::new(), value))
-                    } else {
-                        generator
-                            .semantic_expression_with_prelude(&condition.value, Some(function))
-                            .map(|(prelude, value)| (condition.kind, prelude, value))
-                    }
+                    generator
+                        .semantic_condition(&condition.value, Some(function))
+                        .map(|rendered| (condition.kind, rendered))
                 };
             let pre = match pre_condition {
                 Some(condition) => Some(render_condition(generator, condition)?),
@@ -7838,25 +7834,20 @@ fn basic_semantic_callable_statement_inner(
             generator.loop_exit_stack.pop();
             body_result?;
             let mut lines = vec![top_label.clone()];
-            if let Some((kind, prelude, condition)) = pre {
-                lines.extend(prelude);
-                let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
-                    "= 0"
-                } else {
-                    "<> 0"
-                };
-                lines.push(format!("IF ({condition}) {operator} THEN GOTO {end_label}"));
+            if let Some((kind, condition)) = pre {
+                let invert = kind != crate::semantic_ir::LoopConditionKind::While;
+                lines.extend(condition.jump_lines(&end_label, invert));
             }
             lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
             lines.push(format!("{continue_label}:"));
-            if let Some((kind, prelude, condition)) = post {
-                lines.extend(prelude.into_iter().map(|line| format!("    {line}")));
-                let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
-                    "<> 0"
-                } else {
-                    "= 0"
-                };
-                lines.push(format!("IF ({condition}) {operator} THEN GOTO {top_label}"));
+            if let Some((kind, condition)) = post {
+                let invert = kind == crate::semantic_ir::LoopConditionKind::While;
+                lines.extend(
+                    condition
+                        .jump_lines(&top_label, invert)
+                        .into_iter()
+                        .map(|line| format!("    {line}")),
+                );
             } else {
                 lines.push(format!("GOTO {top_label}"));
             }
@@ -10408,23 +10399,18 @@ impl CodeGenerator {
                     // is a method call on the first argument when its type is
                     // the method's receiver, as `records::lower` decides for
                     // the AST.
-                    if let Some(first) = arguments.first() {
-                        let receiver = semantic_receiver_suffix(first.value_type);
-                        if receiver.is_some_and(|receiver| {
-                            self.method_info(receiver, &ident.name)
-                                .is_some_and(|method| method.source_name.suffix == ident.suffix)
-                        }) {
-                            let method_call = crate::semantic_ir::Expression {
-                                kind: ExpressionKind::Member {
-                                    base: Some(Box::new(first.clone())),
-                                    member: ident.name.clone(),
-                                    arguments: Some(arguments[1..].to_vec()),
-                                },
-                                ..expression.clone()
-                            };
-                            return self
-                                .semantic_expression_with_prelude(&method_call, current_function);
-                        }
+                    if self.ordinary_call_is_scalar_method(&ident, arguments) {
+                        let first = &arguments[0];
+                        let method_call = crate::semantic_ir::Expression {
+                            kind: ExpressionKind::Member {
+                                base: Some(Box::new(first.clone())),
+                                member: ident.name.clone(),
+                                arguments: Some(arguments[1..].to_vec()),
+                            },
+                            ..expression.clone()
+                        };
+                        return self
+                            .semantic_expression_with_prelude(&method_call, current_function);
                     }
                     if self.function_info(&ident).is_some() {
                         return None;
@@ -10797,6 +10783,67 @@ impl CodeGenerator {
         }
     }
 
+    /// Render a branch condition, lowering a `&&`/`||` chain to per-operand
+    /// guards. Declines (`None`) when any operand cannot be rendered.
+    fn semantic_condition(
+        &mut self,
+        condition: &crate::semantic_ir::Expression,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<SemanticCondition> {
+        let chain_operator = match &condition.kind {
+            crate::semantic_ir::ExpressionKind::Binary { operator, .. }
+                if operator == "&&" || operator == "||" =>
+            {
+                Some(operator.clone())
+            }
+            _ => None,
+        };
+        let render = |generator: &mut CodeGenerator,
+                          expression: &crate::semantic_ir::Expression|
+         -> Option<(Vec<String>, String)> {
+            if let Some(text) = generator.semantic_const_expression(expression, current_function) {
+                Some((Vec::new(), text))
+            } else {
+                generator.semantic_expression_with_prelude(expression, current_function)
+            }
+        };
+        let Some(chain_operator) = chain_operator else {
+            let (prelude, text) = render(self, condition)?;
+            return Some(SemanticCondition::Expression { prelude, text });
+        };
+        let mut flattened = Vec::new();
+        flatten_semantic_chain(condition, &chain_operator, &mut flattened);
+        let mut operands = Vec::with_capacity(flattened.len());
+        for operand in flattened {
+            operands.push(render(self, operand)?);
+        }
+        let continue_id = self.next_label;
+        self.next_label += 1;
+        Some(SemanticCondition::Chain {
+            is_and: chain_operator == "&&",
+            continue_id,
+            operands,
+        })
+    }
+
+    /// Whether an ordinary-syntax call `name(first, ...)` is a call to a
+    /// scalar method: no ordinary function claims `name`, and the first
+    /// argument's type is the receiver of a method of that name and suffix.
+    fn ordinary_call_is_scalar_method(
+        &self,
+        ident: &BasicIdent,
+        arguments: &[crate::semantic_ir::Expression],
+    ) -> bool {
+        self.ordinary_function_info(ident).is_none()
+            && arguments
+                .first()
+                .and_then(|first| semantic_receiver_suffix(first.value_type))
+                .is_some_and(|receiver| {
+                    self.method_info(receiver, &ident.name)
+                        .is_some_and(|method| method.source_name.suffix == ident.suffix)
+                })
+    }
+
     fn semantic_expression_contains_callable_call(
         &self,
         expression: &crate::semantic_ir::Expression,
@@ -10804,8 +10851,9 @@ impl CodeGenerator {
         use crate::semantic_ir::ExpressionKind;
         match &expression.kind {
             ExpressionKind::Call { name, arguments } => {
-                self.ordinary_function_info(&BasicIdent::parse(name))
-                    .is_some()
+                let ident = BasicIdent::parse(name);
+                self.ordinary_function_info(&ident).is_some()
+                    || self.ordinary_call_is_scalar_method(&ident, arguments)
                     || arguments
                         .iter()
                         .any(|argument| self.semantic_expression_contains_callable_call(argument))
@@ -13397,6 +13445,79 @@ fn resolve_semantic_call_arg_bound(
             None => ArgBound::Unresolvable,
         })
         .unwrap_or(ArgBound::NotAnArray)
+}
+
+/// A rendered branch condition: a single BASIC expression, or a `&&`/`||`
+/// chain lowered to one short-circuit guard per operand, so a later operand's
+/// side effects genuinely do not run once an earlier operand has decided the
+/// outcome (the semantic counterpart of `CodeGenerator::condition_jump`).
+enum SemanticCondition {
+    Expression {
+        prelude: Vec<String>,
+        text: String,
+    },
+    Chain {
+        is_and: bool,
+        continue_id: usize,
+        operands: Vec<(Vec<String>, String)>,
+    },
+}
+
+impl SemanticCondition {
+    /// Lines that jump to `target` when the condition is false (or true, if
+    /// `invert`) and fall through otherwise.
+    fn jump_lines(&self, target: &str, invert: bool) -> Vec<String> {
+        match self {
+            SemanticCondition::Expression { prelude, text } => {
+                let polarity = if invert { "<> 0" } else { "= 0" };
+                let mut lines = prelude.clone();
+                lines.push(format!("IF ({text}) {polarity} THEN GOTO {target}"));
+                lines
+            }
+            SemanticCondition::Chain {
+                is_and,
+                continue_id,
+                operands,
+            } => {
+                let polarity = if *is_and { "= 0" } else { "<> 0" };
+                // De Morgan duality: an AND chain under `invert` behaves like
+                // an OR chain and needs a skip label.
+                let simple = *is_and != invert;
+                let continue_label = format!("SC_{continue_id:04}_CONT");
+                let destination = if simple { target } else { &continue_label };
+                let mut lines = Vec::new();
+                for (prelude, text) in operands {
+                    lines.extend(prelude.iter().cloned());
+                    lines.push(format!("IF ({text}) {polarity} THEN GOTO {destination}"));
+                }
+                if !simple {
+                    lines.push(format!("GOTO {target}"));
+                    lines.push(format!("{continue_label}:"));
+                }
+                lines
+            }
+        }
+    }
+}
+
+fn flatten_semantic_chain<'a>(
+    expression: &'a crate::semantic_ir::Expression,
+    operator: &str,
+    out: &mut Vec<&'a crate::semantic_ir::Expression>,
+) {
+    if let crate::semantic_ir::ExpressionKind::Binary {
+        left,
+        operator: this,
+        right,
+    } = &expression.kind
+    {
+        if this == operator {
+            flatten_semantic_chain(left, operator, out);
+            flatten_semantic_chain(right, operator, out);
+            return;
+        }
+    }
+    out.push(expression);
 }
 
 /// The scalar type a value of this semantic type has as a method receiver.

@@ -278,6 +278,11 @@ pub(crate) fn generate(
             };
             let handled_semantically = semantic_statement.is_some_and(|semantic| {
                     use crate::semantic_ir::SemanticStatementKind as Kind;
+                    // See `emit_jvm_semantic_block`: a file declaration's `open`
+                    // exists only on the compatibility path.
+                    if semantic_compound_contains_file_declaration(semantic) {
+                        return false;
+                    }
                     match &semantic.kind {
                         Kind::End => {
                             emit_inkey_restore(&context, &mut body);
@@ -2631,6 +2636,45 @@ fn emit_jvm_semantic_comment(block: bool, text: &str, out: &mut String) {
     }
 }
 
+/// Whether a compound statement (a loop, branch, `select case` or `try`) has
+/// a record file declaration anywhere in its bodies. A plain `Line` is not
+/// compound: a top-level file declaration is consumed as metadata, with its
+/// `open` emitted from the lowered AST sibling beside it.
+fn semantic_compound_contains_file_declaration(
+    statement: &crate::semantic_ir::SemanticStatement,
+) -> bool {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    fn has_file_declaration(statement: &crate::semantic_ir::SemanticStatement) -> bool {
+        matches!(statement.kind, Kind::FileDeclaration { .. })
+            || matches!(statement.kind, Kind::Line(ref children) if children.iter().any(has_file_declaration))
+            || semantic_compound_contains_file_declaration(statement)
+    }
+    let any = |statements: &[crate::semantic_ir::SemanticStatement]| {
+        statements.iter().any(has_file_declaration)
+    };
+    match &statement.kind {
+        Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => any(body),
+        Kind::If {
+            then_body,
+            else_body,
+            ..
+        } => any(then_body) || any(else_body),
+        Kind::SelectCase {
+            cases, else_body, ..
+        } => cases.iter().any(|case| any(&case.body)) || any(else_body),
+        Kind::Try {
+            body,
+            catch,
+            finally_body,
+        } => {
+            any(body)
+                || catch.as_ref().is_some_and(|catch| any(&catch.body))
+                || any(finally_body)
+        }
+        _ => false,
+    }
+}
+
 fn emit_jvm_semantic_block(
     statements: &[crate::semantic_ir::SemanticStatement],
     context: &JvmContext,
@@ -2644,7 +2688,13 @@ fn emit_jvm_semantic_block(
     let mut rendered = String::new();
     for statement in statements {
         let mut node = String::new();
-        let handled = match &statement.kind {
+        // A file declaration's `open` comes from a lowered AST sibling that
+        // only the compatibility emitter has, so a compound statement whose
+        // body holds one cannot be emitted from typed IR alone.
+        let handled = if semantic_compound_contains_file_declaration(statement) {
+            false
+        } else {
+            match &statement.kind {
             Kind::Label(name) => {
                 node.push_str(&format!("{}:\n", jvm_label(&name.name)));
                 true
@@ -2902,6 +2952,7 @@ fn emit_jvm_semantic_block(
                 true
             }
             _ => false,
+            }
         };
         if !handled {
             *state = initial_state;
@@ -6822,6 +6873,11 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
             };
             let handled_semantically = semantic_statement.is_some_and(|semantic| {
                     use crate::semantic_ir::SemanticStatementKind as Kind;
+                    // See `emit_jvm_semantic_block`: a file declaration's `open`
+                    // exists only on the compatibility path.
+                    if semantic_compound_contains_file_declaration(semantic) {
+                        return false;
+                    }
                     match &semantic.kind {
                         Kind::End => {
                             emit_inkey_restore(&context, &mut body);
@@ -11370,6 +11426,54 @@ mod tests {
 
         assert!(handled, "typed record-file metadata triggered AST fallback");
         assert!(output.contains("return"), "typed END was not emitted: {output}");
+    }
+
+    #[test]
+    fn jvm_semantic_block_declines_a_file_declaration_nested_in_try() {
+        let source = "record Item\nvalue: int16\nend record\ntry\nfile items as Item = open(\"items.dat\")\ncatch err%, erl%\nprint 1\nend try\nend\n";
+        let parsed = crate::parse_source("jvm_nested_file.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("jvm_nested_file.bcl", source).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        let module = resolved.semantic_module.as_ref().unwrap();
+        let context = super::JvmContext::build(
+            &resolved.program,
+            super::function_table(&resolved.program.functions, Some(module)).unwrap(),
+            "Program".to_string(),
+            resolved.function_global_declarations.clone(),
+            resolved.typed_array_declarations.clone(),
+            Some(module),
+            resolved.semantic_name_scopes.clone(),
+        )
+        .unwrap();
+        let try_statement = module
+            .statements
+            .iter()
+            .flat_map(|root| match &root.kind {
+                crate::semantic_ir::SemanticStatementKind::Line(children) => {
+                    children.iter().collect::<Vec<_>>()
+                }
+                _ => vec![root],
+            })
+            .find(|statement| {
+                matches!(statement.kind, crate::semantic_ir::SemanticStatementKind::Try { .. })
+            })
+            .expect("a try statement");
+        assert!(super::semantic_compound_contains_file_declaration(try_statement));
+        let handled = super::emit_jvm_semantic_block(
+            std::slice::from_ref(try_statement),
+            &context,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut super::JvmSemanticState {
+                source_filename: "jvm_nested_file.bcl".to_string(),
+                next_label: 0,
+                exception_handlers: Vec::new(),
+            },
+            &mut String::new(),
+        );
+        assert!(!handled, "the nested file open would have been dropped");
     }
 
     #[test]

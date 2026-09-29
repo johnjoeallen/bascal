@@ -1574,6 +1574,40 @@ impl SemanticModule {
         scopes
     }
 
+    /// Annotate every expression's value and record type from this module's
+    /// declarations. Runs after parsing and again after dependencies merge,
+    /// so a call to a dependency's callable resolves in the root module.
+    pub fn annotate_types(&mut self) {
+        let facts = self.clone();
+        facts.annotate_statement_types(&mut self.statements);
+        for callable in &mut self.callables {
+            let mut callable_facts = facts.clone();
+            // Include module declarations first and callable declarations second:
+            // the lexical callable scope shadows a same-named module array.
+            callable_facts.statements.extend(callable.body.clone());
+            let array_parameters = callable
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.array_axes > 0)
+                .map(|parameter| DimDeclaration {
+                    name: parameter.name.clone(),
+                    array_axes: parameter.array_axes,
+                    dimensions: parameter.dimensions.clone(),
+                    element_type: SemanticValueType::from_suffix(parameter.name.chars().last()),
+                    type_annotation: None,
+                    span: parameter.span,
+                })
+                .collect::<Vec<_>>();
+            if !array_parameters.is_empty() {
+                callable_facts.statements.push(SemanticStatement {
+                    kind: SemanticStatementKind::Dim(array_parameters),
+                    span: callable.span,
+                });
+            }
+            callable_facts.annotate_statement_types(&mut callable.body);
+        }
+    }
+
     /// Merge a dependency module ahead of this module's executable content.
     /// This mirrors the driver's legacy dependency order while preserving the
     /// root module header and source span.
@@ -1606,6 +1640,7 @@ impl SemanticModule {
             }
         }));
         self.statement_sources = statement_sources;
+        self.annotate_types();
     }
 
     /// Whether this module contains structured error handling.  This is a
@@ -4227,34 +4262,7 @@ pub fn adapt_module(program: &rdgen_frontend::Program) -> SemanticModule {
         statements,
         statement_sources,
     };
-    let facts = module.clone();
-    facts.annotate_statement_types(&mut module.statements);
-    for callable in &mut module.callables {
-        let mut callable_facts = facts.clone();
-        // Include module declarations first and callable declarations second:
-        // the lexical callable scope shadows a same-named module array.
-        callable_facts.statements.extend(callable.body.clone());
-        let array_parameters = callable
-            .parameters
-            .iter()
-            .filter(|parameter| parameter.array_axes > 0)
-            .map(|parameter| DimDeclaration {
-                name: parameter.name.clone(),
-                array_axes: parameter.array_axes,
-                dimensions: parameter.dimensions.clone(),
-                element_type: SemanticValueType::from_suffix(parameter.name.chars().last()),
-                type_annotation: None,
-                span: parameter.span,
-            })
-            .collect::<Vec<_>>();
-        if !array_parameters.is_empty() {
-            callable_facts.statements.push(SemanticStatement {
-                kind: SemanticStatementKind::Dim(array_parameters),
-                span: callable.span,
-            });
-        }
-        callable_facts.annotate_statement_types(&mut callable.body);
-    }
+    module.annotate_types();
     let const_types = module.const_types();
     fn apply_const_types(
         statements: &mut [SemanticStatement],
@@ -6440,6 +6448,40 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(kinds, ["assign", "block-if", "end"], "comment {comment:?}");
         }
+    }
+
+    #[test]
+    fn merging_a_dependency_reannotates_calls_to_its_callables() {
+        fn chained_base_type(module: &SemanticModule) -> SemanticValueType {
+            let assignment = module
+                .statements
+                .iter()
+                .flat_map(|root| match &root.kind {
+                    SemanticStatementKind::Line(children) => children.iter().collect::<Vec<_>>(),
+                    _ => vec![root],
+                })
+                .find_map(|statement| match &statement.kind {
+                    SemanticStatementKind::Assignment { value, .. } => Some(value),
+                    _ => None,
+                })
+                .expect("an assignment");
+            let ExpressionKind::Member {
+                base: Some(base), ..
+            } = &assignment.kind
+            else {
+                panic!("expected a chained member call");
+            };
+            base.value_type
+        }
+        let mut root = parse_and_adapt("s$ = \"a\".pad().pad()\nend\n").unwrap();
+        let dependency = parse_and_adapt(
+            "library pad\nmethod pad[string]()\nreturn self$ + \" \"\nend method\n",
+        )
+        .unwrap();
+        // Alone, the root module cannot see the dependency's method.
+        assert_eq!(chained_base_type(&root), SemanticValueType::Unknown);
+        root.prepend_dependency(dependency);
+        assert_eq!(chained_base_type(&root), SemanticValueType::String);
     }
 
     #[test]
