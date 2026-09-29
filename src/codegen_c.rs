@@ -10386,6 +10386,33 @@ fn c_semantic_top_level_source_position(
     None
 }
 
+/// Resolve a callable semantic statement through its callable source index.
+/// Callable dispatch may expose children of a semantic `Line`, so both root
+/// and direct child identities are accepted.
+fn c_semantic_callable_source_position(
+    module: &crate::semantic_ir::SemanticModule,
+    function: &FunctionDef,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<SourcePos> {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    let callable = semantic_callable_signature(module, function)?;
+    let belongs_to_callable = callable.body.iter().any(|root| {
+        std::ptr::eq(root, semantic)
+            || matches!(
+                &root.kind,
+                Kind::Line(children)
+                    if children.iter().any(|child| std::ptr::eq(child, semantic))
+            )
+    });
+    if !belongs_to_callable {
+        return None;
+    }
+    module
+        .sources
+        .get(callable.source_index)?
+        .source_position_at(semantic.span.start)
+}
+
 fn emit_c_semantic_comment(block: bool, text: &str, out: &mut String) {
     let body = if block {
         text.strip_prefix("/*")
@@ -10949,6 +10976,7 @@ pub(crate) fn generate(
             func,
             sig,
             semantic_callable_name,
+            resolved.semantic_module.as_ref(),
             table_for_body,
             &local_arrays,
             &mut function_defs,
@@ -12327,6 +12355,7 @@ fn emit_function_def(
     func: &FunctionDef,
     sig: &FnSig,
     semantic_callable_name: Option<&str>,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
     functions: &FunctionTable,
     local_arrays: &ArrayTable,
     out: &mut String,
@@ -12916,20 +12945,26 @@ fn emit_function_def(
                         mode,
                         channel,
                         ..
-                    } => emit_c_semantic_open(
-                        path,
-                        mode.kind,
-                        channel,
-                        &mut body,
-                        needs_math,
-                        temp_counter,
-                        file_io,
-                        &functions.arrays,
-                        &functions.funcs,
-                        &stmt.pos,
-                        Some(sig),
-                        &mut ctx,
-                    ),
+                    } => semantic_module
+                        .and_then(|module| {
+                            c_semantic_callable_source_position(module, func, semantic)
+                        })
+                        .is_some_and(|source_pos| {
+                            emit_c_semantic_open(
+                                path,
+                                mode.kind,
+                                channel,
+                                &mut body,
+                                needs_math,
+                                temp_counter,
+                                file_io,
+                                &functions.arrays,
+                                &functions.funcs,
+                                &source_pos,
+                                Some(sig),
+                                &mut ctx,
+                            )
+                        }),
                     Kind::Seek { channel, position } => emit_c_semantic_seek(
                         channel,
                         position,
@@ -13011,16 +13046,22 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                     ),
                     Kind::Throw(value) if ctx.current_function_reachable => {
-                        emit_c_semantic_callable_throw(
-                            value,
-                            &stmt.pos,
-                            &mut body,
-                            needs_math,
-                            functions.dialect.supports_float,
-                            &functions.arrays,
-                            &functions.funcs,
-                            sig,
-                        )
+                        semantic_module
+                            .and_then(|module| {
+                                c_semantic_callable_source_position(module, func, semantic)
+                            })
+                            .is_some_and(|source_pos| {
+                                emit_c_semantic_callable_throw(
+                                    value,
+                                    &source_pos,
+                                    &mut body,
+                                    needs_math,
+                                    functions.dialect.supports_float,
+                                    &functions.arrays,
+                                    &functions.funcs,
+                                    sig,
+                                )
+                            })
                     }
                     Kind::Return(crate::semantic_ir::ReturnValue::Default) if sig.is_void => {
                         emit_byref_scalar_copyback(sig, &mut body);
@@ -20893,6 +20934,43 @@ mod dialect_tests {
             c_semantic_statements_by_source(&semantic, &program.statements).is_none(),
             "semantic dispatch must decline when source identity is unavailable"
         );
+    }
+
+    #[test]
+    fn c_semantic_callable_source_position_uses_callable_source_index() {
+        let filename = "callable_source_position.bcl";
+        let parsed = parse_source(
+            filename.to_string(),
+            "procedure writer()\nopen \"out.dat\" for output as #1\nend procedure\nend\n",
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let module = crate::semantic_ir::parse_and_adapt_named(
+            filename,
+            "procedure writer()\nopen \"out.dat\" for output as #1\nend procedure\nend\n",
+        )
+        .unwrap();
+        let callable = semantic_callable_signature(&module, &program.functions[0]).unwrap();
+        let semantic = callable
+            .body
+            .iter()
+            .flat_map(|root| match &root.kind {
+                crate::semantic_ir::SemanticStatementKind::Line(children) => children.iter(),
+                _ => std::slice::from_ref(root).iter(),
+            })
+            .find(|statement| {
+                matches!(
+                    statement.kind,
+                    crate::semantic_ir::SemanticStatementKind::Open { .. }
+                )
+            })
+            .unwrap();
+
+        let position = c_semantic_callable_source_position(&module, &program.functions[0], semantic)
+            .unwrap();
+        assert_eq!(position.filename, filename);
+        assert_eq!(position.line, 2);
+        assert_eq!(position.column, 1);
     }
 
     #[test]

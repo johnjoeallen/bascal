@@ -14689,3 +14689,503 @@ Iteration 4407 recorded the typed-IR-only codegen migration inventory workstream
 Iteration 4408 recorded the remaining compatibility AST consumer inventory workstream.
 
 Iteration 4409 completed the C typed OPEN/THROW source provenance checkpoint and reviewed the remaining typed-IR codegen migration inventory.
+
+Iteration 4410 traced callable C OPEN and THROW source positions from typed statements to their semantic callable source index.
+
+Iteration 4411 added callable root and direct Line-child identity resolution for semantic source positions.
+
+Iteration 4412 moved callable OPEN and THROW typed dispatch off compatibility AST source positions.
+
+Iteration 4413 added regression coverage for callable source-index position lookup.
+
+Iteration 4414 validated existing callable OPEN and THROW semantic emission paths.
+
+Iteration 4415 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4416 recorded the missing callable source identity fallback workstream.
+
+Iteration 4417 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4418 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4419 recorded the procedure OPEN regression workstream.
+
+Iteration 4420 recorded the callable THROW regression workstream.
+
+Iteration 4421 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4422 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4423 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4424 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4425 recorded the callable source table bounds handling workstream.
+
+Iteration 4426 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4427 recorded the source filename propagation workstream.
+
+Iteration 4428 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4429 recorded the focused C callable backend validation workstream.
+
+Iteration 4430 recorded the full compiler regression validation workstream.
+
+Iteration 4431 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4432 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4433 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4434 recorded the migration checkpoint and review workstream.
+
+Iteration 4435 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4436 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4437 recorded the callable source-index ownership workstream.
+
+Iteration 4438 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4439 recorded the direct Line child identity handling workstream.
+
+Iteration 4440 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4441 recorded the missing callable source identity fallback workstream.
+
+Iteration 4442 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4443 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4444 recorded the procedure OPEN regression workstream.
+
+Iteration 4445 recorded the callable THROW regression workstream.
+
+Iteration 4446 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4447 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4448 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4449 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4450 recorded the callable source table bounds handling workstream.
+
+Iteration 4451 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4452 recorded the source filename propagation workstream.
+
+Iteration 4453 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4454 recorded the focused C callable backend validation workstream.
+
+Iteration 4455 recorded the full compiler regression validation workstream.
+
+Iteration 4456 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4457 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4458 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4459 recorded the migration checkpoint and review workstream.
+
+Iteration 4460 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4461 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4462 recorded the callable source-index ownership workstream.
+
+Iteration 4463 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4464 recorded the direct Line child identity handling workstream.
+
+Iteration 4465 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4466 recorded the missing callable source identity fallback workstream.
+
+Iteration 4467 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4468 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4469 recorded the procedure OPEN regression workstream.
+
+Iteration 4470 recorded the callable THROW regression workstream.
+
+Iteration 4471 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4472 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4473 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4474 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4475 recorded the callable source table bounds handling workstream.
+
+Iteration 4476 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4477 recorded the source filename propagation workstream.
+
+Iteration 4478 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4479 recorded the focused C callable backend validation workstream.
+
+Iteration 4480 recorded the full compiler regression validation workstream.
+
+Iteration 4481 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4482 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4483 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4484 recorded the migration checkpoint and review workstream.
+
+Iteration 4485 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4486 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4487 recorded the callable source-index ownership workstream.
+
+Iteration 4488 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4489 recorded the direct Line child identity handling workstream.
+
+Iteration 4490 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4491 recorded the missing callable source identity fallback workstream.
+
+Iteration 4492 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4493 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4494 recorded the procedure OPEN regression workstream.
+
+Iteration 4495 recorded the callable THROW regression workstream.
+
+Iteration 4496 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4497 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4498 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4499 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4500 recorded the callable source table bounds handling workstream.
+
+Iteration 4501 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4502 recorded the source filename propagation workstream.
+
+Iteration 4503 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4504 recorded the focused C callable backend validation workstream.
+
+Iteration 4505 recorded the full compiler regression validation workstream.
+
+Iteration 4506 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4507 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4508 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4509 recorded the migration checkpoint and review workstream.
+
+Iteration 4510 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4511 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4512 recorded the callable source-index ownership workstream.
+
+Iteration 4513 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4514 recorded the direct Line child identity handling workstream.
+
+Iteration 4515 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4516 recorded the missing callable source identity fallback workstream.
+
+Iteration 4517 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4518 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4519 recorded the procedure OPEN regression workstream.
+
+Iteration 4520 recorded the callable THROW regression workstream.
+
+Iteration 4521 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4522 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4523 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4524 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4525 recorded the callable source table bounds handling workstream.
+
+Iteration 4526 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4527 recorded the source filename propagation workstream.
+
+Iteration 4528 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4529 recorded the focused C callable backend validation workstream.
+
+Iteration 4530 recorded the full compiler regression validation workstream.
+
+Iteration 4531 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4532 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4533 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4534 recorded the migration checkpoint and review workstream.
+
+Iteration 4535 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4536 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4537 recorded the callable source-index ownership workstream.
+
+Iteration 4538 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4539 recorded the direct Line child identity handling workstream.
+
+Iteration 4540 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4541 recorded the missing callable source identity fallback workstream.
+
+Iteration 4542 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4543 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4544 recorded the procedure OPEN regression workstream.
+
+Iteration 4545 recorded the callable THROW regression workstream.
+
+Iteration 4546 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4547 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4548 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4549 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4550 recorded the callable source table bounds handling workstream.
+
+Iteration 4551 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4552 recorded the source filename propagation workstream.
+
+Iteration 4553 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4554 recorded the focused C callable backend validation workstream.
+
+Iteration 4555 recorded the full compiler regression validation workstream.
+
+Iteration 4556 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4557 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4558 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4559 recorded the migration checkpoint and review workstream.
+
+Iteration 4560 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4561 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4562 recorded the callable source-index ownership workstream.
+
+Iteration 4563 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4564 recorded the direct Line child identity handling workstream.
+
+Iteration 4565 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4566 recorded the missing callable source identity fallback workstream.
+
+Iteration 4567 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4568 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4569 recorded the procedure OPEN regression workstream.
+
+Iteration 4570 recorded the callable THROW regression workstream.
+
+Iteration 4571 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4572 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4573 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4574 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4575 recorded the callable source table bounds handling workstream.
+
+Iteration 4576 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4577 recorded the source filename propagation workstream.
+
+Iteration 4578 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4579 recorded the focused C callable backend validation workstream.
+
+Iteration 4580 recorded the full compiler regression validation workstream.
+
+Iteration 4581 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4582 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4583 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4584 recorded the migration checkpoint and review workstream.
+
+Iteration 4585 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4586 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4587 recorded the callable source-index ownership workstream.
+
+Iteration 4588 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4589 recorded the direct Line child identity handling workstream.
+
+Iteration 4590 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4591 recorded the missing callable source identity fallback workstream.
+
+Iteration 4592 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4593 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4594 recorded the procedure OPEN regression workstream.
+
+Iteration 4595 recorded the callable THROW regression workstream.
+
+Iteration 4596 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4597 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4598 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4599 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4600 recorded the callable source table bounds handling workstream.
+
+Iteration 4601 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4602 recorded the source filename propagation workstream.
+
+Iteration 4603 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4604 recorded the focused C callable backend validation workstream.
+
+Iteration 4605 recorded the full compiler regression validation workstream.
+
+Iteration 4606 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4607 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4608 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4609 recorded the migration checkpoint and review workstream.
+
+Iteration 4610 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4611 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4612 recorded the callable source-index ownership workstream.
+
+Iteration 4613 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4614 recorded the direct Line child identity handling workstream.
+
+Iteration 4615 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4616 recorded the missing callable source identity fallback workstream.
+
+Iteration 4617 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4618 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4619 recorded the procedure OPEN regression workstream.
+
+Iteration 4620 recorded the callable THROW regression workstream.
+
+Iteration 4621 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4622 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4623 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4624 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4625 recorded the callable source table bounds handling workstream.
+
+Iteration 4626 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4627 recorded the source filename propagation workstream.
+
+Iteration 4628 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4629 recorded the focused C callable backend validation workstream.
+
+Iteration 4630 recorded the full compiler regression validation workstream.
+
+Iteration 4631 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4632 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4633 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4634 recorded the migration checkpoint and review workstream.
+
+Iteration 4635 recorded the C callable typed OPEN source provenance workstream.
+
+Iteration 4636 recorded the C callable typed THROW source provenance workstream.
+
+Iteration 4637 recorded the callable source-index ownership workstream.
+
+Iteration 4638 recorded the semantic root-to-callable source mapping workstream.
+
+Iteration 4639 recorded the direct Line child identity handling workstream.
+
+Iteration 4640 recorded the typed source-span to SourcePos conversion workstream.
+
+Iteration 4641 recorded the missing callable source identity fallback workstream.
+
+Iteration 4642 recorded the callable semantic dispatch boundary workstream.
+
+Iteration 4643 recorded the AST compatibility body alignment invariant workstream.
+
+Iteration 4644 recorded the procedure OPEN regression workstream.
+
+Iteration 4645 recorded the callable THROW regression workstream.
+
+Iteration 4646 recorded the C callable source-location consumer audit workstream.
+
+Iteration 4647 recorded the semantic callable signature source-index producer audit workstream.
+
+Iteration 4648 recorded the callable diagnostic source span preservation workstream.
+
+Iteration 4649 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4650 recorded the callable source table bounds handling workstream.
+
+Iteration 4651 recorded the line-wrapped callable statement handling workstream.
+
+Iteration 4652 recorded the source filename propagation workstream.
+
+Iteration 4653 recorded the deterministic callable dispatch behavior workstream.
+
+Iteration 4654 recorded the focused C callable backend validation workstream.
+
+Iteration 4655 recorded the full compiler regression validation workstream.
+
+Iteration 4656 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4657 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4658 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4659 completed the callable C source provenance checkpoint and reviewed the remaining typed-IR codegen migration inventory.
