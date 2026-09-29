@@ -439,7 +439,7 @@ pub(crate) fn generate(
                         Kind::Seek { channel, position } => {
                             return emit_jvm_semantic_seek(channel, position, &context, &mut body);
                         }
-                        Kind::Get { channel, position } => {
+                        Kind::Get { channel, position, .. } => {
                             return emit_jvm_semantic_get_put(
                                 true,
                                 channel,
@@ -2833,7 +2833,7 @@ fn emit_jvm_semantic_block(
             Kind::Seek { channel, position } => {
                 emit_jvm_semantic_seek(channel, position, context, &mut node)
             }
-            Kind::Get { channel, position } => {
+            Kind::Get { channel, position, .. } => {
                 emit_jvm_semantic_get_put(true, channel, position.as_ref(), context, &mut node)
             }
             Kind::Put { channel, position } => {
@@ -6014,7 +6014,7 @@ fn collect_semantic_scalar_declarations(
                     }
                     register_byref_call_targets(value, callables, declarations);
                 }
-                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                     register_byref_call_targets(channel, callables, declarations);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
@@ -6288,7 +6288,7 @@ fn semantic_runtime_features(module: &crate::semantic_ir::SemanticModule) -> (bo
                         .iter()
                         .any(|binding| expression_uses_name(&binding.length, "inkey"));
                 }
-                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                     flags.0 = true;
                     flags.2 |= expression_uses_name(channel, "inkey")
                         || position.as_ref().is_some_and(|position| {

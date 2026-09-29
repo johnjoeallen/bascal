@@ -2011,7 +2011,7 @@ fn collect_semantic_byref_scalar_actuals(
                     visit_expr!(channel);
                     visit_expr!(target);
                 }
-                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                     visit_expr!(channel);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
@@ -2935,7 +2935,7 @@ fn collect_semantic_called_callables(
             collect_semantic_calls_in_expression(channel, functions, out)
                 && collect_semantic_calls_in_expression(target, functions, out)
         }
-        Kind::Get { channel, position } | Kind::Put { channel, position } => {
+        Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
             collect_semantic_calls_in_expression(channel, functions, out)
                 && position.as_ref().is_none_or(|position| {
                     position.position.as_ref().is_none_or(|value| {
@@ -5032,7 +5032,7 @@ fn semantic_module_uses_name(module: &crate::semantic_ir::SemanticModule, name: 
                 semantic_expression_uses_name(channel, name)
                     || semantic_expression_uses_name(target, name)
             }
-            Kind::Get { channel, position } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                 semantic_expression_uses_name(channel, name)
                     || position.as_ref().is_some_and(|position| {
                         position.position.as_ref().is_some_and(|value| semantic_expression_uses_name(value, name))
@@ -5188,7 +5188,7 @@ fn semantic_module_uses_call(module: &crate::semantic_ir::SemanticModule, name: 
             Kind::Locate { row, column } => semantic_expression_uses_call(row, name) || semantic_expression_uses_call(column, name),
             Kind::Color { foreground, background } => semantic_expression_uses_call(foreground, name) || background.as_ref().is_some_and(|background| semantic_expression_uses_call(background, name)),
             Kind::OnBranch { selector, .. } => semantic_expression_uses_call(selector, name),
-            Kind::Get { channel, position } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                 semantic_expression_uses_call(channel, name)
                     || position.as_ref().is_some_and(|position| {
                         position.position.as_ref().is_some_and(|value| semantic_expression_uses_call(value, name))
@@ -5486,7 +5486,7 @@ fn semantic_module_uses_string_comparison(module: &crate::semantic_ir::SemanticM
                 expression_uses_string_comparison(channel)
                     || expression_uses_string_comparison(target)
             }
-            Kind::Get { channel, position } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                 expression_uses_string_comparison(channel)
                     || position.as_ref().is_some_and(|position| {
                         position
@@ -7807,7 +7807,7 @@ fn emit_c_semantic_for_body(
                     return false;
                 }
             }
-            Kind::Get { channel, position } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                 if !emit_c_semantic_get_put(
                     channel,
                     position.as_ref(),
@@ -11526,7 +11526,7 @@ pub(crate) fn generate(
                             &functions.funcs,
                         );
                     }
-                    Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                    Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                         return emit_c_semantic_get_put(
                             channel,
                             position.as_ref(),
@@ -13123,7 +13123,7 @@ fn emit_function_def(
                         &functions.arrays,
                         &functions.funcs,
                     ),
-                    Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                    Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                         emit_c_semantic_get_put(
                             channel,
                             position.as_ref(),
@@ -20568,7 +20568,7 @@ fn reject_float(
                             exprs.push(value);
                         }
                         K::LineInput { channel, target } => exprs.extend([channel, target]),
-                        K::Get { channel, position } | K::Put { channel, position } => {
+                        K::Get { channel, position, .. } | K::Put { channel, position } => {
                             exprs.push(channel);
                             if let Some(p) = position {
                                 exprs.extend(p.position.iter());

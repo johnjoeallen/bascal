@@ -493,10 +493,10 @@ impl<'a> Transpiler<'a> {
             .iter()
             .zip(&fact.fields)
             .map(|(_, layout)| {
-                let buffer = BufferName::parse(&layout.buffer_name);
                 FieldBinding {
                     length: int(layout.width as i64, span),
-                    name: buffer.name,
+                    // Typed name, as a hand-written `FIELD` binds it.
+                    name: layout.buffer_name.clone(),
                     name_span: span,
                     type_suffix: Some("$".to_string()),
                     is_string: true,
@@ -852,7 +852,13 @@ impl<'a> Transpiler<'a> {
         fact.fields.get(field_index)
     }
 
-    fn get_statement(&self, channel: i64, index: Expression, span: SourceSpan) -> SemanticStatement {
+    fn get_statement(
+        &self,
+        channel: i64,
+        index: Expression,
+        require_existing: Option<u32>,
+        span: SourceSpan,
+    ) -> SemanticStatement {
         statement_of(
             SemanticStatementKind::Get {
                 channel: int(channel, span),
@@ -860,6 +866,7 @@ impl<'a> Transpiler<'a> {
                     position: Some(index),
                     record: None,
                 }),
+                require_existing,
             },
             span,
         )
@@ -878,8 +885,8 @@ impl<'a> Transpiler<'a> {
         )
     }
 
-    /// The `GET` that precedes a partial update, refusing a record beyond the
-    /// end of the file exactly like the AST form.
+    /// The `GET` that precedes a partial update; it refuses a record beyond
+    /// the end of the file, exactly like the AST form.
     fn get_existing(
         &self,
         channel: i64,
@@ -887,51 +894,7 @@ impl<'a> Transpiler<'a> {
         index: &Expression,
         span: SourceSpan,
     ) -> Vec<SemanticStatement> {
-        let bound = Expression {
-            kind: ExpressionKind::Binary {
-                left: Box::new(Expression {
-                    kind: ExpressionKind::Parenthesized(Box::new(index.clone())),
-                    span,
-                    value_type: index.value_type,
-                    record_type: None,
-                }),
-                operator: "*".to_string(),
-                right: Box::new(int(record_length as i64, span)),
-            },
-            span,
-            value_type: SemanticValueType::Integer,
-            record_type: None,
-        };
-        let too_short = Expression {
-            kind: ExpressionKind::Binary {
-                left: Box::new(call(
-                    "lof",
-                    vec![int(channel, span)],
-                    SemanticValueType::Long,
-                    span,
-                )),
-                operator: "<".to_string(),
-                right: Box::new(bound),
-            },
-            span,
-            value_type: SemanticValueType::Integer,
-            record_type: None,
-        };
-        vec![
-            statement_of(
-                SemanticStatementKind::If {
-                    condition: too_short,
-                    then_body: vec![statement_of(
-                        SemanticStatementKind::Error(int(63, span)),
-                        span,
-                    )],
-                    else_body: Vec::new(),
-                    block: false,
-                },
-                span,
-            ),
-            self.get_statement(channel, index.clone(), span),
-        ]
+        vec![self.get_statement(channel, index.clone(), Some(record_length), span)]
     }
 
     fn whole_write(
@@ -1028,7 +991,7 @@ impl<'a> Transpiler<'a> {
                 format!("' let {variable} = {file}[...]  (whole-record read)"),
                 span,
             ),
-            self.get_statement(info.channel, index, span),
+            self.get_statement(info.channel, index, None, span),
         ];
         for (position, field) in fields.iter().enumerate() {
             let Some(layout) = self.layout(file, position) else {
@@ -1454,19 +1417,6 @@ impl<'a> Transpiler<'a> {
 
 // ── builders ────────────────────────────────────────────────────────────
 
-/// A synthesized buffer variable name split into `name` + suffix.
-struct BufferName {
-    name: String,
-}
-
-impl BufferName {
-    fn parse(basic: &str) -> Self {
-        Self {
-            name: basic.trim_end_matches('$').to_string(),
-        }
-    }
-}
-
 fn statement_of(kind: SemanticStatementKind, span: SourceSpan) -> SemanticStatement {
     SemanticStatement { kind, span }
 }
@@ -1798,7 +1748,7 @@ mod tests {
         let module = transpiled(&program("inv[2] = ?{ qty: 7 }\n")).unwrap();
         assert_eq!(
             shape(&module)[3..],
-            ["comment", "if", "get", "lset", "put", "end"]
+            ["comment", "get", "lset", "put", "end"]
         );
         // Naming every field needs no read, exactly like a full literal.
         let module = transpiled(&program(

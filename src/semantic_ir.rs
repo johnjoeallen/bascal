@@ -2364,7 +2364,7 @@ impl SemanticModule {
                     self.annotate_expression_types(channel);
                     self.annotate_expression_types(target);
                 }
-                SemanticStatementKind::Get { channel, position }
+                SemanticStatementKind::Get { channel, position, .. }
                 | SemanticStatementKind::Put { channel, position } => {
                     self.annotate_expression_types(channel);
                     if let Some(position) = position {
@@ -3053,7 +3053,7 @@ fn collect_semantic_statements(
                 collect_semantic_expression(channel, names);
                 collect_semantic_expression(target, names);
             }
-            SemanticStatementKind::Get { channel, position }
+            SemanticStatementKind::Get { channel, position, .. }
             | SemanticStatementKind::Put { channel, position } => {
                 collect_semantic_expression(channel, names);
                 if let Some(position) = position {
@@ -3975,6 +3975,10 @@ pub enum SemanticStatementKind {
     Get {
         channel: Expression,
         position: Option<FilePosition>,
+        /// Set by the record DSL for a partial update: the fixed record
+        /// length, and the read must fail if the record lies beyond the end
+        /// of the file (BASIC error 63) rather than reading a blank one.
+        require_existing: Option<u32>,
     },
     Put {
         channel: Expression,
@@ -5101,6 +5105,7 @@ fn adapt_statement_core(statement: &rdgen_frontend::StatementCore) -> SemanticSt
                 kind: SemanticStatementKind::Get {
                     channel: adapt_expression(channel),
                     position: position.as_ref().map(adapt_file_position),
+                    require_existing: None,
                 },
                 span: *span,
             }

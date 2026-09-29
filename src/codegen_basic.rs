@@ -5969,7 +5969,7 @@ fn basic_semantic_intrinsics(
                     output.extend(prelude);
                     output.push(format!("{prefix}{}", rendered_targets.join(", ")));
                 }
-                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                     let command = if matches!(&statement.kind, Kind::Get { .. }) {
                         "GET"
                     } else {
@@ -6021,6 +6021,16 @@ fn basic_semantic_intrinsics(
                         None => String::new(),
                     };
                     output.extend(lines);
+                    if let Kind::Get {
+                        require_existing: Some(length),
+                        ..
+                    } = &statement.kind
+                    {
+                        let record = position.trim_start_matches(", ");
+                        output.push(format!(
+                            "IF LOF(#{channel}) < ({record}) * {length} THEN ERROR 63"
+                        ));
+                    }
                     output.push(format!("{command} #{channel}{position}"));
                 }
                 Kind::Lset { target, value } | Kind::Rset { target, value } => {
@@ -7110,7 +7120,7 @@ fn basic_semantic_callable_leaf(
             lines.push(format!("SEEK #{channel}, {position}"));
             Some(lines)
         }
-        Kind::Get { channel, position } | Kind::Put { channel, position } => {
+        Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
             let command = if matches!(&semantic.kind, Kind::Get { .. }) {
                 "GET"
             } else {
@@ -7150,6 +7160,16 @@ fn basic_semantic_callable_leaf(
                 }
                 None => String::new(),
             };
+            if let Kind::Get {
+                require_existing: Some(length),
+                ..
+            } = &semantic.kind
+            {
+                let record = position.trim_start_matches(", ");
+                lines.push(format!(
+                    "IF LOF(#{channel}) < ({record}) * {length} THEN ERROR 63"
+                ));
+            }
             lines.push(format!("{command} #{channel}{position}"));
             Some(lines)
         }
@@ -13327,7 +13347,7 @@ fn collect_semantic_call_sites(
                     visit_expression(channel, scope, function_names, sites);
                     visit_expression(target, scope, function_names, sites);
                 }
-                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
                     visit_expression(channel, scope, function_names, sites);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
