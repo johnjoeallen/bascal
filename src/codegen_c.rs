@@ -19577,9 +19577,9 @@ fn reject_float(
             } else {
                 ident.name.clone()
             };
-            let suffix = semantic_suffix
-                .or(ident.suffix)
-                .unwrap_or(TypeSuffix::Single);
+            let Some(suffix) = semantic_suffix.or(ident.suffix) else {
+                return;
+            };
             allowed_c_names.insert(c_var_name(
                 &BasicIdent {
                     name: storage_name,

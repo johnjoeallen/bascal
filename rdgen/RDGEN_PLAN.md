@@ -17319,3 +17319,7 @@ Iteration 5722 centralized BASIC semantic CONST suffix mapping with unresolved-t
 Iteration 5723 added regression coverage for BASIC CONST suffix mapping of Unknown and resolved types.
 
 Iteration 5724 refreshed Graphify and validated the complete locked workspace suite after BASIC CONST changes.
+
+Iteration 5725 removed C typed-name filter fallback to suffixless Single when semantic and identifier types are absent.
+
+Iteration 5726 verified the complete locked workspace suite after removing the C typed-name default.
