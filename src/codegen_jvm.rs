@@ -11045,6 +11045,29 @@ mod tests {
     }
 
     #[test]
+    fn jvm_typed_module_declines_atomically_when_source_identity_is_missing() {
+        let parsed = crate::parse_source(
+            "jvm_missing_source_ast.bcl".to_string(),
+            "print 1\nend\n",
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "jvm_missing_source_typed.bcl",
+            "print 2\nend\n",
+        )
+        .unwrap();
+        *semantic.statement_sources.last_mut().unwrap() = usize::MAX;
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::generate(&resolved).expect("AST compatibility path should emit");
+        let main = output.split(".method public static main :").nth(1).unwrap();
+        let main = main.split(".end method").next().unwrap();
+        assert!(main.contains("ldc 1"), "AST fallback was not used: {main}");
+        assert!(!main.contains("ldc 2"), "partial typed output leaked: {main}");
+    }
+
+    #[test]
     fn jvm_callable_dispatch_uses_semantic_body_across_arity_mismatch() {
         let filename = "jvm_callable_arity.bcl";
         let parsed = crate::parse_source(

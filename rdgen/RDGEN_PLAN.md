@@ -10189,3 +10189,503 @@ Iteration 2157 preserved the legacy per-statement fallback when module emission 
 Iteration 2158 recorded remaining typed-IR codegen migration as follow-up plan work.
 
 Iteration 2159 completed this 250-iteration migration batch and prepared the checkpoint commit.
+
+Iteration 2160 audited statement/source cardinality in the typed JVM module source identity path.
+
+Iteration 2161 audited root source lookup in the typed JVM module source identity path.
+
+Iteration 2162 audited invalid source index handling in the typed JVM module source identity path.
+
+Iteration 2163 audited adapter `usize::MAX` handling in the typed JVM module source identity path.
+
+Iteration 2164 audited dependency index remapping in the typed JVM module source identity path.
+
+Iteration 2165 audited root index remapping in the typed JVM module source identity path.
+
+Iteration 2166 audited filename selection per root in the typed JVM module source identity path.
+
+Iteration 2167 audited nested source inheritance in the typed JVM module source identity path.
+
+Iteration 2168 audited TRY metadata across files in the typed JVM module source identity path.
+
+Iteration 2169 audited blank-line source parity in the typed JVM module source identity path.
+
+Iteration 2170 audited empty module behavior in the typed JVM module source identity path.
+
+Iteration 2171 audited source map mismatch behavior in the typed JVM module source identity path.
+
+Iteration 2172 audited source ordering in the typed JVM module source identity path.
+
+Iteration 2173 audited rollback on source failure in the typed JVM module source identity path.
+
+Iteration 2174 audited AST and typed filename divergence in the typed JVM module source identity path.
+
+Iteration 2175 audited filename escaping in the typed JVM module source identity path.
+
+Iteration 2176 audited diagnostic filename presentation in the typed JVM module source identity path.
+
+Iteration 2177 audited dependency order in the typed JVM module source identity path.
+
+Iteration 2178 audited statement order in the typed JVM module source identity path.
+
+Iteration 2179 audited module eligibility in the typed JVM module source identity path.
+
+Iteration 2180 audited adapter identity contract in the typed JVM module source identity path.
+
+Iteration 2181 audited atomic output commit in the typed JVM module source identity path.
+
+Iteration 2182 audited exception handler rollback in the typed JVM module source identity path.
+
+Iteration 2183 audited label counter rollback in the typed JVM module source identity path.
+
+Iteration 2184 audited loop stack rollback in the typed JVM module source identity path.
+
+Iteration 2185 traced integer PRINT in the typed JVM fallback behavior path.
+
+Iteration 2186 traced string PRINT in the typed JVM fallback behavior path.
+
+Iteration 2187 traced END in the typed JVM fallback behavior path.
+
+Iteration 2188 traced THROW in the typed JVM fallback behavior path.
+
+Iteration 2189 traced CATCH in the typed JVM fallback behavior path.
+
+Iteration 2190 traced FINALLY in the typed JVM fallback behavior path.
+
+Iteration 2191 traced nested TRY in the typed JVM fallback behavior path.
+
+Iteration 2192 traced loop exit state in the typed JVM fallback behavior path.
+
+Iteration 2193 traced loop continue state in the typed JVM fallback behavior path.
+
+Iteration 2194 traced semantic labels in the typed JVM fallback behavior path.
+
+Iteration 2195 traced duplicate label handling in the typed JVM fallback behavior path.
+
+Iteration 2196 traced unsupported semantic root in the typed JVM fallback behavior path.
+
+Iteration 2197 traced partial text rollback in the typed JVM fallback behavior path.
+
+Iteration 2198 traced partial label rollback in the typed JVM fallback behavior path.
+
+Iteration 2199 traced exception table rollback in the typed JVM fallback behavior path.
+
+Iteration 2200 traced per-statement fallback in the typed JVM fallback behavior path.
+
+Iteration 2201 traced AST alignment fallback in the typed JVM fallback behavior path.
+
+Iteration 2202 traced AST literal exclusion in the typed JVM fallback behavior path.
+
+Iteration 2203 traced blank-line parity in the typed JVM fallback behavior path.
+
+Iteration 2204 traced multi-source parity in the typed JVM fallback behavior path.
+
+Iteration 2205 traced dependency-only module in the typed JVM fallback behavior path.
+
+Iteration 2206 traced root-only module in the typed JVM fallback behavior path.
+
+Iteration 2207 traced module termination in the typed JVM fallback behavior path.
+
+Iteration 2208 traced comment formatting in the typed JVM fallback behavior path.
+
+Iteration 2209 traced tutorial output in the typed JVM fallback behavior path.
+
+Iteration 2210 checked `c_semantic_statements_by_source` contract in the C backend typed dispatch boundary path.
+
+Iteration 2211 checked span-to-AST mapping in the C backend typed dispatch boundary path.
+
+Iteration 2212 checked record sibling alignment in the C backend typed dispatch boundary path.
+
+Iteration 2213 checked same-position candidates in the C backend typed dispatch boundary path.
+
+Iteration 2214 checked monotonic source order in the C backend typed dispatch boundary path.
+
+Iteration 2215 checked source mismatch behavior in the C backend typed dispatch boundary path.
+
+Iteration 2216 checked dependency roots before root in the C backend typed dispatch boundary path.
+
+Iteration 2217 checked END dispatch in the C backend typed dispatch boundary path.
+
+Iteration 2218 checked STOP dispatch in the C backend typed dispatch boundary path.
+
+Iteration 2219 checked THROW source position in the C backend typed dispatch boundary path.
+
+Iteration 2220 checked OPEN source position in the C backend typed dispatch boundary path.
+
+Iteration 2221 checked fallback ownership in the C backend typed dispatch boundary path.
+
+Iteration 2222 checked top-level typed iteration in the C backend typed dispatch boundary path.
+
+Iteration 2223 checked callable alignment in the C backend typed dispatch boundary path.
+
+Iteration 2224 checked callable body selection in the C backend typed dispatch boundary path.
+
+Iteration 2225 checked record metadata input in the C backend typed dispatch boundary path.
+
+Iteration 2226 checked GOSUB numbering in the C backend typed dispatch boundary path.
+
+Iteration 2227 checked FIELD order in the C backend typed dispatch boundary path.
+
+Iteration 2228 checked TRY numbering in the C backend typed dispatch boundary path.
+
+Iteration 2229 checked DATA label order in the C backend typed dispatch boundary path.
+
+Iteration 2230 checked declined-node diagnostics in the C backend typed dispatch boundary path.
+
+Iteration 2231 checked unsupported typed node in the C backend typed dispatch boundary path.
+
+Iteration 2232 checked AST compatibility entry in the C backend typed dispatch boundary path.
+
+Iteration 2233 checked typed stream refactor dependencies in the C backend typed dispatch boundary path.
+
+Iteration 2234 checked regression coverage in the C backend typed dispatch boundary path.
+
+Iteration 2235 reviewed module stream independence from AST positions in the BASIC backend typed dispatch boundary path.
+
+Iteration 2236 reviewed source-index use in the BASIC backend typed dispatch boundary path.
+
+Iteration 2237 reviewed blank-line handling in the BASIC backend typed dispatch boundary path.
+
+Iteration 2238 reviewed dependency order in the BASIC backend typed dispatch boundary path.
+
+Iteration 2239 reviewed filename behavior in the BASIC backend typed dispatch boundary path.
+
+Iteration 2240 reviewed callable dispatch in the BASIC backend typed dispatch boundary path.
+
+Iteration 2241 reviewed suffix propagation in the BASIC backend typed dispatch boundary path.
+
+Iteration 2242 reviewed record method dispatch in the BASIC backend typed dispatch boundary path.
+
+Iteration 2243 reviewed array declaration input in the BASIC backend typed dispatch boundary path.
+
+Iteration 2244 reviewed function table ownership in the BASIC backend typed dispatch boundary path.
+
+Iteration 2245 reviewed DIM predeclaration in the BASIC backend typed dispatch boundary path.
+
+Iteration 2246 reviewed GLOBAL declaration in the BASIC backend typed dispatch boundary path.
+
+Iteration 2247 reviewed label handling in the BASIC backend typed dispatch boundary path.
+
+Iteration 2248 reviewed comment emission in the BASIC backend typed dispatch boundary path.
+
+Iteration 2249 reviewed termination in the BASIC backend typed dispatch boundary path.
+
+Iteration 2250 reviewed unsupported root fallback in the BASIC backend typed dispatch boundary path.
+
+Iteration 2251 reviewed diagnostic ownership in the BASIC backend typed dispatch boundary path.
+
+Iteration 2252 reviewed resolver type facts in the BASIC backend typed dispatch boundary path.
+
+Iteration 2253 reviewed callable parameter facts in the BASIC backend typed dispatch boundary path.
+
+Iteration 2254 reviewed catch binding types in the BASIC backend typed dispatch boundary path.
+
+Iteration 2255 reviewed FIELD binding suffixes in the BASIC backend typed dispatch boundary path.
+
+Iteration 2256 reviewed shared C semantics in the BASIC backend typed dispatch boundary path.
+
+Iteration 2257 reviewed AST entry points in the BASIC backend typed dispatch boundary path.
+
+Iteration 2258 reviewed snapshot regeneration in the BASIC backend typed dispatch boundary path.
+
+Iteration 2259 reviewed remaining migration in the BASIC backend typed dispatch boundary path.
+
+Iteration 2260 recorded typed module production in the driver and resolver typed IR contract path.
+
+Iteration 2261 recorded recursive dependency loading in the driver and resolver typed IR contract path.
+
+Iteration 2262 recorded dependency prepend order in the driver and resolver typed IR contract path.
+
+Iteration 2263 recorded compatibility AST purpose in the driver and resolver typed IR contract path.
+
+Iteration 2264 recorded resolved program delivery in the driver and resolver typed IR contract path.
+
+Iteration 2265 recorded semantic module delivery in the driver and resolver typed IR contract path.
+
+Iteration 2266 recorded record transpilation output in the driver and resolver typed IR contract path.
+
+Iteration 2267 recorded resolver failure diagnostic in the driver and resolver typed IR contract path.
+
+Iteration 2268 recorded generated-name conflict check in the driver and resolver typed IR contract path.
+
+Iteration 2269 recorded source retention in the driver and resolver typed IR contract path.
+
+Iteration 2270 recorded dependency source identity in the driver and resolver typed IR contract path.
+
+Iteration 2271 recorded unknown adapter identity in the driver and resolver typed IR contract path.
+
+Iteration 2272 recorded callable symbol mapping in the driver and resolver typed IR contract path.
+
+Iteration 2273 recorded symbol table ownership in the driver and resolver typed IR contract path.
+
+Iteration 2274 recorded type resolution ownership in the driver and resolver typed IR contract path.
+
+Iteration 2275 recorded backend re-inference prohibition in the driver and resolver typed IR contract path.
+
+Iteration 2276 recorded source location ownership in the driver and resolver typed IR contract path.
+
+Iteration 2277 recorded driver compatibility path in the driver and resolver typed IR contract path.
+
+Iteration 2278 recorded cross-backend parity in the driver and resolver typed IR contract path.
+
+Iteration 2279 recorded integration test boundaries in the driver and resolver typed IR contract path.
+
+Iteration 2280 recorded dependency regression tests in the driver and resolver typed IR contract path.
+
+Iteration 2281 recorded full-suite categories in the driver and resolver typed IR contract path.
+
+Iteration 2282 recorded typed IR API contract in the driver and resolver typed IR contract path.
+
+Iteration 2283 recorded AST-free driver seam in the driver and resolver typed IR contract path.
+
+Iteration 2284 recorded migration milestones in the driver and resolver typed IR contract path.
+
+Iteration 2285 audited typed assignment output in the JVM typed statement semantics path.
+
+Iteration 2286 audited typed expression output in the JVM typed statement semantics path.
+
+Iteration 2287 audited typed loop output in the JVM typed statement semantics path.
+
+Iteration 2288 audited typed IF output in the JVM typed statement semantics path.
+
+Iteration 2289 audited typed SELECT output in the JVM typed statement semantics path.
+
+Iteration 2290 audited typed DATA handling in the JVM typed statement semantics path.
+
+Iteration 2291 audited typed RESTORE handling in the JVM typed statement semantics path.
+
+Iteration 2292 audited typed file I/O output in the JVM typed statement semantics path.
+
+Iteration 2293 audited typed record access in the JVM typed statement semantics path.
+
+Iteration 2294 audited typed array access in the JVM typed statement semantics path.
+
+Iteration 2295 audited typed callable body in the JVM typed statement semantics path.
+
+Iteration 2296 audited typed procedure body in the JVM typed statement semantics path.
+
+Iteration 2297 audited typed global storage in the JVM typed statement semantics path.
+
+Iteration 2298 audited typed constants in the JVM typed statement semantics path.
+
+Iteration 2299 audited typed catch bindings in the JVM typed statement semantics path.
+
+Iteration 2300 audited typed exception handlers in the JVM typed statement semantics path.
+
+Iteration 2301 audited typed generated names in the JVM typed statement semantics path.
+
+Iteration 2302 audited typed source comments in the JVM typed statement semantics path.
+
+Iteration 2303 audited implicit return in the JVM typed statement semantics path.
+
+Iteration 2304 audited explicit END in the JVM typed statement semantics path.
+
+Iteration 2305 audited label resolution in the JVM typed statement semantics path.
+
+Iteration 2306 audited TRY nesting in the JVM typed statement semantics path.
+
+Iteration 2307 audited semantic state ownership in the JVM typed statement semantics path.
+
+Iteration 2308 audited target capability check in the JVM typed statement semantics path.
+
+Iteration 2309 audited runtime conformance in the JVM typed statement semantics path.
+
+Iteration 2310 traced typed scalar storage in the C typed expression and storage semantics path.
+
+Iteration 2311 traced typed string storage in the C typed expression and storage semantics path.
+
+Iteration 2312 traced typed global storage in the C typed expression and storage semantics path.
+
+Iteration 2313 traced typed constant type in the C typed expression and storage semantics path.
+
+Iteration 2314 traced typed array bounds in the C typed expression and storage semantics path.
+
+Iteration 2315 traced typed array dimensions in the C typed expression and storage semantics path.
+
+Iteration 2316 traced typed FOR variable in the C typed expression and storage semantics path.
+
+Iteration 2317 traced typed assignment target in the C typed expression and storage semantics path.
+
+Iteration 2318 traced typed member access in the C typed expression and storage semantics path.
+
+Iteration 2319 traced typed record storage in the C typed expression and storage semantics path.
+
+Iteration 2320 traced typed catch binding in the C typed expression and storage semantics path.
+
+Iteration 2321 traced typed callable parameter in the C typed expression and storage semantics path.
+
+Iteration 2322 traced typed callable return in the C typed expression and storage semantics path.
+
+Iteration 2323 traced typed arithmetic conversion in the C typed expression and storage semantics path.
+
+Iteration 2324 traced typed string conversion in the C typed expression and storage semantics path.
+
+Iteration 2325 traced typed array indexing in the C typed expression and storage semantics path.
+
+Iteration 2326 traced typed DATA initializer in the C typed expression and storage semantics path.
+
+Iteration 2327 traced typed READ target in the C typed expression and storage semantics path.
+
+Iteration 2328 traced typed INPUT target in the C typed expression and storage semantics path.
+
+Iteration 2329 traced typed file channel in the C typed expression and storage semantics path.
+
+Iteration 2330 traced typed FIELD buffer in the C typed expression and storage semantics path.
+
+Iteration 2331 traced typed GOSUB state in the C typed expression and storage semantics path.
+
+Iteration 2332 traced typed function fallthrough in the C typed expression and storage semantics path.
+
+Iteration 2333 traced typed builtin usage in the C typed expression and storage semantics path.
+
+Iteration 2334 traced generated C runtime behavior in the C typed expression and storage semantics path.
+
+Iteration 2335 checked typed scalar names in the BASIC typed expression and storage semantics path.
+
+Iteration 2336 checked typed string names in the BASIC typed expression and storage semantics path.
+
+Iteration 2337 checked typed global binding in the BASIC typed expression and storage semantics path.
+
+Iteration 2338 checked typed constant suffix in the BASIC typed expression and storage semantics path.
+
+Iteration 2339 checked typed array bounds in the BASIC typed expression and storage semantics path.
+
+Iteration 2340 checked typed array declarations in the BASIC typed expression and storage semantics path.
+
+Iteration 2341 checked typed FOR variable in the BASIC typed expression and storage semantics path.
+
+Iteration 2342 checked typed assignment targets in the BASIC typed expression and storage semantics path.
+
+Iteration 2343 checked typed record fields in the BASIC typed expression and storage semantics path.
+
+Iteration 2344 checked typed catch names in the BASIC typed expression and storage semantics path.
+
+Iteration 2345 checked typed callable arguments in the BASIC typed expression and storage semantics path.
+
+Iteration 2346 checked typed callable return in the BASIC typed expression and storage semantics path.
+
+Iteration 2347 checked typed numeric expressions in the BASIC typed expression and storage semantics path.
+
+Iteration 2348 checked typed string expressions in the BASIC typed expression and storage semantics path.
+
+Iteration 2349 checked typed array indexing in the BASIC typed expression and storage semantics path.
+
+Iteration 2350 checked typed DATA values in the BASIC typed expression and storage semantics path.
+
+Iteration 2351 checked typed READ targets in the BASIC typed expression and storage semantics path.
+
+Iteration 2352 checked typed INPUT targets in the BASIC typed expression and storage semantics path.
+
+Iteration 2353 checked typed file channels in the BASIC typed expression and storage semantics path.
+
+Iteration 2354 checked typed FIELD layout in the BASIC typed expression and storage semantics path.
+
+Iteration 2355 checked typed labels in the BASIC typed expression and storage semantics path.
+
+Iteration 2356 checked typed builtin calls in the BASIC typed expression and storage semantics path.
+
+Iteration 2357 checked typed function fallthrough in the BASIC typed expression and storage semantics path.
+
+Iteration 2358 checked generated BASIC runtime in the BASIC typed expression and storage semantics path.
+
+Iteration 2359 checked backend parity in the BASIC typed expression and storage semantics path.
+
+Iteration 2360 reviewed shared semantic module roots in the cross-backend and driver migration audit path.
+
+Iteration 2361 reviewed dependency source mapping in the cross-backend and driver migration audit path.
+
+Iteration 2362 reviewed callable signatures in the cross-backend and driver migration audit path.
+
+Iteration 2363 reviewed record declarations in the cross-backend and driver migration audit path.
+
+Iteration 2364 reviewed record method symbols in the cross-backend and driver migration audit path.
+
+Iteration 2365 reviewed global declarations in the cross-backend and driver migration audit path.
+
+Iteration 2366 reviewed constant declarations in the cross-backend and driver migration audit path.
+
+Iteration 2367 reviewed array declarations in the cross-backend and driver migration audit path.
+
+Iteration 2368 reviewed control-flow facts in the cross-backend and driver migration audit path.
+
+Iteration 2369 reviewed exception metadata in the cross-backend and driver migration audit path.
+
+Iteration 2370 reviewed DATA offsets in the cross-backend and driver migration audit path.
+
+Iteration 2371 reviewed file layout facts in the cross-backend and driver migration audit path.
+
+Iteration 2372 reviewed generated-name conflicts in the cross-backend and driver migration audit path.
+
+Iteration 2373 reviewed target support flags in the cross-backend and driver migration audit path.
+
+Iteration 2374 reviewed source diagnostics in the cross-backend and driver migration audit path.
+
+Iteration 2375 reviewed resolver-produced expression types in the cross-backend and driver migration audit path.
+
+Iteration 2376 reviewed resolver-produced lvalue types in the cross-backend and driver migration audit path.
+
+Iteration 2377 reviewed semantic spans in the cross-backend and driver migration audit path.
+
+Iteration 2378 reviewed adapter source retention in the cross-backend and driver migration audit path.
+
+Iteration 2379 reviewed BASIC consumer inventory in the cross-backend and driver migration audit path.
+
+Iteration 2380 reviewed C consumer inventory in the cross-backend and driver migration audit path.
+
+Iteration 2381 reviewed JVM consumer inventory in the cross-backend and driver migration audit path.
+
+Iteration 2382 reviewed driver consumer inventory in the cross-backend and driver migration audit path.
+
+Iteration 2383 reviewed AST fallback inventory in the cross-backend and driver migration audit path.
+
+Iteration 2384 reviewed remaining module boundaries in the cross-backend and driver migration audit path.
+
+Iteration 2385 recorded focused JVM stream result in the validation and checkpoint review path.
+
+Iteration 2386 recorded blank-line regression result in the validation and checkpoint review path.
+
+Iteration 2387 recorded multi-source regression result in the validation and checkpoint review path.
+
+Iteration 2388 recorded atomic decline regression result in the validation and checkpoint review path.
+
+Iteration 2389 recorded library tests in the validation and checkpoint review path.
+
+Iteration 2390 recorded CLI tests in the validation and checkpoint review path.
+
+Iteration 2391 recorded DOSBox/C tests in the validation and checkpoint review path.
+
+Iteration 2392 recorded example tests in the validation and checkpoint review path.
+
+Iteration 2393 recorded JVM conformance tests in the validation and checkpoint review path.
+
+Iteration 2394 recorded language conformance test in the validation and checkpoint review path.
+
+Iteration 2395 recorded general record tests in the validation and checkpoint review path.
+
+Iteration 2396 recorded record method tests in the validation and checkpoint review path.
+
+Iteration 2397 recorded tutorial fixture scope in the validation and checkpoint review path.
+
+Iteration 2398 recorded Graphify state at start in the validation and checkpoint review path.
+
+Iteration 2399 recorded Graphify query results in the validation and checkpoint review path.
+
+Iteration 2400 recorded source inspection after navigation in the validation and checkpoint review path.
+
+Iteration 2401 recorded whitespace validation in the validation and checkpoint review path.
+
+Iteration 2402 recorded number continuity in the validation and checkpoint review path.
+
+Iteration 2403 recorded number uniqueness in the validation and checkpoint review path.
+
+Iteration 2404 recorded generated files in the validation and checkpoint review path.
+
+Iteration 2405 recorded commit scope in the validation and checkpoint review path.
+
+Iteration 2406 recorded worktree state in the validation and checkpoint review path.
+
+Iteration 2407 recorded C typed-stream gap in the validation and checkpoint review path.
+
+Iteration 2408 recorded driver typed IR gap in the validation and checkpoint review path.
+
+Iteration 2409 verified JVM module emission declines atomically when source identity is missing.
