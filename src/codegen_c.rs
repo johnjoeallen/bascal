@@ -1507,16 +1507,13 @@ fn collect_semantic_scalar_declarations(
         fn const_ident(
             name: &str,
             value_type: crate::semantic_ir::SemanticValueType,
-        ) -> BasicIdent {
+        ) -> Option<BasicIdent> {
             let parsed = BasicIdent::parse(name);
-            let suffix = value_type
-                .suffix()
-                .and_then(TypeSuffix::from_char)
-                .unwrap_or(TypeSuffix::Integer);
-            BasicIdent {
+            let suffix = semantic_value_type_suffix(value_type)?;
+            Some(BasicIdent {
                 name: parsed.name,
                 suffix: Some(suffix),
-            }
+            })
         }
         for statement in statements {
             match &statement.kind {
@@ -1617,7 +1614,9 @@ fn collect_semantic_scalar_declarations(
                 Kind::Const {
                     name, value_type, ..
                 } => {
-                    let ident = const_ident(&name.name, *value_type);
+                    let Some(ident) = const_ident(&name.name, *value_type) else {
+                        continue;
+                    };
                     if BasicIdent::parse(&name.name).suffix.is_none() {
                         let base = BasicIdent {
                             name: ident.name.clone(),
@@ -25061,6 +25060,28 @@ mod dialect_tests {
         collect_semantic_scalar_declarations(&suffixless.statements, &mut numeric, &mut strings);
         assert_eq!(numeric.get("bv_f_error"), Some(&"float"), "{numeric:?}");
         assert_eq!(numeric.get("bv_f_line"), Some(&"float"), "{numeric:?}");
+    }
+
+    #[test]
+    fn c_semantic_const_storage_does_not_default_unknown_type() {
+        let mut module = crate::semantic_ir::parse_and_adapt("const amount = 1\nend\n").unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
+        else {
+            panic!("expected statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Const { value_type, .. } =
+            &mut body[0].kind
+        else {
+            panic!("expected CONST")
+        };
+        *value_type = crate::semantic_ir::SemanticValueType::Unknown;
+
+        let mut numeric = BTreeMap::new();
+        let mut strings = BTreeSet::new();
+        collect_semantic_scalar_declarations(&module.statements, &mut numeric, &mut strings);
+
+        assert!(numeric.is_empty(), "{numeric:?}");
+        assert!(strings.is_empty(), "{strings:?}");
     }
 
     #[test]

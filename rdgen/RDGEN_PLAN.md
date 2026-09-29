@@ -17277,3 +17277,11 @@ Iteration 5701 removed BASIC semantic array element-type reconstruction from ann
 Iteration 5702 removed the obsolete annotation-to-suffix codegen helper after semantic array typing switched to typed IR.
 
 Iteration 5703 validated the complete locked workspace suite after removing BASIC array type fallbacks.
+
+Iteration 5704 removed C semantic CONST storage fallback to Integer for unresolved typed-IR values.
+
+Iteration 5705 added regression coverage that Unknown semantic CONST types do not allocate C storage.
+
+Iteration 5706 refreshed Graphify after changing C declaration collection dependencies.
+
+Iteration 5707 validated the complete locked workspace suite after C CONST storage changes.
