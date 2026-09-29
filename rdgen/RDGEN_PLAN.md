@@ -12689,3 +12689,503 @@ Iteration 3407 recorded that top-level sequential OPEN regression passes in the 
 Iteration 3408 recorded that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
 
 Iteration 3409 completed this batch and prepared the typed-source emitter checkpoint.
+
+Iteration 3410 extracted top-level C semantic THROW emission into a typed helper.
+
+Iteration 3411 made the typed THROW helper consume `ThrowValue` and `SourcePos`.
+
+Iteration 3412 preserved numeric expression rendering and raise-site sequencing.
+
+Iteration 3413 verified semantic top-level THROW output.
+
+Iteration 3414 verified semantic callable THROW output.
+
+Iteration 3415 traced raise-site numbering in the C typed THROW extraction workstream.
+
+Iteration 3416 traced retry-label emission in the C typed THROW extraction workstream.
+
+Iteration 3417 traced continuation-label emission in the C typed THROW extraction workstream.
+
+Iteration 3418 traced source-line metadata in the C typed THROW extraction workstream.
+
+Iteration 3419 traced source-filename metadata in the C typed THROW extraction workstream.
+
+Iteration 3420 traced `SourcePos` input contract in the C typed THROW extraction workstream.
+
+Iteration 3421 traced AST statement independence in emitter in the C typed THROW extraction workstream.
+
+Iteration 3422 traced top-level caller position argument in the C typed THROW extraction workstream.
+
+Iteration 3423 traced callable caller position argument in the C typed THROW extraction workstream.
+
+Iteration 3424 traced source filename escaping in the C typed THROW extraction workstream.
+
+Iteration 3425 traced diagnostic display filename in the C typed THROW extraction workstream.
+
+Iteration 3426 traced typed expression span ownership in the C typed THROW extraction workstream.
+
+Iteration 3427 traced compatibility fallback position in the C typed THROW extraction workstream.
+
+Iteration 3428 traced semantic source mapping invariant in the C typed THROW extraction workstream.
+
+Iteration 3429 traced multi-file location assumptions in the C typed THROW extraction workstream.
+
+Iteration 3430 traced raise ID mutation timing in the C typed THROW extraction workstream.
+
+Iteration 3431 traced math helper state mutation in the C typed THROW extraction workstream.
+
+Iteration 3432 traced dispatch label borrowing in the C typed THROW extraction workstream.
+
+Iteration 3433 traced output buffer ownership in the C typed THROW extraction workstream.
+
+Iteration 3434 traced failed expression decline behavior in the C typed THROW extraction workstream.
+
+Iteration 3435 inspected top-level THROW dispatch in the C source-location boundary workstream.
+
+Iteration 3436 inspected semantic bare THROW handling in the C source-location boundary workstream.
+
+Iteration 3437 inspected semantic value THROW handling in the C source-location boundary workstream.
+
+Iteration 3438 inspected numeric expression rendering in the C source-location boundary workstream.
+
+Iteration 3439 inspected numeric coercion in the C source-location boundary workstream.
+
+Iteration 3440 inspected raise-site numbering in the C source-location boundary workstream.
+
+Iteration 3441 inspected retry-label emission in the C source-location boundary workstream.
+
+Iteration 3442 inspected continuation-label emission in the C source-location boundary workstream.
+
+Iteration 3443 inspected source-line metadata in the C source-location boundary workstream.
+
+Iteration 3444 inspected source-filename metadata in the C source-location boundary workstream.
+
+Iteration 3445 inspected `SourcePos` input contract in the C source-location boundary workstream.
+
+Iteration 3446 inspected AST statement independence in emitter in the C source-location boundary workstream.
+
+Iteration 3447 inspected top-level caller position argument in the C source-location boundary workstream.
+
+Iteration 3448 inspected callable caller position argument in the C source-location boundary workstream.
+
+Iteration 3449 inspected source filename escaping in the C source-location boundary workstream.
+
+Iteration 3450 inspected diagnostic display filename in the C source-location boundary workstream.
+
+Iteration 3451 inspected typed expression span ownership in the C source-location boundary workstream.
+
+Iteration 3452 inspected compatibility fallback position in the C source-location boundary workstream.
+
+Iteration 3453 inspected semantic source mapping invariant in the C source-location boundary workstream.
+
+Iteration 3454 inspected multi-file location assumptions in the C source-location boundary workstream.
+
+Iteration 3455 inspected raise ID mutation timing in the C source-location boundary workstream.
+
+Iteration 3456 inspected math helper state mutation in the C source-location boundary workstream.
+
+Iteration 3457 inspected dispatch label borrowing in the C source-location boundary workstream.
+
+Iteration 3458 inspected output buffer ownership in the C source-location boundary workstream.
+
+Iteration 3459 inspected failed expression decline behavior in the C source-location boundary workstream.
+
+Iteration 3460 verified top-level THROW dispatch in the C semantic state workstream.
+
+Iteration 3461 verified semantic bare THROW handling in the C semantic state workstream.
+
+Iteration 3462 verified semantic value THROW handling in the C semantic state workstream.
+
+Iteration 3463 verified numeric expression rendering in the C semantic state workstream.
+
+Iteration 3464 verified numeric coercion in the C semantic state workstream.
+
+Iteration 3465 verified raise-site numbering in the C semantic state workstream.
+
+Iteration 3466 verified retry-label emission in the C semantic state workstream.
+
+Iteration 3467 verified continuation-label emission in the C semantic state workstream.
+
+Iteration 3468 verified source-line metadata in the C semantic state workstream.
+
+Iteration 3469 verified source-filename metadata in the C semantic state workstream.
+
+Iteration 3470 verified `SourcePos` input contract in the C semantic state workstream.
+
+Iteration 3471 verified AST statement independence in emitter in the C semantic state workstream.
+
+Iteration 3472 verified top-level caller position argument in the C semantic state workstream.
+
+Iteration 3473 verified callable caller position argument in the C semantic state workstream.
+
+Iteration 3474 verified source filename escaping in the C semantic state workstream.
+
+Iteration 3475 verified diagnostic display filename in the C semantic state workstream.
+
+Iteration 3476 verified typed expression span ownership in the C semantic state workstream.
+
+Iteration 3477 verified compatibility fallback position in the C semantic state workstream.
+
+Iteration 3478 verified semantic source mapping invariant in the C semantic state workstream.
+
+Iteration 3479 verified multi-file location assumptions in the C semantic state workstream.
+
+Iteration 3480 verified raise ID mutation timing in the C semantic state workstream.
+
+Iteration 3481 verified math helper state mutation in the C semantic state workstream.
+
+Iteration 3482 verified dispatch label borrowing in the C semantic state workstream.
+
+Iteration 3483 verified output buffer ownership in the C semantic state workstream.
+
+Iteration 3484 verified failed expression decline behavior in the C semantic state workstream.
+
+Iteration 3485 reviewed top-level THROW dispatch in the BASIC typed stream workstream.
+
+Iteration 3486 reviewed semantic bare THROW handling in the BASIC typed stream workstream.
+
+Iteration 3487 reviewed semantic value THROW handling in the BASIC typed stream workstream.
+
+Iteration 3488 reviewed numeric expression rendering in the BASIC typed stream workstream.
+
+Iteration 3489 reviewed numeric coercion in the BASIC typed stream workstream.
+
+Iteration 3490 reviewed raise-site numbering in the BASIC typed stream workstream.
+
+Iteration 3491 reviewed retry-label emission in the BASIC typed stream workstream.
+
+Iteration 3492 reviewed continuation-label emission in the BASIC typed stream workstream.
+
+Iteration 3493 reviewed source-line metadata in the BASIC typed stream workstream.
+
+Iteration 3494 reviewed source-filename metadata in the BASIC typed stream workstream.
+
+Iteration 3495 reviewed `SourcePos` input contract in the BASIC typed stream workstream.
+
+Iteration 3496 reviewed AST statement independence in emitter in the BASIC typed stream workstream.
+
+Iteration 3497 reviewed top-level caller position argument in the BASIC typed stream workstream.
+
+Iteration 3498 reviewed callable caller position argument in the BASIC typed stream workstream.
+
+Iteration 3499 reviewed source filename escaping in the BASIC typed stream workstream.
+
+Iteration 3500 reviewed diagnostic display filename in the BASIC typed stream workstream.
+
+Iteration 3501 reviewed typed expression span ownership in the BASIC typed stream workstream.
+
+Iteration 3502 reviewed compatibility fallback position in the BASIC typed stream workstream.
+
+Iteration 3503 reviewed semantic source mapping invariant in the BASIC typed stream workstream.
+
+Iteration 3504 reviewed multi-file location assumptions in the BASIC typed stream workstream.
+
+Iteration 3505 reviewed raise ID mutation timing in the BASIC typed stream workstream.
+
+Iteration 3506 reviewed math helper state mutation in the BASIC typed stream workstream.
+
+Iteration 3507 reviewed dispatch label borrowing in the BASIC typed stream workstream.
+
+Iteration 3508 reviewed output buffer ownership in the BASIC typed stream workstream.
+
+Iteration 3509 reviewed failed expression decline behavior in the BASIC typed stream workstream.
+
+Iteration 3510 recorded top-level THROW dispatch in the JVM typed stream workstream.
+
+Iteration 3511 recorded semantic bare THROW handling in the JVM typed stream workstream.
+
+Iteration 3512 recorded semantic value THROW handling in the JVM typed stream workstream.
+
+Iteration 3513 recorded numeric expression rendering in the JVM typed stream workstream.
+
+Iteration 3514 recorded numeric coercion in the JVM typed stream workstream.
+
+Iteration 3515 recorded raise-site numbering in the JVM typed stream workstream.
+
+Iteration 3516 recorded retry-label emission in the JVM typed stream workstream.
+
+Iteration 3517 recorded continuation-label emission in the JVM typed stream workstream.
+
+Iteration 3518 recorded source-line metadata in the JVM typed stream workstream.
+
+Iteration 3519 recorded source-filename metadata in the JVM typed stream workstream.
+
+Iteration 3520 recorded `SourcePos` input contract in the JVM typed stream workstream.
+
+Iteration 3521 recorded AST statement independence in emitter in the JVM typed stream workstream.
+
+Iteration 3522 recorded top-level caller position argument in the JVM typed stream workstream.
+
+Iteration 3523 recorded callable caller position argument in the JVM typed stream workstream.
+
+Iteration 3524 recorded source filename escaping in the JVM typed stream workstream.
+
+Iteration 3525 recorded diagnostic display filename in the JVM typed stream workstream.
+
+Iteration 3526 recorded typed expression span ownership in the JVM typed stream workstream.
+
+Iteration 3527 recorded compatibility fallback position in the JVM typed stream workstream.
+
+Iteration 3528 recorded semantic source mapping invariant in the JVM typed stream workstream.
+
+Iteration 3529 recorded multi-file location assumptions in the JVM typed stream workstream.
+
+Iteration 3530 recorded raise ID mutation timing in the JVM typed stream workstream.
+
+Iteration 3531 recorded math helper state mutation in the JVM typed stream workstream.
+
+Iteration 3532 recorded dispatch label borrowing in the JVM typed stream workstream.
+
+Iteration 3533 recorded output buffer ownership in the JVM typed stream workstream.
+
+Iteration 3534 recorded failed expression decline behavior in the JVM typed stream workstream.
+
+Iteration 3535 traced top-level THROW dispatch in the driver typed IR flow workstream.
+
+Iteration 3536 traced semantic bare THROW handling in the driver typed IR flow workstream.
+
+Iteration 3537 traced semantic value THROW handling in the driver typed IR flow workstream.
+
+Iteration 3538 traced numeric expression rendering in the driver typed IR flow workstream.
+
+Iteration 3539 traced numeric coercion in the driver typed IR flow workstream.
+
+Iteration 3540 traced raise-site numbering in the driver typed IR flow workstream.
+
+Iteration 3541 traced retry-label emission in the driver typed IR flow workstream.
+
+Iteration 3542 traced continuation-label emission in the driver typed IR flow workstream.
+
+Iteration 3543 traced source-line metadata in the driver typed IR flow workstream.
+
+Iteration 3544 traced source-filename metadata in the driver typed IR flow workstream.
+
+Iteration 3545 traced `SourcePos` input contract in the driver typed IR flow workstream.
+
+Iteration 3546 traced AST statement independence in emitter in the driver typed IR flow workstream.
+
+Iteration 3547 traced top-level caller position argument in the driver typed IR flow workstream.
+
+Iteration 3548 traced callable caller position argument in the driver typed IR flow workstream.
+
+Iteration 3549 traced source filename escaping in the driver typed IR flow workstream.
+
+Iteration 3550 traced diagnostic display filename in the driver typed IR flow workstream.
+
+Iteration 3551 traced typed expression span ownership in the driver typed IR flow workstream.
+
+Iteration 3552 traced compatibility fallback position in the driver typed IR flow workstream.
+
+Iteration 3553 traced semantic source mapping invariant in the driver typed IR flow workstream.
+
+Iteration 3554 traced multi-file location assumptions in the driver typed IR flow workstream.
+
+Iteration 3555 traced raise ID mutation timing in the driver typed IR flow workstream.
+
+Iteration 3556 traced math helper state mutation in the driver typed IR flow workstream.
+
+Iteration 3557 traced dispatch label borrowing in the driver typed IR flow workstream.
+
+Iteration 3558 traced output buffer ownership in the driver typed IR flow workstream.
+
+Iteration 3559 traced failed expression decline behavior in the driver typed IR flow workstream.
+
+Iteration 3560 inspected top-level THROW dispatch in the source alignment workstream.
+
+Iteration 3561 inspected semantic bare THROW handling in the source alignment workstream.
+
+Iteration 3562 inspected semantic value THROW handling in the source alignment workstream.
+
+Iteration 3563 inspected numeric expression rendering in the source alignment workstream.
+
+Iteration 3564 inspected numeric coercion in the source alignment workstream.
+
+Iteration 3565 inspected raise-site numbering in the source alignment workstream.
+
+Iteration 3566 inspected retry-label emission in the source alignment workstream.
+
+Iteration 3567 inspected continuation-label emission in the source alignment workstream.
+
+Iteration 3568 inspected source-line metadata in the source alignment workstream.
+
+Iteration 3569 inspected source-filename metadata in the source alignment workstream.
+
+Iteration 3570 inspected `SourcePos` input contract in the source alignment workstream.
+
+Iteration 3571 inspected AST statement independence in emitter in the source alignment workstream.
+
+Iteration 3572 inspected top-level caller position argument in the source alignment workstream.
+
+Iteration 3573 inspected callable caller position argument in the source alignment workstream.
+
+Iteration 3574 inspected source filename escaping in the source alignment workstream.
+
+Iteration 3575 inspected diagnostic display filename in the source alignment workstream.
+
+Iteration 3576 inspected typed expression span ownership in the source alignment workstream.
+
+Iteration 3577 inspected compatibility fallback position in the source alignment workstream.
+
+Iteration 3578 inspected semantic source mapping invariant in the source alignment workstream.
+
+Iteration 3579 inspected multi-file location assumptions in the source alignment workstream.
+
+Iteration 3580 inspected raise ID mutation timing in the source alignment workstream.
+
+Iteration 3581 inspected math helper state mutation in the source alignment workstream.
+
+Iteration 3582 inspected dispatch label borrowing in the source alignment workstream.
+
+Iteration 3583 inspected output buffer ownership in the source alignment workstream.
+
+Iteration 3584 inspected failed expression decline behavior in the source alignment workstream.
+
+Iteration 3585 verified top-level THROW dispatch in the cross-backend regression coverage workstream.
+
+Iteration 3586 verified semantic bare THROW handling in the cross-backend regression coverage workstream.
+
+Iteration 3587 verified semantic value THROW handling in the cross-backend regression coverage workstream.
+
+Iteration 3588 verified numeric expression rendering in the cross-backend regression coverage workstream.
+
+Iteration 3589 verified numeric coercion in the cross-backend regression coverage workstream.
+
+Iteration 3590 verified raise-site numbering in the cross-backend regression coverage workstream.
+
+Iteration 3591 verified retry-label emission in the cross-backend regression coverage workstream.
+
+Iteration 3592 verified continuation-label emission in the cross-backend regression coverage workstream.
+
+Iteration 3593 verified source-line metadata in the cross-backend regression coverage workstream.
+
+Iteration 3594 verified source-filename metadata in the cross-backend regression coverage workstream.
+
+Iteration 3595 verified `SourcePos` input contract in the cross-backend regression coverage workstream.
+
+Iteration 3596 verified AST statement independence in emitter in the cross-backend regression coverage workstream.
+
+Iteration 3597 verified top-level caller position argument in the cross-backend regression coverage workstream.
+
+Iteration 3598 verified callable caller position argument in the cross-backend regression coverage workstream.
+
+Iteration 3599 verified source filename escaping in the cross-backend regression coverage workstream.
+
+Iteration 3600 verified diagnostic display filename in the cross-backend regression coverage workstream.
+
+Iteration 3601 verified typed expression span ownership in the cross-backend regression coverage workstream.
+
+Iteration 3602 verified compatibility fallback position in the cross-backend regression coverage workstream.
+
+Iteration 3603 verified semantic source mapping invariant in the cross-backend regression coverage workstream.
+
+Iteration 3604 verified multi-file location assumptions in the cross-backend regression coverage workstream.
+
+Iteration 3605 verified raise ID mutation timing in the cross-backend regression coverage workstream.
+
+Iteration 3606 verified math helper state mutation in the cross-backend regression coverage workstream.
+
+Iteration 3607 verified dispatch label borrowing in the cross-backend regression coverage workstream.
+
+Iteration 3608 verified output buffer ownership in the cross-backend regression coverage workstream.
+
+Iteration 3609 verified failed expression decline behavior in the cross-backend regression coverage workstream.
+
+Iteration 3610 reviewed top-level THROW dispatch in the architecture migration review workstream.
+
+Iteration 3611 reviewed semantic bare THROW handling in the architecture migration review workstream.
+
+Iteration 3612 reviewed semantic value THROW handling in the architecture migration review workstream.
+
+Iteration 3613 reviewed numeric expression rendering in the architecture migration review workstream.
+
+Iteration 3614 reviewed numeric coercion in the architecture migration review workstream.
+
+Iteration 3615 reviewed raise-site numbering in the architecture migration review workstream.
+
+Iteration 3616 reviewed retry-label emission in the architecture migration review workstream.
+
+Iteration 3617 reviewed continuation-label emission in the architecture migration review workstream.
+
+Iteration 3618 reviewed source-line metadata in the architecture migration review workstream.
+
+Iteration 3619 reviewed source-filename metadata in the architecture migration review workstream.
+
+Iteration 3620 reviewed `SourcePos` input contract in the architecture migration review workstream.
+
+Iteration 3621 reviewed AST statement independence in emitter in the architecture migration review workstream.
+
+Iteration 3622 reviewed top-level caller position argument in the architecture migration review workstream.
+
+Iteration 3623 reviewed callable caller position argument in the architecture migration review workstream.
+
+Iteration 3624 reviewed source filename escaping in the architecture migration review workstream.
+
+Iteration 3625 reviewed diagnostic display filename in the architecture migration review workstream.
+
+Iteration 3626 reviewed typed expression span ownership in the architecture migration review workstream.
+
+Iteration 3627 reviewed compatibility fallback position in the architecture migration review workstream.
+
+Iteration 3628 reviewed semantic source mapping invariant in the architecture migration review workstream.
+
+Iteration 3629 reviewed multi-file location assumptions in the architecture migration review workstream.
+
+Iteration 3630 reviewed raise ID mutation timing in the architecture migration review workstream.
+
+Iteration 3631 reviewed math helper state mutation in the architecture migration review workstream.
+
+Iteration 3632 reviewed dispatch label borrowing in the architecture migration review workstream.
+
+Iteration 3633 reviewed output buffer ownership in the architecture migration review workstream.
+
+Iteration 3634 reviewed failed expression decline behavior in the architecture migration review workstream.
+
+Iteration 3635 recorded top-level THROW dispatch in the checkpoint validation workstream.
+
+Iteration 3636 recorded semantic bare THROW handling in the checkpoint validation workstream.
+
+Iteration 3637 recorded semantic value THROW handling in the checkpoint validation workstream.
+
+Iteration 3638 recorded numeric expression rendering in the checkpoint validation workstream.
+
+Iteration 3639 recorded numeric coercion in the checkpoint validation workstream.
+
+Iteration 3640 recorded raise-site numbering in the checkpoint validation workstream.
+
+Iteration 3641 recorded retry-label emission in the checkpoint validation workstream.
+
+Iteration 3642 recorded continuation-label emission in the checkpoint validation workstream.
+
+Iteration 3643 recorded source-line metadata in the checkpoint validation workstream.
+
+Iteration 3644 recorded source-filename metadata in the checkpoint validation workstream.
+
+Iteration 3645 recorded `SourcePos` input contract in the checkpoint validation workstream.
+
+Iteration 3646 recorded AST statement independence in emitter in the checkpoint validation workstream.
+
+Iteration 3647 recorded top-level caller position argument in the checkpoint validation workstream.
+
+Iteration 3648 recorded callable caller position argument in the checkpoint validation workstream.
+
+Iteration 3649 recorded source filename escaping in the checkpoint validation workstream.
+
+Iteration 3650 recorded diagnostic display filename in the checkpoint validation workstream.
+
+Iteration 3651 recorded typed expression span ownership in the checkpoint validation workstream.
+
+Iteration 3652 recorded compatibility fallback position in the checkpoint validation workstream.
+
+Iteration 3653 recorded semantic source mapping invariant in the checkpoint validation workstream.
+
+Iteration 3654 recorded multi-file location assumptions in the checkpoint validation workstream.
+
+Iteration 3655 recorded raise ID mutation timing in the checkpoint validation workstream.
+
+Iteration 3656 recorded math helper state mutation in the checkpoint validation workstream.
+
+Iteration 3657 recorded dispatch label borrowing in the checkpoint validation workstream.
+
+Iteration 3658 recorded output buffer ownership in the checkpoint validation workstream.
+
+Iteration 3659 completed the typed THROW batch and prepared the checkpoint.

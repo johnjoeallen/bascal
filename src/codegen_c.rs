@@ -9605,6 +9605,46 @@ fn emit_c_semantic_open(
     true
 }
 
+fn emit_c_semantic_throw(
+    value: &crate::semantic_ir::ThrowValue,
+    source_pos: &SourcePos,
+    out: &mut String,
+    needs_math: &mut bool,
+    supports_float: bool,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+    ctx: &mut ErrorDataCtx<'_>,
+) -> bool {
+    let code = match value {
+        crate::semantic_ir::ThrowValue::Bare => "bcc_err".to_string(),
+        crate::semantic_ir::ThrowValue::Value(expression) => {
+            let Some((text, is_float)) = render_c_semantic_numeric_expression_context(
+                expression,
+                needs_math,
+                supports_float,
+                Some(arrays),
+                Some(functions),
+            ) else {
+                return false;
+            };
+            coerce_numeric(text, is_float, false, needs_math)
+        }
+    };
+    let id = ctx.raise_id;
+    ctx.raise_id += 1;
+    out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
+    emit_raise_block(
+        out,
+        &code,
+        id,
+        source_pos.line,
+        &source_pos.filename,
+        ctx.dispatch_labels,
+    );
+    out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+    true
+}
+
 fn emit_c_semantic_nested_output_open(
     path: &crate::semantic_ir::Expression,
     mode: crate::semantic_ir::OpenModeKind,
@@ -11423,35 +11463,16 @@ pub(crate) fn generate(
                         body.push_str("    }\n");
                     }
                     Kind::Throw(value) => {
-                        let code = match value {
-                            crate::semantic_ir::ThrowValue::Bare => "bcc_err".to_string(),
-                            crate::semantic_ir::ThrowValue::Value(expression) => {
-                                let Some((text, is_float)) =
-                                    render_c_semantic_numeric_expression_context(
-                                        expression,
-                                        &mut needs_math,
-                                        functions.dialect.supports_float,
-                                        Some(&functions.arrays),
-                                        Some(&functions.funcs),
-                                    )
-                                else {
-                                    return false;
-                                };
-                                coerce_numeric(text, is_float, false, &mut needs_math)
-                            }
-                        };
-                        let id = ctx.raise_id;
-                        ctx.raise_id += 1;
-                        body.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-                        emit_raise_block(
+                        return emit_c_semantic_throw(
+                            value,
+                            &statement.pos,
                             &mut body,
-                            &code,
-                            id,
-                            statement.pos.line,
-                            &statement.pos.filename,
-                            ctx.dispatch_labels,
+                            &mut needs_math,
+                            functions.dialect.supports_float,
+                            &functions.arrays,
+                            &functions.funcs,
+                            &mut ctx,
                         );
-                        body.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
                     }
                     Kind::Read(targets) => {
                         return emit_c_semantic_read(
