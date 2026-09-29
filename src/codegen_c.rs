@@ -9446,7 +9446,7 @@ fn emit_c_semantic_open(
     file_io: &mut FileIoLayout,
     arrays: &ArrayTable,
     functions: &FunctionMap,
-    statement: &Stmt,
+    source_pos: &SourcePos,
     current_function: Option<&FnSig>,
     ctx: &mut ErrorDataCtx<'_>,
 ) -> bool {
@@ -9496,8 +9496,8 @@ fn emit_c_semantic_open(
                     &mut raise,
                     "53",
                     id,
-                    statement.pos.line,
-                    &statement.pos.filename,
+                    source_pos.line,
+                    &source_pos.filename,
                     ctx.dispatch_labels,
                 );
                 for line in raise.lines() {
@@ -9511,11 +9511,11 @@ fn emit_c_semantic_open(
                 out.push_str(&format!("    bcc_files[{index}] = fopen({path}, \"r\");\n"));
                 out.push_str(&format!("    if (!bcc_files[{index}]) {{\n"));
                 out.push_str("        bcc_err = 53;\n");
-                out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
+                out.push_str(&format!("        bcc_erl = {};\n", source_pos.line));
                 out.push_str(&format!(
                     "        bcc_err_file = \"{}\";\n",
                     escape_c_string_literal(&crate::diagnostics::display_source_filename(
-                        &statement.pos.filename
+                        &source_pos.filename
                     ))
                 ));
                 out.push_str(&format!("        goto {label};\n    }}\n"));
@@ -9526,8 +9526,8 @@ fn emit_c_semantic_open(
                 emit_raise_in_callable_block(
                     &mut raise,
                     "53",
-                    statement.pos.line,
-                    &statement.pos.filename,
+                    source_pos.line,
+                    &source_pos.filename,
                     current_function.expect("reachable opens occur inside callables"),
                 );
                 for line in raise.lines() {
@@ -9557,8 +9557,8 @@ fn emit_c_semantic_open(
                     &mut raise,
                     "75",
                     id,
-                    statement.pos.line,
-                    &statement.pos.filename,
+                    source_pos.line,
+                    &source_pos.filename,
                     ctx.dispatch_labels,
                 );
                 for line in raise.lines() {
@@ -9572,11 +9572,11 @@ fn emit_c_semantic_open(
                 out.push_str(&open_pair());
                 out.push_str(&format!("    if (!bcc_files[{index}]) {{\n"));
                 out.push_str("        bcc_err = 75;\n");
-                out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
+                out.push_str(&format!("        bcc_erl = {};\n", source_pos.line));
                 out.push_str(&format!(
                     "        bcc_err_file = \"{}\";\n",
                     escape_c_string_literal(&crate::diagnostics::display_source_filename(
-                        &statement.pos.filename
+                        &source_pos.filename
                     ))
                 ));
                 out.push_str(&format!("        goto {label};\n    }}\n"));
@@ -9587,8 +9587,8 @@ fn emit_c_semantic_open(
                 emit_raise_in_callable_block(
                     &mut raise,
                     "75",
-                    statement.pos.line,
-                    &statement.pos.filename,
+                    source_pos.line,
+                    &source_pos.filename,
                     current_function.expect("reachable opens occur inside callables"),
                 );
                 for line in raise.lines() {
@@ -11215,7 +11215,7 @@ pub(crate) fn generate(
                             &mut file_io,
                             &functions.arrays,
                             &functions.funcs,
-                            statement,
+                            &statement.pos,
                             None,
                             &mut ctx,
                         );
@@ -12825,7 +12825,7 @@ fn emit_function_def(
                         file_io,
                         &functions.arrays,
                         &functions.funcs,
-                        stmt,
+                        &stmt.pos,
                         Some(sig),
                         &mut ctx,
                     ),

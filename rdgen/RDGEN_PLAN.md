@@ -12189,3 +12189,503 @@ Iteration 3157 recorded next C migration slice in the remaining migration review
 Iteration 3158 recorded next driver migration slice in the remaining migration review workstream.
 
 Iteration 3159 completed this cross-backend source-alignment batch and prepared the checkpoint.
+
+Iteration 3160 changed `emit_c_semantic_open` to accept `SourcePos` instead of an AST statement.
+
+Iteration 3161 updated top-level typed OPEN dispatch to pass its source position.
+
+Iteration 3162 updated callable typed OPEN dispatch to pass its source position.
+
+Iteration 3163 verified top-level semantic sequential OPEN generation.
+
+Iteration 3164 verified callable semantic input OPEN error generation.
+
+Iteration 3165 traced that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3166 traced that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3167 traced that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3168 traced that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3169 traced that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3170 traced that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3171 traced that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3172 traced that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3173 traced that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3174 traced that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3175 traced that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3176 traced that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3177 traced that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3178 traced that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3179 traced that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3180 traced that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3181 traced that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3182 traced that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3183 traced that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3184 traced that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3185 inspected that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3186 inspected that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3187 inspected that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3188 inspected that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3189 inspected that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3190 inspected that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3191 inspected that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3192 inspected that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3193 inspected that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3194 inspected that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3195 inspected that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3196 inspected that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3197 inspected that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3198 inspected that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3199 inspected that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3200 inspected that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3201 inspected that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3202 inspected that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3203 inspected that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3204 inspected that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3205 inspected that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3206 inspected that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3207 inspected that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3208 inspected that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3209 inspected that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3210 verified that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3211 verified that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3212 verified that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3213 verified that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3214 verified that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3215 verified that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3216 verified that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3217 verified that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3218 verified that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3219 verified that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3220 verified that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3221 verified that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3222 verified that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3223 verified that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3224 verified that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3225 verified that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3226 verified that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3227 verified that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3228 verified that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3229 verified that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3230 verified that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3231 verified that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3232 verified that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3233 verified that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3234 verified that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3235 reviewed that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3236 reviewed that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3237 reviewed that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3238 reviewed that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3239 reviewed that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3240 reviewed that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3241 reviewed that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3242 reviewed that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3243 reviewed that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3244 reviewed that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3245 reviewed that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3246 reviewed that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3247 reviewed that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3248 reviewed that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3249 reviewed that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3250 reviewed that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3251 reviewed that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3252 reviewed that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3253 reviewed that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3254 reviewed that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3255 reviewed that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3256 reviewed that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3257 reviewed that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3258 reviewed that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3259 reviewed that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3260 recorded that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3261 recorded that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3262 recorded that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3263 recorded that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3264 recorded that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3265 recorded that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3266 recorded that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3267 recorded that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3268 recorded that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3269 recorded that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3270 recorded that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3271 recorded that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3272 recorded that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3273 recorded that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3274 recorded that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3275 recorded that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3276 recorded that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3277 recorded that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3278 recorded that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3279 recorded that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3280 recorded that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3281 recorded that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3282 recorded that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3283 recorded that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3284 recorded that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3285 traced that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3286 traced that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3287 traced that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3288 traced that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3289 traced that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3290 traced that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3291 traced that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3292 traced that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3293 traced that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3294 traced that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3295 traced that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3296 traced that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3297 traced that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3298 traced that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3299 traced that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3300 traced that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3301 traced that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3302 traced that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3303 traced that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3304 traced that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3305 traced that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3306 traced that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3307 traced that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3308 traced that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3309 traced that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3310 inspected that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3311 inspected that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3312 inspected that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3313 inspected that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3314 inspected that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3315 inspected that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3316 inspected that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3317 inspected that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3318 inspected that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3319 inspected that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3320 inspected that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3321 inspected that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3322 inspected that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3323 inspected that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3324 inspected that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3325 inspected that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3326 inspected that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3327 inspected that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3328 inspected that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3329 inspected that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3330 inspected that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3331 inspected that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3332 inspected that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3333 inspected that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3334 inspected that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3335 verified that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3336 verified that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3337 verified that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3338 verified that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3339 verified that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3340 verified that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3341 verified that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3342 verified that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3343 verified that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3344 verified that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3345 verified that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3346 verified that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3347 verified that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3348 verified that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3349 verified that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3350 verified that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3351 verified that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3352 verified that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3353 verified that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3354 verified that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3355 verified that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3356 verified that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3357 verified that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3358 verified that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3359 verified that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3360 reviewed that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3361 reviewed that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3362 reviewed that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3363 reviewed that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3364 reviewed that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3365 reviewed that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3366 reviewed that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3367 reviewed that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3368 reviewed that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3369 reviewed that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3370 reviewed that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3371 reviewed that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3372 reviewed that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3373 reviewed that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3374 reviewed that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3375 reviewed that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3376 reviewed that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3377 reviewed that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3378 reviewed that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3379 reviewed that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3380 reviewed that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3381 reviewed that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3382 reviewed that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3383 reviewed that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3384 reviewed that all test groups pass after the typed-source boundary change in the full suite validation workstream.
+
+Iteration 3385 recorded that C semantic OPEN emitter now accepts `SourcePos` directly in the C semantic OPEN emitter boundary workstream.
+
+Iteration 3386 recorded that OPEN failure line metadata remains explicit in the typed OPEN diagnostics workstream.
+
+Iteration 3387 recorded that OPEN failure filename metadata remains explicit in the OPEN filename metadata workstream.
+
+Iteration 3388 recorded that top-level OPEN call site supplies mapped source position in the top-level C semantic dispatch workstream.
+
+Iteration 3389 recorded that callable OPEN call site supplies callable source position in the callable C semantic dispatch workstream.
+
+Iteration 3390 recorded that C source alignment still requires checked typed-source offsets in the C source alignment invariants workstream.
+
+Iteration 3391 recorded that unsupported OPEN emission retains AST fallback behavior in the C fallback behavior workstream.
+
+Iteration 3392 recorded that OPEN raise-site numbering remains in the caller context in the C semantic state workstream.
+
+Iteration 3393 recorded that BASIC source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3394 recorded that C source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3395 recorded that JVM source mapping uses checked source positions in the cross-backend source alignment workstream.
+
+Iteration 3396 recorded that BASIC callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3397 recorded that C callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3398 recorded that JVM callable mapping uses checked source positions in the callable source alignment workstream.
+
+Iteration 3399 recorded that malformed source offsets decline alignment in the source API validation workstream.
+
+Iteration 3400 recorded that semantic source filename is retained through alignment in the typed source ownership workstream.
+
+Iteration 3401 recorded that statement spans remain the alignment origin in the semantic IR spans workstream.
+
+Iteration 3402 recorded that diagnostics use shared tolerant source positioning in the driver integration workstream.
+
+Iteration 3403 recorded that semantic target diagnostics use shared source positioning in the C diagnostics workstream.
+
+Iteration 3404 recorded that typed stream regressions remain green in the BASIC regression coverage workstream.
+
+Iteration 3405 recorded that blank-line and multi-source regressions remain green in the JVM regression coverage workstream.
+
+Iteration 3406 recorded that source identity decline regression remains green in the C regression coverage workstream.
+
+Iteration 3407 recorded that top-level sequential OPEN regression passes in the C OPEN test coverage workstream.
+
+Iteration 3408 recorded that callable input OPEN error-path regression passes in the C OPEN test coverage workstream.
+
+Iteration 3409 completed this batch and prepared the typed-source emitter checkpoint.
