@@ -27867,6 +27867,32 @@ mod dialect_tests {
     }
 
     #[test]
+    fn c_unresolved_semantic_function_result_returns_error() {
+        let source = "function identity%()\nreturn 1\nend function\nend\n";
+        let parsed = parse_source("c_unknown_function_result.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "c_unknown_function_result.bcl",
+            source,
+        )
+        .unwrap();
+        semantic.callables[0].result_type = None;
+        resolved.semantic_module = Some(semantic);
+
+        let diagnostics = match generate(&resolved, Target::C) {
+            Ok(_) => panic!("unresolved typed function result unexpectedly generated C"),
+            Err(diagnostics) => diagnostics,
+        };
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("function `identity%`")),
+            "unresolved typed-IR result should produce a C diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn c_callable_local_storage_candidates_come_from_typed_dispatch() {
         let ast_source =
             "function f%()\nold%=1\nreturn 0\nend function\nresult%=f%()\nend\n";

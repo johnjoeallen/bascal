@@ -17461,3 +17461,9 @@ Iteration 5793 made BASIC codegen reject semantic functions without a resolved t
 Iteration 5794 added BASIC regression coverage that an unresolved semantic function result produces a codegen diagnostic.
 
 Iteration 5795 refreshed Graphify and validated the complete locked workspace suite after BASIC callable result validation changes.
+
+Iteration 5796 added C regression coverage that unresolved semantic function results produce diagnostics rather than falling back to AST suffixes.
+
+Iteration 5797 added JVM regression coverage for unresolved semantic function result diagnostics.
+
+Iteration 5798 validated unresolved callable result diagnostics across all three codegen backends with the complete locked workspace suite.

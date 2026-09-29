@@ -15924,6 +15924,29 @@ mod tests {
     }
 
     #[test]
+    fn jvm_unresolved_semantic_function_result_returns_diagnostic() {
+        let source = "function read%()\nreturn 1\nend function\nend\n";
+        let parsed = crate::parse_source("unknown_function_result.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_function_result.bcl",
+            source,
+        )
+        .unwrap();
+        semantic.callables[0].result_type = None;
+        resolved.semantic_module = Some(semantic);
+
+        let diagnostics = super::generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("no resolved JVM result type")),
+            "unresolved typed-IR result should produce a JVM diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn jvm_semantic_dim_collectors_do_not_default_unknown_storage_types() {
         let mut module = crate::semantic_ir::parse_and_adapt(
             "dim scalar&\ndim values&(4)\nend\n",
