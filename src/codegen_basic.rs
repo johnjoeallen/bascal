@@ -6130,7 +6130,7 @@ fn basic_semantic_statements_by_source(
     for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
         let source = module.sources.get(*source_index)?;
         let pairs = if let crate::semantic_ir::SemanticStatementKind::Line(nodes) = &root.kind {
-            let line = source_position(source, root.span.start)?.line;
+            let line = source_position(source, root.span)?.line;
             let ast_line = ast_statements
                 .iter()
                 .enumerate()
@@ -6146,7 +6146,7 @@ fn basic_semantic_statements_by_source(
             }
             nodes.iter().zip(ast_line).collect::<Vec<_>>()
         } else {
-            let position = source_position(source, root.span.start)?;
+            let position = source_position(source, root.span)?;
             let matches = ast_statements
                 .iter()
                 .enumerate()
@@ -6320,7 +6320,7 @@ fn basic_semantic_callable_statements_by_source<'a>(
             vec![root]
         };
         for semantic in children {
-            let position = source_position(source, semantic.span.start)?;
+            let position = source_position(source, semantic.span)?;
             let candidates = function
                 .body
                 .iter()
@@ -8120,21 +8120,9 @@ fn semantic_dim_type_suffix(annotation: &str) -> Option<TypeSuffix> {
 
 fn source_position(
     source: &crate::semantic_ir::SemanticSource,
-    offset: usize,
+    span: crate::rdgen_frontend::SourceSpan,
 ) -> Option<crate::diagnostics::SourcePos> {
-    let tail = source.text.get(offset..)?;
-    let leading_trivia = tail
-        .char_indices()
-        .find(|(_, character)| !character.is_whitespace())?
-        .0;
-    let prefix = source.text.get(..offset + leading_trivia)?;
-    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = prefix.rsplit('\n').next()?.chars().count() + 1;
-    Some(crate::diagnostics::SourcePos::new(
-        &source.filename,
-        line,
-        column,
-    ))
+    source.source_position_at(span.start)
 }
 
 impl CodeGenerator {

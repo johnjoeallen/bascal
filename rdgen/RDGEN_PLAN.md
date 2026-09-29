@@ -11689,3 +11689,503 @@ Iteration 2907 recorded checkpoint diff check in the batch checkpoint and remain
 Iteration 2908 recorded repository status after commit in the batch checkpoint and remaining work workstream.
 
 Iteration 2909 completed this source-location migration batch and prepared the checkpoint.
+
+Iteration 2910 migrated C top-level source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2911 migrated C callable source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2912 migrated JVM top-level source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2913 migrated JVM callable source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2914 migrated BASIC top-level source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2915 migrated BASIC callable source alignment to checked `SemanticSource::source_position_at`.
+
+Iteration 2916 traced monotonic AST ordering in the C semantic top-level source alignment workstream.
+
+Iteration 2917 traced duplicate-position siblings in the C semantic top-level source alignment workstream.
+
+Iteration 2918 traced record-generated siblings in the C semantic top-level source alignment workstream.
+
+Iteration 2919 traced source lookup failure in the C semantic top-level source alignment workstream.
+
+Iteration 2920 traced invalid source index in the C semantic top-level source alignment workstream.
+
+Iteration 2921 traced unknown source sentinel in the C semantic top-level source alignment workstream.
+
+Iteration 2922 traced statement-source cardinality in the C semantic top-level source alignment workstream.
+
+Iteration 2923 traced dependency source selection in the C semantic top-level source alignment workstream.
+
+Iteration 2924 traced root source selection in the C semantic top-level source alignment workstream.
+
+Iteration 2925 traced whitespace before source token in the C semantic top-level source alignment workstream.
+
+Iteration 2926 traced Unicode source column in the C semantic top-level source alignment workstream.
+
+Iteration 2927 traced span boundary behavior in the C semantic top-level source alignment workstream.
+
+Iteration 2928 traced all-or-nothing map decline in the C semantic top-level source alignment workstream.
+
+Iteration 2929 traced fallback statement path in the C semantic top-level source alignment workstream.
+
+Iteration 2930 traced aligned semantic dispatch in the C semantic top-level source alignment workstream.
+
+Iteration 2931 traced typed node ordering in the C semantic top-level source alignment workstream.
+
+Iteration 2932 traced nested statement mapping in the C semantic top-level source alignment workstream.
+
+Iteration 2933 traced C backend source identity in the C semantic top-level source alignment workstream.
+
+Iteration 2934 traced shared source API in the C semantic top-level source alignment workstream.
+
+Iteration 2935 inspected callable source index in the C semantic callable source alignment workstream.
+
+Iteration 2936 inspected callable signature selection in the C semantic callable source alignment workstream.
+
+Iteration 2937 inspected callable body root spans in the C semantic callable source alignment workstream.
+
+Iteration 2938 inspected nested line child spans in the C semantic callable source alignment workstream.
+
+Iteration 2939 inspected source filename comparison in the C semantic callable source alignment workstream.
+
+Iteration 2940 inspected line comparison in the C semantic callable source alignment workstream.
+
+Iteration 2941 inspected column comparison in the C semantic callable source alignment workstream.
+
+Iteration 2942 inspected blank-line exclusion in the C semantic callable source alignment workstream.
+
+Iteration 2943 inspected monotonic body ordering in the C semantic callable source alignment workstream.
+
+Iteration 2944 inspected duplicate-position body siblings in the C semantic callable source alignment workstream.
+
+Iteration 2945 inspected callable span bounds in the C semantic callable source alignment workstream.
+
+Iteration 2946 inspected invalid callable source index in the C semantic callable source alignment workstream.
+
+Iteration 2947 inspected dependency callable source in the C semantic callable source alignment workstream.
+
+Iteration 2948 inspected record method source in the C semantic callable source alignment workstream.
+
+Iteration 2949 inspected procedure source mapping in the C semantic callable source alignment workstream.
+
+Iteration 2950 inspected function source mapping in the C semantic callable source alignment workstream.
+
+Iteration 2951 inspected semantic body fallback in the C semantic callable source alignment workstream.
+
+Iteration 2952 inspected AST body fallback in the C semantic callable source alignment workstream.
+
+Iteration 2953 inspected unsupported semantic nodes in the C semantic callable source alignment workstream.
+
+Iteration 2954 inspected typed return position in the C semantic callable source alignment workstream.
+
+Iteration 2955 inspected typed THROW position in the C semantic callable source alignment workstream.
+
+Iteration 2956 inspected typed OPEN position in the C semantic callable source alignment workstream.
+
+Iteration 2957 inspected source-order invariants in the C semantic callable source alignment workstream.
+
+Iteration 2958 inspected shared source API in the C semantic callable source alignment workstream.
+
+Iteration 2959 inspected callable regression coverage in the C semantic callable source alignment workstream.
+
+Iteration 2960 verified module source index in the JVM semantic top-level source alignment workstream.
+
+Iteration 2961 verified semantic root span in the JVM semantic top-level source alignment workstream.
+
+Iteration 2962 verified nested line spans in the JVM semantic top-level source alignment workstream.
+
+Iteration 2963 verified source filename comparison in the JVM semantic top-level source alignment workstream.
+
+Iteration 2964 verified line comparison in the JVM semantic top-level source alignment workstream.
+
+Iteration 2965 verified column comparison in the JVM semantic top-level source alignment workstream.
+
+Iteration 2966 verified blank-line exclusion in the JVM semantic top-level source alignment workstream.
+
+Iteration 2967 verified strict unique AST candidate in the JVM semantic top-level source alignment workstream.
+
+Iteration 2968 verified monotonic root ordering in the JVM semantic top-level source alignment workstream.
+
+Iteration 2969 verified duplicate positions in the JVM semantic top-level source alignment workstream.
+
+Iteration 2970 verified dependency/root sources in the JVM semantic top-level source alignment workstream.
+
+Iteration 2971 verified missing source behavior in the JVM semantic top-level source alignment workstream.
+
+Iteration 2972 verified invalid source behavior in the JVM semantic top-level source alignment workstream.
+
+Iteration 2973 verified unknown adapter source in the JVM semantic top-level source alignment workstream.
+
+Iteration 2974 verified typed module dispatch in the JVM semantic top-level source alignment workstream.
+
+Iteration 2975 verified legacy fallback dispatch in the JVM semantic top-level source alignment workstream.
+
+Iteration 2976 verified AST-only statement selection in the JVM semantic top-level source alignment workstream.
+
+Iteration 2977 verified TRY filename source in the JVM semantic top-level source alignment workstream.
+
+Iteration 2978 verified source filename escaping in the JVM semantic top-level source alignment workstream.
+
+Iteration 2979 verified blank-line tests in the JVM semantic top-level source alignment workstream.
+
+Iteration 2980 verified multi-source tests in the JVM semantic top-level source alignment workstream.
+
+Iteration 2981 verified typed AST divergence in the JVM semantic top-level source alignment workstream.
+
+Iteration 2982 verified module source ordering in the JVM semantic top-level source alignment workstream.
+
+Iteration 2983 verified shared source API in the JVM semantic top-level source alignment workstream.
+
+Iteration 2984 verified JVM regression coverage in the JVM semantic top-level source alignment workstream.
+
+Iteration 2985 reviewed callable source index in the JVM callable source alignment workstream.
+
+Iteration 2986 reviewed callable span bounds in the JVM callable source alignment workstream.
+
+Iteration 2987 reviewed callable root span in the JVM callable source alignment workstream.
+
+Iteration 2988 reviewed nested statement spans in the JVM callable source alignment workstream.
+
+Iteration 2989 reviewed filename selection in the JVM callable source alignment workstream.
+
+Iteration 2990 reviewed line selection in the JVM callable source alignment workstream.
+
+Iteration 2991 reviewed column selection in the JVM callable source alignment workstream.
+
+Iteration 2992 reviewed blank-line exclusion in the JVM callable source alignment workstream.
+
+Iteration 2993 reviewed unique AST candidate in the JVM callable source alignment workstream.
+
+Iteration 2994 reviewed monotonic body ordering in the JVM callable source alignment workstream.
+
+Iteration 2995 reviewed duplicate position decline in the JVM callable source alignment workstream.
+
+Iteration 2996 reviewed dependency callable source in the JVM callable source alignment workstream.
+
+Iteration 2997 reviewed method source identity in the JVM callable source alignment workstream.
+
+Iteration 2998 reviewed procedure source identity in the JVM callable source alignment workstream.
+
+Iteration 2999 reviewed function source identity in the JVM callable source alignment workstream.
+
+Iteration 3000 reviewed typed body dispatch in the JVM callable source alignment workstream.
+
+Iteration 3001 reviewed legacy body fallback in the JVM callable source alignment workstream.
+
+Iteration 3002 reviewed TRY metadata filename in the JVM callable source alignment workstream.
+
+Iteration 3003 reviewed source index mismatch in the JVM callable source alignment workstream.
+
+Iteration 3004 reviewed unknown source sentinel in the JVM callable source alignment workstream.
+
+Iteration 3005 reviewed stale AST arity regression in the JVM callable source alignment workstream.
+
+Iteration 3006 reviewed typed source disagreement in the JVM callable source alignment workstream.
+
+Iteration 3007 reviewed shared source API in the JVM callable source alignment workstream.
+
+Iteration 3008 reviewed callable test coverage in the JVM callable source alignment workstream.
+
+Iteration 3009 reviewed remaining AST dependencies in the JVM callable source alignment workstream.
+
+Iteration 3010 recorded top-level root span in the BASIC source alignment workstream.
+
+Iteration 3011 recorded nested line source spans in the BASIC source alignment workstream.
+
+Iteration 3012 recorded callable body source span in the BASIC source alignment workstream.
+
+Iteration 3013 recorded source filename matching in the BASIC source alignment workstream.
+
+Iteration 3014 recorded line matching in the BASIC source alignment workstream.
+
+Iteration 3015 recorded column matching in the BASIC source alignment workstream.
+
+Iteration 3016 recorded AST blank-line exclusion in the BASIC source alignment workstream.
+
+Iteration 3017 recorded record sibling mapping in the BASIC source alignment workstream.
+
+Iteration 3018 recorded AST candidate ordering in the BASIC source alignment workstream.
+
+Iteration 3019 recorded duplicate candidates in the BASIC source alignment workstream.
+
+Iteration 3020 recorded source mapping failure in the BASIC source alignment workstream.
+
+Iteration 3021 recorded typed stream fallback in the BASIC source alignment workstream.
+
+Iteration 3022 recorded source filename ownership in the BASIC source alignment workstream.
+
+Iteration 3023 recorded dependency source selection in the BASIC source alignment workstream.
+
+Iteration 3024 recorded generated lines in the BASIC source alignment workstream.
+
+Iteration 3025 recorded typed comments in the BASIC source alignment workstream.
+
+Iteration 3026 recorded typed TRY metadata in the BASIC source alignment workstream.
+
+Iteration 3027 recorded typed catch locations in the BASIC source alignment workstream.
+
+Iteration 3028 recorded shared source API in the BASIC source alignment workstream.
+
+Iteration 3029 recorded non-ASCII column parity in the BASIC source alignment workstream.
+
+Iteration 3030 recorded whitespace handling in the BASIC source alignment workstream.
+
+Iteration 3031 recorded empty span behavior in the BASIC source alignment workstream.
+
+Iteration 3032 recorded multi-file behavior in the BASIC source alignment workstream.
+
+Iteration 3033 recorded callable regression coverage in the BASIC source alignment workstream.
+
+Iteration 3034 recorded remaining compatibility paths in the BASIC source alignment workstream.
+
+Iteration 3035 traced span start clamp in the shared source position semantics workstream.
+
+Iteration 3036 traced span end clamp in the shared source position semantics workstream.
+
+Iteration 3037 traced UTF-8 start normalization in the shared source position semantics workstream.
+
+Iteration 3038 traced UTF-8 end normalization in the shared source position semantics workstream.
+
+Iteration 3039 traced leading trivia scan bound in the shared source position semantics workstream.
+
+Iteration 3040 traced line counting in the shared source position semantics workstream.
+
+Iteration 3041 traced Unicode column counting in the shared source position semantics workstream.
+
+Iteration 3042 traced filename cloning in the shared source position semantics workstream.
+
+Iteration 3043 traced empty input in the shared source position semantics workstream.
+
+Iteration 3044 traced empty span in the shared source position semantics workstream.
+
+Iteration 3045 traced reversed span in the shared source position semantics workstream.
+
+Iteration 3046 traced span past EOF in the shared source position semantics workstream.
+
+Iteration 3047 traced CRLF handling in the shared source position semantics workstream.
+
+Iteration 3048 traced tab handling in the shared source position semantics workstream.
+
+Iteration 3049 traced multibyte prefix in the shared source position semantics workstream.
+
+Iteration 3050 traced whitespace-only range in the shared source position semantics workstream.
+
+Iteration 3051 traced comment-leading span in the shared source position semantics workstream.
+
+Iteration 3052 traced generated spans in the shared source position semantics workstream.
+
+Iteration 3053 traced diagnostic locations in the shared source position semantics workstream.
+
+Iteration 3054 traced alignment locations in the shared source position semantics workstream.
+
+Iteration 3055 traced source-position API ownership in the shared source position semantics workstream.
+
+Iteration 3056 traced SemanticSource contract in the shared source position semantics workstream.
+
+Iteration 3057 traced SourceSpan contract in the shared source position semantics workstream.
+
+Iteration 3058 traced consumer consistency in the shared source position semantics workstream.
+
+Iteration 3059 traced unit test coverage in the shared source position semantics workstream.
+
+Iteration 3060 inspected BASIC mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3061 inspected C mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3062 inspected JVM mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3063 inspected BASIC callable mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3064 inspected C callable mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3065 inspected JVM callable mapping uses typed spans in the cross-backend invariants workstream.
+
+Iteration 3066 inspected driver diagnostics use typed spans in the cross-backend invariants workstream.
+
+Iteration 3067 inspected C diagnostics use typed spans in the cross-backend invariants workstream.
+
+Iteration 3068 inspected resolver retains semantic spans in the cross-backend invariants workstream.
+
+Iteration 3069 inspected adapter retains source identity in the cross-backend invariants workstream.
+
+Iteration 3070 inspected dependency indices remap in the cross-backend invariants workstream.
+
+Iteration 3071 inspected root indices remain stable in the cross-backend invariants workstream.
+
+Iteration 3072 inspected nested statements inherit module source in the cross-backend invariants workstream.
+
+Iteration 3073 inspected AST positions remain compatibility data in the cross-backend invariants workstream.
+
+Iteration 3074 inspected typed source is backend truth in the cross-backend invariants workstream.
+
+Iteration 3075 inspected no backend span parsing in the cross-backend invariants workstream.
+
+Iteration 3076 inspected same line/column formula in the cross-backend invariants workstream.
+
+Iteration 3077 inspected filename normalization parity in the cross-backend invariants workstream.
+
+Iteration 3078 inspected blank-line parity in the cross-backend invariants workstream.
+
+Iteration 3079 inspected Unicode parity in the cross-backend invariants workstream.
+
+Iteration 3080 inspected malformed span behavior in the cross-backend invariants workstream.
+
+Iteration 3081 inspected unknown source behavior in the cross-backend invariants workstream.
+
+Iteration 3082 inspected all backend test suite in the cross-backend invariants workstream.
+
+Iteration 3083 inspected Graphify dependency update in the cross-backend invariants workstream.
+
+Iteration 3084 inspected migration milestone in the cross-backend invariants workstream.
+
+Iteration 3085 verified compile-source semantic parse in the typed IR and driver boundary workstream.
+
+Iteration 3086 verified compile-file semantic parse in the typed IR and driver boundary workstream.
+
+Iteration 3087 verified compatibility AST parse role in the typed IR and driver boundary workstream.
+
+Iteration 3088 verified resolved program contract in the typed IR and driver boundary workstream.
+
+Iteration 3089 verified semantic module contract in the typed IR and driver boundary workstream.
+
+Iteration 3090 verified backend dispatch input in the typed IR and driver boundary workstream.
+
+Iteration 3091 verified dependency module loading in the typed IR and driver boundary workstream.
+
+Iteration 3092 verified module prepend semantics in the typed IR and driver boundary workstream.
+
+Iteration 3093 verified record transpilation producer in the typed IR and driver boundary workstream.
+
+Iteration 3094 verified generated frontend span producer in the typed IR and driver boundary workstream.
+
+Iteration 3095 verified resolver span preservation in the typed IR and driver boundary workstream.
+
+Iteration 3096 verified driver diagnostic consumer in the typed IR and driver boundary workstream.
+
+Iteration 3097 verified C diagnostic consumer in the typed IR and driver boundary workstream.
+
+Iteration 3098 verified BASIC alignment consumer in the typed IR and driver boundary workstream.
+
+Iteration 3099 verified JVM alignment consumer in the typed IR and driver boundary workstream.
+
+Iteration 3100 verified AST-free codegen prerequisite in the typed IR and driver boundary workstream.
+
+Iteration 3101 verified typed-only API proposal in the typed IR and driver boundary workstream.
+
+Iteration 3102 verified public compatibility callers in the typed IR and driver boundary workstream.
+
+Iteration 3103 verified multi-file input in the typed IR and driver boundary workstream.
+
+Iteration 3104 verified target capability checks in the typed IR and driver boundary workstream.
+
+Iteration 3105 verified generated name validation in the typed IR and driver boundary workstream.
+
+Iteration 3106 verified driver regression coverage in the typed IR and driver boundary workstream.
+
+Iteration 3107 verified CLI regression coverage in the typed IR and driver boundary workstream.
+
+Iteration 3108 verified library regression coverage in the typed IR and driver boundary workstream.
+
+Iteration 3109 verified future migration order in the typed IR and driver boundary workstream.
+
+Iteration 3110 reviewed semantic IR span unit tests in the validation for shared span refactor workstream.
+
+Iteration 3111 reviewed UTF-8 boundary unit test in the validation for shared span refactor workstream.
+
+Iteration 3112 reviewed leading trivia unit test in the validation for shared span refactor workstream.
+
+Iteration 3113 reviewed C invalid source identity test in the validation for shared span refactor workstream.
+
+Iteration 3114 reviewed C source map test in the validation for shared span refactor workstream.
+
+Iteration 3115 reviewed C callable source map test in the validation for shared span refactor workstream.
+
+Iteration 3116 reviewed JVM source map tests in the validation for shared span refactor workstream.
+
+Iteration 3117 reviewed BASIC source map tests in the validation for shared span refactor workstream.
+
+Iteration 3118 reviewed driver diagnostic tests in the validation for shared span refactor workstream.
+
+Iteration 3119 reviewed focused backend tests in the validation for shared span refactor workstream.
+
+Iteration 3120 reviewed library test group in the validation for shared span refactor workstream.
+
+Iteration 3121 reviewed CLI test group in the validation for shared span refactor workstream.
+
+Iteration 3122 reviewed DOSBox/C conformance group in the validation for shared span refactor workstream.
+
+Iteration 3123 reviewed example test group in the validation for shared span refactor workstream.
+
+Iteration 3124 reviewed JVM conformance group in the validation for shared span refactor workstream.
+
+Iteration 3125 reviewed language conformance group in the validation for shared span refactor workstream.
+
+Iteration 3126 reviewed record test groups in the validation for shared span refactor workstream.
+
+Iteration 3127 reviewed generated tutorial fixtures in the validation for shared span refactor workstream.
+
+Iteration 3128 reviewed full locked suite in the validation for shared span refactor workstream.
+
+Iteration 3129 reviewed Graphify refreshed state in the validation for shared span refactor workstream.
+
+Iteration 3130 reviewed graph node count in the validation for shared span refactor workstream.
+
+Iteration 3131 reviewed diff whitespace check in the validation for shared span refactor workstream.
+
+Iteration 3132 reviewed iteration range check in the validation for shared span refactor workstream.
+
+Iteration 3133 reviewed iteration uniqueness check in the validation for shared span refactor workstream.
+
+Iteration 3134 reviewed worktree state in the validation for shared span refactor workstream.
+
+Iteration 3135 recorded C main-loop AST iteration in the remaining migration review workstream.
+
+Iteration 3136 recorded C semantic root iteration in the remaining migration review workstream.
+
+Iteration 3137 recorded C THROW location dependency in the remaining migration review workstream.
+
+Iteration 3138 recorded C OPEN location dependency in the remaining migration review workstream.
+
+Iteration 3139 recorded C unsupported-node fallback in the remaining migration review workstream.
+
+Iteration 3140 recorded C transactional state requirements in the remaining migration review workstream.
+
+Iteration 3141 recorded BASIC whole-stream compatibility path in the remaining migration review workstream.
+
+Iteration 3142 recorded BASIC per-statement path in the remaining migration review workstream.
+
+Iteration 3143 recorded JVM whole-module path in the remaining migration review workstream.
+
+Iteration 3144 recorded JVM callable path in the remaining migration review workstream.
+
+Iteration 3145 recorded driver compatibility AST construction in the remaining migration review workstream.
+
+Iteration 3146 recorded resolver dependence on AST in the remaining migration review workstream.
+
+Iteration 3147 recorded typed callable declarations in the remaining migration review workstream.
+
+Iteration 3148 recorded typed module headers in the remaining migration review workstream.
+
+Iteration 3149 recorded record method binding in the remaining migration review workstream.
+
+Iteration 3150 recorded array shape metadata in the remaining migration review workstream.
+
+Iteration 3151 recorded source location metadata in the remaining migration review workstream.
+
+Iteration 3152 recorded typed codegen context in the remaining migration review workstream.
+
+Iteration 3153 recorded target-specific diagnostics in the remaining migration review workstream.
+
+Iteration 3154 recorded backend semantic ownership in the remaining migration review workstream.
+
+Iteration 3155 recorded shared semantic helper ownership in the remaining migration review workstream.
+
+Iteration 3156 recorded source map contract in the remaining migration review workstream.
+
+Iteration 3157 recorded next C migration slice in the remaining migration review workstream.
+
+Iteration 3158 recorded next driver migration slice in the remaining migration review workstream.
+
+Iteration 3159 completed this cross-backend source-alignment batch and prepared the checkpoint.

@@ -104,6 +104,25 @@ impl SemanticSource {
         let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
         crate::diagnostics::SourcePos::new(self.filename.clone(), line, column)
     }
+
+    /// Resolve a byte offset for source-to-AST alignment. Unlike diagnostic
+    /// positioning, alignment must decline malformed offsets instead of
+    /// clamping them to a potentially unrelated AST node.
+    pub fn source_position_at(&self, offset: usize) -> Option<crate::diagnostics::SourcePos> {
+        let tail = self.text.get(offset..)?;
+        let leading_trivia = tail
+            .char_indices()
+            .find(|(_, character)| !character.is_whitespace())?
+            .0;
+        let prefix = self.text.get(..offset + leading_trivia)?;
+        let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let column = prefix.rsplit('\n').next()?.chars().count() + 1;
+        Some(crate::diagnostics::SourcePos::new(
+            self.filename.clone(),
+            line,
+            column,
+        ))
+    }
 }
 
 /// Name visibility facts derived from the generated semantic module.  This is
@@ -5703,6 +5722,16 @@ mod tests {
         let position = source.source_position(SourceSpan { start: 1, end: 2 });
 
         assert_eq!((position.line, position.column), (1, 1));
+    }
+
+    #[test]
+    fn semantic_source_alignment_rejects_non_boundary_offsets() {
+        let source = SemanticSource {
+            filename: "typed_source.bcl".to_string(),
+            text: "évalue%".to_string(),
+        };
+
+        assert!(source.source_position_at(1).is_none());
     }
 
     #[test]

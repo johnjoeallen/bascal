@@ -4186,19 +4186,14 @@ fn jvm_semantic_statements_by_source<'a>(
             vec![root]
         };
         for semantic in children {
-            let start = semantic.span.start;
-            let tail = source.text.get(start..)?;
-            let leading = tail.char_indices().find(|(_, ch)| !ch.is_whitespace())?.0;
-            let prefix = source.text.get(..start + leading)?;
-            let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-            let column = prefix.rsplit('\n').next()?.chars().count() + 1;
+            let position = source.source_position_at(semantic.span.start)?;
             let candidates = ast_statements
                 .iter()
                 .enumerate()
                 .filter(|(_, statement)| {
-                    statement.pos.filename == source.filename
-                        && statement.pos.line == line
-                        && statement.pos.column == column
+                    statement.pos.filename == position.filename
+                        && statement.pos.line == position.line
+                        && statement.pos.column == position.column
                         && !matches!(statement.kind, Statement::BlankLine)
                 })
                 .map(|(index, _)| index)
@@ -4235,20 +4230,15 @@ fn jvm_semantic_callable_statements_by_source<'a>(
             vec![root]
         };
         for semantic in children {
-            let start = semantic.span.start;
-            let tail = source.text.get(start..)?;
-            let leading = tail.char_indices().find(|(_, ch)| !ch.is_whitespace())?.0;
-            let prefix = source.text.get(..start + leading)?;
-            let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-            let column = prefix.rsplit('\n').next()?.chars().count() + 1;
+            let position = source.source_position_at(semantic.span.start)?;
             let candidates = function
                 .body
                 .iter()
                 .enumerate()
                 .filter(|(_, statement)| {
-                    statement.pos.filename == source.filename
-                        && statement.pos.line == line
-                        && statement.pos.column == column
+                    statement.pos.filename == position.filename
+                        && statement.pos.line == position.line
+                        && statement.pos.column == position.column
                         && !matches!(statement.kind, Statement::BlankLine)
                 })
                 .map(|(index, _)| index)
