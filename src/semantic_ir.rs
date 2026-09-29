@@ -911,6 +911,124 @@ impl SemanticModule {
         declarations
     }
 
+    /// Resolve unsuffixed FOR variables against their enclosing module or
+    /// callable DIM declarations so codegen backends consume the declared
+    /// type directly from typed IR.
+    pub fn resolve_for_variable_types(&mut self) {
+        fn collect_types(
+            statements: &[SemanticStatement],
+            types: &mut HashMap<String, SemanticValueType>,
+        ) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Dim(items) => {
+                        for item in items {
+                            types.insert(item.name.to_ascii_lowercase(), item.element_type);
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => collect_types(body, types),
+                    SemanticStatementKind::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        collect_types(then_body, types);
+                        collect_types(else_body, types);
+                    }
+                    SemanticStatementKind::SelectCase {
+                        cases, else_body, ..
+                    } => {
+                        for case in cases {
+                            collect_types(&case.body, types);
+                        }
+                        collect_types(else_body, types);
+                    }
+                    SemanticStatementKind::Try {
+                        body,
+                        catch,
+                        finally_body,
+                    } => {
+                        collect_types(body, types);
+                        if let Some(catch) = catch {
+                            collect_types(&catch.body, types);
+                        }
+                        collect_types(finally_body, types);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        fn annotate(
+            statements: &mut [SemanticStatement],
+            types: &HashMap<String, SemanticValueType>,
+        ) {
+            for statement in statements {
+                match &mut statement.kind {
+                    SemanticStatementKind::For {
+                        variable,
+                        variable_type,
+                        body,
+                        ..
+                    } => {
+                        if *variable_type == SemanticValueType::Unknown {
+                            if let Some(value_type) = types.get(&variable.to_ascii_lowercase()) {
+                                *variable_type = *value_type;
+                            }
+                        }
+                        annotate(body, types);
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => annotate(body, types),
+                    SemanticStatementKind::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        annotate(then_body, types);
+                        annotate(else_body, types);
+                    }
+                    SemanticStatementKind::SelectCase {
+                        cases, else_body, ..
+                    } => {
+                        for case in cases {
+                            annotate(&mut case.body, types);
+                        }
+                        annotate(else_body, types);
+                    }
+                    SemanticStatementKind::Try {
+                        body,
+                        catch,
+                        finally_body,
+                    } => {
+                        annotate(body, types);
+                        if let Some(catch) = catch {
+                            annotate(&mut catch.body, types);
+                        }
+                        annotate(finally_body, types);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let top_level_types = self
+            .top_level_dim_declarations()
+            .into_iter()
+            .map(|(name, declaration)| (name, declaration.element_type))
+            .collect::<HashMap<_, _>>();
+        annotate(&mut self.statements, &top_level_types);
+        for callable in &mut self.callables {
+            let mut callable_types = HashMap::new();
+            collect_types(&callable.body, &mut callable_types);
+            annotate(&mut callable.body, &callable_types);
+        }
+    }
+
     /// Return module-scope array names and ranks, including declarations
     /// nested in top-level control-flow bodies. Callable-local arrays are
     /// excluded because backends analyze each callable scope separately.

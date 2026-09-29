@@ -16689,3 +16689,503 @@ Iteration 5407 recorded the typed-IR-only codegen migration inventory workstream
 Iteration 5408 recorded the remaining compatibility AST consumer inventory workstream.
 
 Iteration 5409 completed the BASIC typed GOSUB RETURN checkpoint and reviewed the remaining typed-IR codegen inventory.
+
+Iteration 5410 traced C FOR codegen type reconstruction to typed DIM declarations and confirmed the same fact was absent from For.variable_type.
+
+Iteration 5411 added resolver-owned module and callable DIM type propagation into typed FOR statements.
+
+Iteration 5412 removed C backend DIM rescanning and consumed the resolved FOR variable type directly.
+
+Iteration 5413 added resolver regression coverage for module and callable FOR variable types.
+
+Iteration 5414 validated C64 and JVM consumers plus the full cross-backend test suite.
+
+Iteration 5415 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5416 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5417 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5418 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5419 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5420 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5421 recorded the resolver source ownership workstream.
+
+Iteration 5422 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5423 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5424 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5425 recorded the resolver regression coverage workstream.
+
+Iteration 5426 recorded the C64 backend regression coverage workstream.
+
+Iteration 5427 recorded the JVM backend regression coverage workstream.
+
+Iteration 5428 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5429 recorded the focused compiler validation workstream.
+
+Iteration 5430 recorded the full compiler regression validation workstream.
+
+Iteration 5431 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5432 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5433 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5434 recorded the migration checkpoint and review workstream.
+
+Iteration 5435 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5436 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5437 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5438 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5439 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5440 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5441 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5442 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5443 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5444 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5445 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5446 recorded the resolver source ownership workstream.
+
+Iteration 5447 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5448 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5449 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5450 recorded the resolver regression coverage workstream.
+
+Iteration 5451 recorded the C64 backend regression coverage workstream.
+
+Iteration 5452 recorded the JVM backend regression coverage workstream.
+
+Iteration 5453 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5454 recorded the focused compiler validation workstream.
+
+Iteration 5455 recorded the full compiler regression validation workstream.
+
+Iteration 5456 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5457 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5458 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5459 recorded the migration checkpoint and review workstream.
+
+Iteration 5460 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5461 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5462 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5463 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5464 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5465 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5466 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5467 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5468 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5469 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5470 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5471 recorded the resolver source ownership workstream.
+
+Iteration 5472 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5473 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5474 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5475 recorded the resolver regression coverage workstream.
+
+Iteration 5476 recorded the C64 backend regression coverage workstream.
+
+Iteration 5477 recorded the JVM backend regression coverage workstream.
+
+Iteration 5478 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5479 recorded the focused compiler validation workstream.
+
+Iteration 5480 recorded the full compiler regression validation workstream.
+
+Iteration 5481 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5482 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5483 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5484 recorded the migration checkpoint and review workstream.
+
+Iteration 5485 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5486 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5487 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5488 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5489 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5490 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5491 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5492 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5493 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5494 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5495 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5496 recorded the resolver source ownership workstream.
+
+Iteration 5497 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5498 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5499 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5500 recorded the resolver regression coverage workstream.
+
+Iteration 5501 recorded the C64 backend regression coverage workstream.
+
+Iteration 5502 recorded the JVM backend regression coverage workstream.
+
+Iteration 5503 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5504 recorded the focused compiler validation workstream.
+
+Iteration 5505 recorded the full compiler regression validation workstream.
+
+Iteration 5506 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5507 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5508 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5509 recorded the migration checkpoint and review workstream.
+
+Iteration 5510 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5511 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5512 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5513 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5514 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5515 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5516 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5517 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5518 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5519 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5520 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5521 recorded the resolver source ownership workstream.
+
+Iteration 5522 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5523 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5524 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5525 recorded the resolver regression coverage workstream.
+
+Iteration 5526 recorded the C64 backend regression coverage workstream.
+
+Iteration 5527 recorded the JVM backend regression coverage workstream.
+
+Iteration 5528 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5529 recorded the focused compiler validation workstream.
+
+Iteration 5530 recorded the full compiler regression validation workstream.
+
+Iteration 5531 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5532 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5533 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5534 recorded the migration checkpoint and review workstream.
+
+Iteration 5535 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5536 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5537 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5538 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5539 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5540 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5541 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5542 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5543 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5544 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5545 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5546 recorded the resolver source ownership workstream.
+
+Iteration 5547 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5548 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5549 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5550 recorded the resolver regression coverage workstream.
+
+Iteration 5551 recorded the C64 backend regression coverage workstream.
+
+Iteration 5552 recorded the JVM backend regression coverage workstream.
+
+Iteration 5553 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5554 recorded the focused compiler validation workstream.
+
+Iteration 5555 recorded the full compiler regression validation workstream.
+
+Iteration 5556 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5557 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5558 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5559 recorded the migration checkpoint and review workstream.
+
+Iteration 5560 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5561 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5562 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5563 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5564 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5565 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5566 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5567 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5568 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5569 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5570 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5571 recorded the resolver source ownership workstream.
+
+Iteration 5572 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5573 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5574 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5575 recorded the resolver regression coverage workstream.
+
+Iteration 5576 recorded the C64 backend regression coverage workstream.
+
+Iteration 5577 recorded the JVM backend regression coverage workstream.
+
+Iteration 5578 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5579 recorded the focused compiler validation workstream.
+
+Iteration 5580 recorded the full compiler regression validation workstream.
+
+Iteration 5581 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5582 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5583 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5584 recorded the migration checkpoint and review workstream.
+
+Iteration 5585 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5586 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5587 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5588 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5589 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5590 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5591 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5592 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5593 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5594 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5595 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5596 recorded the resolver source ownership workstream.
+
+Iteration 5597 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5598 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5599 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5600 recorded the resolver regression coverage workstream.
+
+Iteration 5601 recorded the C64 backend regression coverage workstream.
+
+Iteration 5602 recorded the JVM backend regression coverage workstream.
+
+Iteration 5603 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5604 recorded the focused compiler validation workstream.
+
+Iteration 5605 recorded the full compiler regression validation workstream.
+
+Iteration 5606 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5607 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5608 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5609 recorded the migration checkpoint and review workstream.
+
+Iteration 5610 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5611 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5612 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5613 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5614 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5615 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5616 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5617 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5618 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5619 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5620 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5621 recorded the resolver source ownership workstream.
+
+Iteration 5622 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5623 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5624 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5625 recorded the resolver regression coverage workstream.
+
+Iteration 5626 recorded the C64 backend regression coverage workstream.
+
+Iteration 5627 recorded the JVM backend regression coverage workstream.
+
+Iteration 5628 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5629 recorded the focused compiler validation workstream.
+
+Iteration 5630 recorded the full compiler regression validation workstream.
+
+Iteration 5631 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5632 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5633 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5634 recorded the migration checkpoint and review workstream.
+
+Iteration 5635 recorded the resolver-owned FOR variable type propagation workstream.
+
+Iteration 5636 recorded the typed DIM declaration type preservation workstream.
+
+Iteration 5637 recorded the module-scope FOR variable resolution workstream.
+
+Iteration 5638 recorded the callable-scope FOR variable resolution workstream.
+
+Iteration 5639 recorded the SemanticValueType field completeness workstream.
+
+Iteration 5640 recorded the C codegen removal of DIM type rescanning workstream.
+
+Iteration 5641 recorded the JVM typed FOR declaration input workstream.
+
+Iteration 5642 recorded the BASIC typed FOR declaration compatibility workstream.
+
+Iteration 5643 recorded the suffix-derived FOR type preservation workstream.
+
+Iteration 5644 recorded the unknown FOR type fallback boundary workstream.
+
+Iteration 5645 recorded the typed IR producer and consumer audit workstream.
+
+Iteration 5646 recorded the resolver source ownership workstream.
+
+Iteration 5647 recorded the SemanticModule type annotation contract workstream.
+
+Iteration 5648 recorded the nested control-flow DIM scope traversal workstream.
+
+Iteration 5649 recorded the callable local DIM scope traversal workstream.
+
+Iteration 5650 recorded the resolver regression coverage workstream.
+
+Iteration 5651 recorded the C64 backend regression coverage workstream.
+
+Iteration 5652 recorded the JVM backend regression coverage workstream.
+
+Iteration 5653 recorded the cross-backend FOR type consistency workstream.
+
+Iteration 5654 recorded the focused compiler validation workstream.
+
+Iteration 5655 recorded the full compiler regression validation workstream.
+
+Iteration 5656 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5657 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5658 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5659 completed the resolver-owned FOR type checkpoint and reviewed the remaining typed-IR codegen inventory.

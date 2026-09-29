@@ -7471,8 +7471,7 @@ fn emit_c_semantic_for_body(
             } => {
                 let variable_type = (*variable_type
                     != crate::semantic_ir::SemanticValueType::Unknown)
-                    .then_some(*variable_type)
-                    .or_else(|| semantic_dim_type_in_statements(declaration_scope, variable));
+                    .then_some(*variable_type);
                 if !emit_c_semantic_for(
                     variable,
                     variable_type,
@@ -8504,73 +8503,6 @@ fn semantic_value_type_suffix(
     value_type: crate::semantic_ir::SemanticValueType,
 ) -> Option<TypeSuffix> {
     value_type.suffix().and_then(TypeSuffix::from_char)
-}
-
-fn semantic_dim_type_in_statements<'a>(
-    statements: &[crate::semantic_ir::SemanticStatement],
-    name: &str,
-) -> Option<crate::semantic_ir::SemanticValueType> {
-    use crate::semantic_ir::SemanticStatementKind as Kind;
-    for statement in statements {
-        match &statement.kind {
-            Kind::Dim(items) => {
-                if let Some(item) = items
-                    .iter()
-                    .find(|item| item.name.eq_ignore_ascii_case(name))
-                {
-                    return Some(item.element_type);
-                }
-            }
-            Kind::Line(body)
-            | Kind::While { body, .. }
-            | Kind::For { body, .. }
-            | Kind::Do { body, .. } => {
-                if let Some(annotation) = semantic_dim_type_in_statements(body, name) {
-                    return Some(annotation);
-                }
-            }
-            Kind::If {
-                then_body,
-                else_body,
-                ..
-            } => {
-                if let Some(annotation) = semantic_dim_type_in_statements(then_body, name)
-                    .or_else(|| semantic_dim_type_in_statements(else_body, name))
-                {
-                    return Some(annotation);
-                }
-            }
-            Kind::SelectCase {
-                cases, else_body, ..
-            } => {
-                if let Some(annotation) = cases
-                    .iter()
-                    .find_map(|case| semantic_dim_type_in_statements(&case.body, name))
-                    .or_else(|| semantic_dim_type_in_statements(else_body, name))
-                {
-                    return Some(annotation);
-                }
-            }
-            Kind::Try {
-                body,
-                catch,
-                finally_body,
-            } => {
-                if let Some(annotation) = semantic_dim_type_in_statements(body, name)
-                    .or_else(|| {
-                        catch
-                            .as_ref()
-                            .and_then(|catch| semantic_dim_type_in_statements(&catch.body, name))
-                    })
-                    .or_else(|| semantic_dim_type_in_statements(finally_body, name))
-                {
-                    return Some(annotation);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
 
 fn emit_c_semantic_print_tokens(
@@ -11189,12 +11121,7 @@ pub(crate) fn generate(
                     } => {
                         let variable_type = (*variable_type
                             != crate::semantic_ir::SemanticValueType::Unknown)
-                            .then_some(*variable_type)
-                            .or_else(|| {
-                                resolved.semantic_module.as_ref().and_then(|module| {
-                                    semantic_dim_type_in_statements(&module.statements, variable)
-                                })
-                            });
+                            .then_some(*variable_type);
                         return emit_c_semantic_for(
                             variable,
                             variable_type,
@@ -12830,11 +12757,7 @@ fn emit_function_def(
                     } => {
                         let variable_type = (*variable_type
                             != crate::semantic_ir::SemanticValueType::Unknown)
-                            .then_some(*variable_type)
-                            .or_else(|| {
-                                semantic_body
-                                    .and_then(|body| semantic_dim_type_in_statements(body, variable))
-                            });
+                            .then_some(*variable_type);
                         emit_c_semantic_for(
                             variable,
                             variable_type,

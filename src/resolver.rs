@@ -106,9 +106,12 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
 /// Resolve a legacy AST while retaining the generated semantic frontend module.
 pub fn resolve_with_semantic(
     program: Program,
-    semantic_module: Option<crate::semantic_ir::SemanticModule>,
+    mut semantic_module: Option<crate::semantic_ir::SemanticModule>,
 ) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     validate_with_semantic(&program, semantic_module.as_ref())?;
+    if let Some(module) = semantic_module.as_mut() {
+        module.resolve_for_variable_types();
+    }
 
     // AST-derived caches are compatibility data for `resolve(program)`.
     // When the generated typed IR is present, populate the corresponding
@@ -2867,6 +2870,47 @@ mod legacy_form_tests {
         let resolved =
             resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
         assert!(resolved.semantic_module.is_some());
+    }
+
+    #[test]
+    fn resolver_populates_for_variable_types_from_typed_dim_declarations() {
+        let source = "procedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nend procedure\ndim index as long\nfor index = 1 to 2\nprint index\nend for\nend\n";
+        let program = parse(source);
+        let semantic = crate::semantic_ir::parse_and_adapt(source)
+            .expect("typed source should parse");
+        let resolved = resolve_with_semantic(program, Some(semantic))
+            .expect("typed declarations should resolve");
+        let module = resolved.semantic_module.as_ref().unwrap();
+
+        fn find_for(
+            statements: &[crate::semantic_ir::SemanticStatement],
+        ) -> Option<crate::semantic_ir::SemanticValueType> {
+            for statement in statements {
+                match &statement.kind {
+                    crate::semantic_ir::SemanticStatementKind::For {
+                        variable_type, ..
+                    } => return Some(*variable_type),
+                    crate::semantic_ir::SemanticStatementKind::Line(body)
+                    | crate::semantic_ir::SemanticStatementKind::While { body, .. }
+                    | crate::semantic_ir::SemanticStatementKind::Do { body, .. } => {
+                        if let Some(value_type) = find_for(body) {
+                            return Some(value_type);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+
+        assert_eq!(
+            find_for(&module.statements),
+            Some(crate::semantic_ir::SemanticValueType::Long)
+        );
+        assert_eq!(
+            find_for(&module.callables[0].body),
+            Some(crate::semantic_ir::SemanticValueType::Double)
+        );
     }
 
     #[test]
