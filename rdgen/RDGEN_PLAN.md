@@ -14189,3 +14189,503 @@ Iteration 4157 recorded generated C assertion in the driver and resolver flow wo
 Iteration 4158 recorded runtime conformance in the driver and resolver flow workstream.
 
 Iteration 4159 completed the callable THROW batch and prepared the checkpoint.
+
+Iteration 4160 traced C top-level typed OPEN and THROW source positions to the semantic root source index.
+
+Iteration 4161 resolved direct Line-child identity through the root semantic statement before SourcePos conversion.
+
+Iteration 4162 kept typed dispatch decline behavior when the semantic source identity cannot be resolved.
+
+Iteration 4163 validated the direct Line child identity alignment regression path.
+
+Iteration 4164 validated the source-span to SourcePos conversion regression path.
+
+Iteration 4165 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4166 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4167 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4168 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4169 recorded the THROW emission regression workstream.
+
+Iteration 4170 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4171 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4172 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4173 recorded the diagnostic source span preservation workstream.
+
+Iteration 4174 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4175 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4176 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4177 recorded the source table bounds handling workstream.
+
+Iteration 4178 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4179 recorded the focused C backend validation workstream.
+
+Iteration 4180 recorded the full compiler regression validation workstream.
+
+Iteration 4181 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4182 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4183 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4184 recorded the migration checkpoint and review workstream.
+
+Iteration 4185 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4186 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4187 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4188 recorded the direct Line child identity alignment workstream.
+
+Iteration 4189 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4190 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4191 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4192 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4193 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4194 recorded the THROW emission regression workstream.
+
+Iteration 4195 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4196 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4197 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4198 recorded the diagnostic source span preservation workstream.
+
+Iteration 4199 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4200 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4201 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4202 recorded the source table bounds handling workstream.
+
+Iteration 4203 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4204 recorded the focused C backend validation workstream.
+
+Iteration 4205 recorded the full compiler regression validation workstream.
+
+Iteration 4206 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4207 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4208 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4209 recorded the migration checkpoint and review workstream.
+
+Iteration 4210 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4211 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4212 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4213 recorded the direct Line child identity alignment workstream.
+
+Iteration 4214 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4215 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4216 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4217 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4218 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4219 recorded the THROW emission regression workstream.
+
+Iteration 4220 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4221 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4222 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4223 recorded the diagnostic source span preservation workstream.
+
+Iteration 4224 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4225 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4226 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4227 recorded the source table bounds handling workstream.
+
+Iteration 4228 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4229 recorded the focused C backend validation workstream.
+
+Iteration 4230 recorded the full compiler regression validation workstream.
+
+Iteration 4231 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4232 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4233 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4234 recorded the migration checkpoint and review workstream.
+
+Iteration 4235 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4236 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4237 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4238 recorded the direct Line child identity alignment workstream.
+
+Iteration 4239 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4240 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4241 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4242 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4243 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4244 recorded the THROW emission regression workstream.
+
+Iteration 4245 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4246 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4247 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4248 recorded the diagnostic source span preservation workstream.
+
+Iteration 4249 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4250 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4251 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4252 recorded the source table bounds handling workstream.
+
+Iteration 4253 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4254 recorded the focused C backend validation workstream.
+
+Iteration 4255 recorded the full compiler regression validation workstream.
+
+Iteration 4256 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4257 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4258 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4259 recorded the migration checkpoint and review workstream.
+
+Iteration 4260 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4261 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4262 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4263 recorded the direct Line child identity alignment workstream.
+
+Iteration 4264 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4265 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4266 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4267 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4268 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4269 recorded the THROW emission regression workstream.
+
+Iteration 4270 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4271 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4272 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4273 recorded the diagnostic source span preservation workstream.
+
+Iteration 4274 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4275 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4276 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4277 recorded the source table bounds handling workstream.
+
+Iteration 4278 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4279 recorded the focused C backend validation workstream.
+
+Iteration 4280 recorded the full compiler regression validation workstream.
+
+Iteration 4281 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4282 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4283 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4284 recorded the migration checkpoint and review workstream.
+
+Iteration 4285 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4286 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4287 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4288 recorded the direct Line child identity alignment workstream.
+
+Iteration 4289 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4290 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4291 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4292 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4293 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4294 recorded the THROW emission regression workstream.
+
+Iteration 4295 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4296 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4297 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4298 recorded the diagnostic source span preservation workstream.
+
+Iteration 4299 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4300 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4301 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4302 recorded the source table bounds handling workstream.
+
+Iteration 4303 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4304 recorded the focused C backend validation workstream.
+
+Iteration 4305 recorded the full compiler regression validation workstream.
+
+Iteration 4306 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4307 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4308 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4309 recorded the migration checkpoint and review workstream.
+
+Iteration 4310 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4311 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4312 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4313 recorded the direct Line child identity alignment workstream.
+
+Iteration 4314 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4315 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4316 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4317 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4318 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4319 recorded the THROW emission regression workstream.
+
+Iteration 4320 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4321 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4322 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4323 recorded the diagnostic source span preservation workstream.
+
+Iteration 4324 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4325 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4326 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4327 recorded the source table bounds handling workstream.
+
+Iteration 4328 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4329 recorded the focused C backend validation workstream.
+
+Iteration 4330 recorded the full compiler regression validation workstream.
+
+Iteration 4331 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4332 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4333 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4334 recorded the migration checkpoint and review workstream.
+
+Iteration 4335 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4336 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4337 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4338 recorded the direct Line child identity alignment workstream.
+
+Iteration 4339 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4340 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4341 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4342 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4343 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4344 recorded the THROW emission regression workstream.
+
+Iteration 4345 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4346 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4347 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4348 recorded the diagnostic source span preservation workstream.
+
+Iteration 4349 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4350 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4351 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4352 recorded the source table bounds handling workstream.
+
+Iteration 4353 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4354 recorded the focused C backend validation workstream.
+
+Iteration 4355 recorded the full compiler regression validation workstream.
+
+Iteration 4356 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4357 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4358 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4359 recorded the migration checkpoint and review workstream.
+
+Iteration 4360 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4361 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4362 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4363 recorded the direct Line child identity alignment workstream.
+
+Iteration 4364 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4365 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4366 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4367 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4368 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4369 recorded the THROW emission regression workstream.
+
+Iteration 4370 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4371 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4372 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4373 recorded the diagnostic source span preservation workstream.
+
+Iteration 4374 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4375 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4376 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4377 recorded the source table bounds handling workstream.
+
+Iteration 4378 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4379 recorded the focused C backend validation workstream.
+
+Iteration 4380 recorded the full compiler regression validation workstream.
+
+Iteration 4381 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4382 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4383 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4384 recorded the migration checkpoint and review workstream.
+
+Iteration 4385 recorded the C top-level typed OPEN source provenance workstream.
+
+Iteration 4386 recorded the C top-level typed THROW source provenance workstream.
+
+Iteration 4387 recorded the semantic root-to-source index ownership workstream.
+
+Iteration 4388 recorded the direct Line child identity alignment workstream.
+
+Iteration 4389 recorded the source-span to SourcePos conversion workstream.
+
+Iteration 4390 recorded the missing source identity fallback behavior workstream.
+
+Iteration 4391 recorded the typed statement dispatch boundary workstream.
+
+Iteration 4392 recorded the AST compatibility alignment invariants workstream.
+
+Iteration 4393 recorded the OPEN sequential mode emission regression workstream.
+
+Iteration 4394 recorded the THROW emission regression workstream.
+
+Iteration 4395 recorded the C codegen source-location consumer audit workstream.
+
+Iteration 4396 recorded the resolver and semantic source-index producer audit workstream.
+
+Iteration 4397 recorded the cross-backend SourcePos contract audit workstream.
+
+Iteration 4398 recorded the diagnostic source span preservation workstream.
+
+Iteration 4399 recorded the typed IR semantic ownership documentation workstream.
+
+Iteration 4400 recorded the top-level statement mapping edge cases workstream.
+
+Iteration 4401 recorded the line-wrapped semantic statement handling workstream.
+
+Iteration 4402 recorded the source table bounds handling workstream.
+
+Iteration 4403 recorded the deterministic semantic dispatch behavior workstream.
+
+Iteration 4404 recorded the focused C backend validation workstream.
+
+Iteration 4405 recorded the full compiler regression validation workstream.
+
+Iteration 4406 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4407 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4408 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4409 completed the C typed OPEN/THROW source provenance checkpoint and reviewed the remaining typed-IR codegen migration inventory.

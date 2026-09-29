@@ -10361,6 +10361,31 @@ fn c_semantic_statements_by_source<'a>(
     Some(aligned)
 }
 
+/// Resolve a top-level semantic statement's source position through its root
+/// statement's source index. Top-level dispatch may expose children of a
+/// semantic `Line`, so both root and direct child identities are accepted.
+fn c_semantic_top_level_source_position(
+    module: &crate::semantic_ir::SemanticModule,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<SourcePos> {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let belongs_to_root = std::ptr::eq(root, semantic)
+            || matches!(
+                &root.kind,
+                Kind::Line(children)
+                    if children.iter().any(|child| std::ptr::eq(child, semantic))
+            );
+        if belongs_to_root {
+            return module
+                .sources
+                .get(*source_index)?
+                .source_position_at(semantic.span.start);
+        }
+    }
+    None
+}
+
 fn emit_c_semantic_comment(block: bool, text: &str, out: &mut String) {
     let body = if block {
         text.strip_prefix("/*")
@@ -11282,6 +11307,15 @@ pub(crate) fn generate(
                         channel,
                         ..
                     } => {
+                        let Some(source_pos) = resolved
+                            .semantic_module
+                            .as_ref()
+                            .and_then(|module| {
+                                c_semantic_top_level_source_position(module, semantic)
+                            })
+                        else {
+                            return false;
+                        };
                         return emit_c_semantic_open(
                             path,
                             mode.kind,
@@ -11292,7 +11326,7 @@ pub(crate) fn generate(
                             &mut file_io,
                             &functions.arrays,
                             &functions.funcs,
-                            &statement.pos,
+                            &source_pos,
                             None,
                             &mut ctx,
                         );
@@ -11500,9 +11534,18 @@ pub(crate) fn generate(
                         body.push_str("    }\n");
                     }
                     Kind::Throw(value) => {
+                        let Some(source_pos) = resolved
+                            .semantic_module
+                            .as_ref()
+                            .and_then(|module| {
+                                c_semantic_top_level_source_position(module, semantic)
+                            })
+                        else {
+                            return false;
+                        };
                         return emit_c_semantic_throw(
                             value,
-                            &statement.pos,
+                            &source_pos,
                             &mut body,
                             &mut needs_math,
                             functions.dialect.supports_float,
