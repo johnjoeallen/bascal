@@ -3992,6 +3992,9 @@ struct ErrorDataCtx<'a> {
     /// emitted came from, so a nested typed statement can name its own line.
     sources: &'a [crate::semantic_ir::SemanticSource],
     source_index: usize,
+    /// The scalar-method table, so a method call in a nested condition or
+    /// loop guard renders like one at top level.
+    methods: Option<&'a HashMap<(TypeSuffix, String), FnSig>>,
 }
 
 impl ErrorDataCtx<'_> {
@@ -6084,17 +6087,37 @@ fn render_c_semantic_array_bound(
     use crate::semantic_ir::ExpressionKind;
     let builtin = name.to_ascii_lowercase();
     let ExpressionKind::Name(array_name) = &arguments[0].kind else {
-        return None;
+        return c_decline_none(format!(
+            "`{builtin}` expects an array name, e.g. `{builtin}(arr%)` or `{builtin}(grid%, 1)`"
+        ));
     };
-    let info = arrays.get(&array_c_name(&BasicIdent::parse(array_name)))?;
+    let Some(info) = arrays.get(&array_c_name(&BasicIdent::parse(array_name))) else {
+        return c_decline_none(format!(
+            "`{array_name}` isn't a known array, so `{builtin}` can't determine its size"
+        ));
+    };
     let axis = match arguments.get(1).map(|argument| &argument.kind) {
         Some(ExpressionKind::Literal(text)) => text.parse::<usize>().ok()?,
-        Some(_) => return None,
+        Some(_) => {
+            return c_decline_none(format!(
+                "the axis argument to `{builtin}` must be a literal integer"
+            ))
+        }
         None if info.bounds.len() == 1 => 0,
-        None => return None,
+        None => {
+            return c_decline_none(format!(
+                "`{array_name}` has {} dimensions -- {builtin} needs an axis argument, e.g. \
+                 `{builtin}({array_name}, 0)`",
+                info.bounds.len()
+            ))
+        }
     };
     if axis >= info.bounds.len() {
-        return None;
+        return c_decline_none(format!(
+            "`{array_name}` only has {} dimension{} -- axis {axis} doesn't exist",
+            info.bounds.len(),
+            if info.bounds.len() == 1 { "" } else { "s" }
+        ));
     }
     if builtin == "lbound" {
         return Some(("0".to_string(), false));
@@ -6227,7 +6250,10 @@ fn render_c_semantic_user_numeric_call(
         }
         if parameter.by_ref {
             let crate::semantic_ir::ExpressionKind::Name(argument_name) = &argument.kind else {
-                return None;
+                return c_decline_none(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to",
+                );
             };
             let argument_suffix = argument
                 .value_type
@@ -6443,7 +6469,10 @@ fn render_c_semantic_callable_call_statement(
         }
         if parameter.by_ref {
             let ExpressionKind::Name(argument_name) = &argument.kind else {
-                return None;
+                return c_decline_none(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to",
+                );
             };
             if parameter.is_string {
                 if argument.value_type != SemanticValueType::String {
@@ -6857,7 +6886,10 @@ fn render_c_semantic_string_call_with_signature(
 
         if parameter.by_ref {
             let ExpressionKind::Name(argument_name) = &argument.kind else {
-                return None;
+                return c_decline_none(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to",
+                );
             };
             if parameter.is_string {
                 if argument.value_type != SemanticValueType::String {
@@ -7152,7 +7184,10 @@ fn emit_c_semantic_input(
         let Ok(channel) = channel.parse::<i64>() else {
             return false;
         };
-        if !(1..=BCC_MAX_CHANNELS).contains(&channel) || targets.is_empty() {
+        if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
+            return c_decline(format!("file channel #{channel} is out of range -- the minimal C backend supports channels 1 through {BCC_MAX_CHANNELS}"));
+        }
+        if targets.is_empty() {
             return false;
         }
         let mut rendered = String::new();
@@ -7204,7 +7239,10 @@ fn emit_c_semantic_input(
         return false;
     };
     let [target] = targets else {
-        return false;
+        return c_decline(
+            "`input` with more than one variable isn't supported by the minimal C backend yet \
+             -- give each variable its own `input` statement",
+        );
     };
     if target.value_type == SemanticValueType::Unknown
         || (!supports_float
@@ -7424,13 +7462,15 @@ fn emit_c_semantic_do(
         supports_float: bool,
         arrays: &ArrayTable,
         functions: &FunctionMap,
+        methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
     ) -> bool {
-        let Some((value, _)) = render_c_semantic_numeric_expression_context(
+        let Some((value, _)) = render_c_semantic_numeric_expression_with_methods(
             &condition.value,
             needs_math,
             supports_float,
-            Some(arrays),
-            Some(functions),
+            arrays,
+            functions,
+            methods,
         ) else {
             return false;
         };
@@ -7451,6 +7491,7 @@ fn emit_c_semantic_do(
             supports_float,
             arrays,
             functions,
+            staged_gosub.ctx.methods,
         ) {
             return false;
         }
@@ -7490,6 +7531,7 @@ fn emit_c_semantic_do(
             supports_float,
             arrays,
             functions,
+            staged_gosub.ctx.methods,
         ) {
             return false;
         }
@@ -7672,6 +7714,17 @@ fn c_semantic_statement_expressions_mut(
         }
         Kind::If { condition, .. } => vec![condition],
         Kind::SelectCase { selector, .. } => vec![selector],
+        Kind::For { start, bounds, .. } => {
+            let mut expressions = vec![start];
+            match bounds {
+                crate::semantic_ir::ForBounds::To { limit, step } => {
+                    expressions.push(limit);
+                    expressions.extend(step.as_mut());
+                }
+                crate::semantic_ir::ForBounds::Downto { limit, .. } => expressions.push(limit),
+            }
+            expressions
+        }
         _ => Vec::new(),
     }
 }
@@ -7688,11 +7741,71 @@ fn c_semantic_statement_has_try_result_call(
         .any(|expression| c_semantic_contains_try_result_call(expression, functions))
 }
 
-/// Rewrites every call to a `try`-reachable value function in the statement's
-/// once-evaluated expressions into a plain temporary, emitting the call, its
-/// status check and the temporary's declaration into `out` first, in
-/// evaluation order (the typed counterpart of `hoist_try_result_calls`).
-/// `None` means a call could not be rendered.
+/// Rewrites every call to a `try`-reachable value function in `expression`
+/// into a plain temporary, emitting the call, its status check and the
+/// temporary's declaration into `out` first, in evaluation order (the typed
+/// counterpart of `hoist_try_result_calls`). `None` means a call could not be
+/// rendered.
+fn hoist_c_semantic_expression(
+    expression: &mut crate::semantic_ir::Expression,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    supports_float: bool,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+    callable: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
+) -> Option<()> {
+    let mut failed = false;
+    c_semantic_visit_expressions_mut(expression, &mut |expression| {
+        if failed {
+            return;
+        }
+        let crate::semantic_ir::ExpressionKind::Call { name, .. } = &expression.kind else {
+            return;
+        };
+        let Some(signature) = functions.get(&fn_key(&BasicIdent::parse(name))) else {
+            return;
+        };
+        if !signature.try_result || signature.is_void {
+            return;
+        }
+        let Some(suffix) = signature.result_suffix else {
+            failed = true;
+            return;
+        };
+        let temp_ident = BasicIdent {
+            name: format!("anf_{temp_counter}"),
+            suffix: Some(suffix),
+        };
+        *temp_counter += 1;
+        let value_name = c_var_name(&temp_ident, suffix);
+        let Some(rendered) = render_c_semantic_callable_call_statement(
+            expression,
+            callable,
+            ctx,
+            Some(&value_name),
+            needs_math,
+            temp_counter,
+            supports_float,
+            arrays,
+            functions,
+        ) else {
+            failed = true;
+            return;
+        };
+        out.push_str(&rendered);
+        expression.kind = crate::semantic_ir::ExpressionKind::Name(format!(
+            "{}{}",
+            temp_ident.name, suffix
+        ));
+    });
+    (!failed).then_some(())
+}
+
+/// The statement form of `hoist_c_semantic_expression`, over the expressions
+/// the statement evaluates once when it runs.
 fn hoist_c_semantic_try_result_calls(
     statement: &mut crate::semantic_ir::SemanticStatement,
     out: &mut String,
@@ -7704,54 +7817,75 @@ fn hoist_c_semantic_try_result_calls(
     callable: Option<&FnSig>,
     ctx: &ErrorDataCtx<'_>,
 ) -> Option<()> {
-    let mut failed = false;
     for expression in c_semantic_statement_expressions_mut(&mut statement.kind) {
-        c_semantic_visit_expressions_mut(expression, &mut |expression| {
-            if failed {
-                return;
-            }
-            let crate::semantic_ir::ExpressionKind::Call { name, .. } = &expression.kind else {
-                return;
-            };
-            let Some(signature) = functions.get(&fn_key(&BasicIdent::parse(name))) else {
-                return;
-            };
-            if !signature.try_result || signature.is_void {
-                return;
-            }
-            let Some(suffix) = signature.result_suffix else {
-                failed = true;
-                return;
-            };
-            let temp_ident = BasicIdent {
-                name: format!("anf_{temp_counter}"),
-                suffix: Some(suffix),
-            };
-            *temp_counter += 1;
-            let value_name = c_var_name(&temp_ident, suffix);
-            let Some(rendered) = render_c_semantic_callable_call_statement(
-                expression,
-                callable,
-                ctx,
-                Some(&value_name),
-                needs_math,
-                temp_counter,
-                supports_float,
-                arrays,
-                functions,
-            ) else {
-                failed = true;
-                return;
-            };
-            out.push_str(&rendered);
-            expression.kind = crate::semantic_ir::ExpressionKind::Name(format!(
-                "{}{}",
-                temp_ident.name,
-                suffix
-            ));
-        });
+        hoist_c_semantic_expression(
+            expression,
+            out,
+            needs_math,
+            temp_counter,
+            supports_float,
+            arrays,
+            functions,
+            callable,
+            ctx,
+        )?;
     }
-    (!failed).then_some(())
+    Some(())
+}
+
+/// A `while`, or a `do` with a pre-condition, whose guard calls a function
+/// that can raise, rewritten as a plain `do` loop that evaluates the guard
+/// (hoisted, status-checked) and exits at the top of every iteration.
+fn c_semantic_guard_as_exit_test(
+    statement: &crate::semantic_ir::SemanticStatement,
+    functions: &FunctionMap,
+) -> Option<crate::semantic_ir::SemanticStatement> {
+    use crate::semantic_ir::{LoopConditionKind, SemanticStatement, SemanticStatementKind as Kind};
+    let (condition, negate, post_condition, body) = match &statement.kind {
+        Kind::While { condition, body } => (condition.clone(), false, None, body),
+        Kind::Do {
+            pre_condition: Some(pre),
+            post_condition,
+            body,
+        } => (
+            pre.value.clone(),
+            matches!(pre.kind, LoopConditionKind::Until),
+            post_condition.clone(),
+            body,
+        ),
+        _ => return None,
+    };
+    if !c_semantic_contains_try_result_call(&condition, functions) {
+        return None;
+    }
+    let exit = SemanticStatement {
+        kind: Kind::Exit,
+        span: statement.span,
+    };
+    // `while c` exits when c is false; `do until c` exits when c is true.
+    let (then_body, else_body) = if negate {
+        (vec![exit], Vec::new())
+    } else {
+        (Vec::new(), vec![exit])
+    };
+    let mut rewritten_body = vec![SemanticStatement {
+        kind: Kind::If {
+            condition,
+            then_body,
+            else_body,
+            block: true,
+        },
+        span: statement.span,
+    }];
+    rewritten_body.extend(body.iter().cloned());
+    Some(SemanticStatement {
+        kind: Kind::Do {
+            pre_condition: None,
+            post_condition,
+            body: rewritten_body,
+        },
+        span: statement.span,
+    })
 }
 
 fn emit_c_semantic_for_body(
@@ -7774,6 +7908,26 @@ fn emit_c_semantic_for_body(
         // A call that can raise returns a wrapped status: hoist it out of the
         // statement's expressions, then emit the rewritten statement.
         if !gosub.ctx.try_reachable.is_empty() {
+            if let Some(rewritten) = c_semantic_guard_as_exit_test(statement, functions) {
+                if !emit_c_semantic_for_body(
+                    std::slice::from_ref(&rewritten),
+                    out,
+                    needs_math,
+                    needs_string,
+                    temp_counter,
+                    supports_float,
+                    arrays,
+                    functions,
+                    data_labels,
+                    file_io,
+                    declaration_scope,
+                    callable,
+                    gosub,
+                ) {
+                    return false;
+                }
+                continue;
+            }
             let mut rewritten = statement.clone();
             let mut probe = false;
             for expression in c_semantic_statement_expressions_mut(&mut rewritten.kind) {
@@ -7858,12 +8012,13 @@ fn emit_c_semantic_for_body(
                 else_body,
                 ..
             } => {
-                let Some((condition, _)) = render_c_semantic_numeric_expression_context(
+                let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
                     condition,
                     needs_math,
                     supports_float,
-                    Some(arrays),
-                    Some(functions),
+                    arrays,
+                    functions,
+                    gosub.ctx.methods,
                 ) else {
                     return false;
                 };
@@ -7910,12 +8065,13 @@ fn emit_c_semantic_for_body(
                 }
             }
             Kind::While { condition, body } => {
-                let Some((condition, _)) = render_c_semantic_numeric_expression_context(
+                let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
                     condition,
                     needs_math,
                     supports_float,
-                    Some(arrays),
-                    Some(functions),
+                    arrays,
+                    functions,
+                    gosub.ctx.methods,
                 ) else {
                     return false;
                 };
@@ -8519,6 +8675,11 @@ fn emit_c_semantic_for_body(
                     out.push_str("    return;\n");
                 }
             }
+            Kind::Return(crate::semantic_ir::ReturnValue::Default) if callable.is_none() => {
+                return c_decline(
+                    "`return` outside of a function isn't supported by the minimal C backend",
+                );
+            }
             Kind::End if callable.is_some() => out.push_str("    exit(0);\n"),
             Kind::End => out.push_str("    return 0;\n"),
             Kind::Stop | Kind::System => out.push_str("    exit(0);\n"),
@@ -8610,6 +8771,35 @@ fn emit_c_semantic_select_case_in_loop(
         staged_out.push_str(&format!("    if (!{matched}) {{\n"));
         let mut conditions = Vec::new();
         for value in &case.values {
+            // A value that calls a function which can raise is evaluated
+            // (and its status checked) only when the clause is reached.
+            let mut hoisted = value.clone();
+            if !gosub.ctx.try_reachable.is_empty() {
+                let expressions: Vec<&mut crate::semantic_ir::Expression> = match &mut hoisted {
+                    CaseValue::Comparison { value, .. } => vec![value],
+                    CaseValue::Value {
+                        first, range_end, ..
+                    } => std::iter::once(first).chain(range_end.as_mut()).collect(),
+                };
+                for expression in expressions {
+                    if hoist_c_semantic_expression(
+                        expression,
+                        &mut staged_out,
+                        &mut staged_math,
+                        &mut staged_counter,
+                        supports_float,
+                        arrays,
+                        functions,
+                        callable,
+                        &staged_gosub.ctx,
+                    )
+                    .is_none()
+                    {
+                        return false;
+                    }
+                }
+            }
+            let value = &hoisted;
             match value {
                 CaseValue::Value {
                     first,
@@ -9275,7 +9465,10 @@ fn render_c_semantic_numeric_scalar_method_call(
     for (parameter, argument) in signature.params.iter().skip(1).zip(arguments) {
         if parameter.by_ref {
             let ExpressionKind::Name(name) = &argument.kind else {
-                return None;
+                return c_decline_none(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to",
+                );
             };
             let suffix = argument
                 .value_type
@@ -10061,7 +10254,7 @@ fn emit_c_semantic_open(
         return false;
     };
     if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
-        return false;
+        return c_decline(format!("file channel #{channel} is out of range -- the minimal C backend supports channels 1 through {BCC_MAX_CHANNELS}"));
     }
     if path.value_type != SemanticValueType::String {
         return false;
@@ -10658,28 +10851,64 @@ fn c_semantic_entries<'a>(
     entries
 }
 
+thread_local! {
+    /// Why the typed C emitters last declined a statement, when the reason is
+    /// something the user can act on (an invalid program, not a construct the
+    /// backend merely lacks). The first reason recorded for a statement wins;
+    /// `c_unsupported_typed_statement` reports it in place of the generic
+    /// "not supported" text.
+    static C_DECLINE_REASON: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Records `reason` (unless one is already recorded) and returns `false`, for
+/// a typed emitter that returns `bool`.
+fn c_decline(reason: impl Into<String>) -> bool {
+    C_DECLINE_REASON.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(reason.into());
+        }
+    });
+    false
+}
+
+/// `c_decline` for a typed renderer that returns `Option`.
+fn c_decline_none<T>(reason: impl Into<String>) -> Option<T> {
+    c_decline(reason);
+    None
+}
+
+fn c_clear_decline() {
+    C_DECLINE_REASON.with(|slot| *slot.borrow_mut() = None);
+}
+
+fn c_take_decline() -> Option<String> {
+    C_DECLINE_REASON.with(|slot| slot.borrow_mut().take())
+}
+
 /// The diagnostic for a typed statement the C backend cannot emit and has no
 /// AST statement to fall back to.
 fn c_unsupported_typed_statement(
     semantic: Option<&crate::semantic_ir::SemanticStatement>,
     position: Option<SourcePos>,
 ) -> String {
-    let kind = semantic.map_or_else(
-        || "statement".to_string(),
-        |semantic| {
-            format!("{:?}", semantic.kind)
-                .split([' ', '{', '('])
-                .next()
-                .unwrap_or("statement")
-                .to_string()
-        },
-    );
+    let message = c_take_decline().unwrap_or_else(|| {
+        let kind = semantic.map_or_else(
+            || "statement".to_string(),
+            |semantic| {
+                format!("{:?}", semantic.kind)
+                    .split([' ', '{', '('])
+                    .next()
+                    .unwrap_or("statement")
+                    .to_string()
+            },
+        );
+        format!("{kind} is not supported by the minimal C backend yet")
+    });
     match position {
-        Some(position) => format!(
-            "{kind} is not supported by the C backend yet ({}:{})",
-            position.filename, position.line
-        ),
-        None => format!("{kind} is not supported by the C backend yet"),
+        Some(position) => format!("{message} ({}:{})", position.filename, position.line),
+        None => message,
     }
 }
 
@@ -10705,7 +10934,7 @@ fn emit_c_semantic_get_put(
         return false;
     };
     if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
-        return false;
+        return c_decline(format!("file channel #{channel} is out of range -- the minimal C backend supports channels 1 through {BCC_MAX_CHANNELS}"));
     }
     let record_type = file_io
         .channel_record_type
@@ -10713,13 +10942,19 @@ fn emit_c_semantic_get_put(
         .cloned()
         .flatten();
     let Some(fields) = file_io.channel_fields.get(&channel).cloned() else {
-        return false;
+        return c_decline(format!(
+            "GET/PUT on channel {channel} isn't supported by the minimal C backend yet -- no \
+             FIELD was seen for it (with a literal channel number) before this point"
+        ));
     };
     let Some(position) = position
         .filter(|position| position.record.is_none())
         .and_then(|position| position.position.as_ref())
     else {
-        return false;
+        return c_decline(
+            "GET/PUT with no record number (\"next sequential record\") isn't supported by \
+             the minimal C backend yet -- always pass an explicit record number",
+        );
     };
     if !matches!(
         position.value_type,
@@ -10908,9 +11143,11 @@ fn emit_c_semantic_line_input(
     let Ok(channel) = value.parse::<i64>() else {
         return false;
     };
-    if !(1..=BCC_MAX_CHANNELS).contains(&channel) || target.value_type != SemanticValueType::String
-    {
-        return false;
+    if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
+        return c_decline(format!("file channel #{channel} is out of range -- the minimal C backend supports channels 1 through {BCC_MAX_CHANNELS}"));
+    }
+    if target.value_type != SemanticValueType::String {
+        return c_decline("LINE INPUT # requires a string (`$`-suffixed) target");
     }
     let Some(target_text) =
         render_c_semantic_lvalue(target, arrays, functions, needs_math, supports_float)
@@ -10945,7 +11182,11 @@ fn emit_c_semantic_field_string_assignment(
     };
     let c_name = c_var_name(&ident, TypeSuffix::String);
     let Some(&width) = file_io.field_widths.get(&c_name) else {
-        return false;
+        return c_decline(format!(
+            "LSET/RSET on `{}` isn't supported by the minimal C backend yet -- only a \
+             variable declared by a (literal-channel) FIELD is",
+            target.name
+        ));
     };
     if is_dsl_record_buffer(file_io, &c_name) {
         let packed_argument = match &value.kind {
@@ -12105,6 +12346,7 @@ pub(crate) fn generate(
                 .as_ref()
                 .map_or(&[], |module| module.sources.as_slice()),
             source_index: 0,
+            methods: Some(&functions.methods),
         },
     };
     let mut body = String::new();
@@ -12155,6 +12397,7 @@ pub(crate) fn generate(
             continue;
         }
         previous_blank = false;
+        c_clear_decline();
         let gosub_checkpoint = gosub.clone();
         if let (Some(semantic), Some(module)) = (semantic_statement, resolved.semantic_module.as_ref()) {
             if let Some(source_index) = c_semantic_top_level_source_index(module, semantic) {
@@ -12708,7 +12951,7 @@ pub(crate) fn generate(
                         }
                         body.push_str("    }\n");
                     }
-                    Kind::Throw(_) | Kind::Error(_) | Kind::Try { .. } => {
+                    Kind::Throw(_) | Kind::Error(_) | Kind::Try { .. } | Kind::Return(_) => {
                         return emit_c_semantic_for_body(
                             std::slice::from_ref(semantic),
                             &mut body,
@@ -13840,6 +14083,7 @@ fn emit_function_def(
             source_index: semantic_module
                 .and_then(|module| semantic_callable_signature(module, func))
                 .map_or(0, |callable| callable.source_index),
+            methods: Some(&functions.methods),
         },
     };
     let callable_entries: Vec<(
@@ -13887,6 +14131,7 @@ fn emit_function_def(
             continue;
         }
         previous_return = is_return;
+        c_clear_decline();
         let emitted_semantically = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;

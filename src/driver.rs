@@ -112,18 +112,17 @@ pub fn compile_source(
 /// `Target::C` -- see `codegen_c::GeneratedC`'s own doc comment for why
 /// that `.c` needs no paired file alongside it).
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
-    compile_file_impl(input, options, AstUse::TypedFirst)
+    compile_file_impl(input, options, AstUse::TypedOnly)
 }
 
 /// How much of the resolved AST code generation may read.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AstUse {
-    /// Generate from the typed module alone; fall back to the full resolved
-    /// program only when a backend cannot yet emit something from it.
-    TypedFirst,
-    /// The legacy AST-driven generation, never the typed-only attempt.
+    /// The legacy AST-driven generation, kept as the baseline the
+    /// AST-independence tests compare against.
     AstOnly,
-    /// The typed module alone; a backend that needs the AST fails.
+    /// The typed module alone, with the resolved AST emptied. This is what
+    /// `compile_file` uses: code generation reads only the typed IR.
     TypedOnly,
 }
 
@@ -259,24 +258,20 @@ fn compile_file_impl(
             return Err(conflicts);
         }
     }
-    // Generation is driven by the typed module; the resolved AST is only a
-    // compatibility fallback.
     let generate = |resolved: &resolver::ResolvedProgram| {
         generate_for_target(resolved, options, &synthesized_buffer_names)
     };
     if ast_use == AstUse::AstOnly {
         return generate(&resolved);
     }
-    let mut typed_only = resolved.clone();
+    // Code generation reads only the typed module: hand it a program whose
+    // AST statement and function bodies are empty.
+    let mut typed_only = resolved;
     typed_only.program.statements.clear();
     for function in &mut typed_only.program.functions {
         function.body.clear();
     }
-    match (generate(&typed_only), ast_use) {
-        (Ok(output), _) => Ok(output),
-        (Err(error), AstUse::TypedOnly) => Err(error),
-        (Err(_), _) => generate(&resolved),
-    }
+    generate(&typed_only)
 }
 
 fn generate_for_target(

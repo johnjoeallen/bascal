@@ -627,6 +627,14 @@ impl<'a> Transpiler<'a> {
         if operator != AssignmentOperator::Assign {
             return plain(target, value, self);
         }
+        // `file[i] = (row)` writes the record variable back just as `= row`.
+        while let ExpressionKind::Parenthesized(inner) = &value.kind {
+            if !matches!(inner.kind, ExpressionKind::Name(_)) {
+                break;
+            }
+            let inner = (**inner).clone();
+            value = inner;
+        }
 
         // `x = { ... }`: initialize an in-memory record from a full literal.
         if let (ExpressionKind::Name(name), ExpressionKind::RecordLiteral(fields)) =
