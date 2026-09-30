@@ -3975,6 +3975,18 @@ struct ErrorDataCtx<'a> {
     /// the `while (1)`'s own top and skip that guard entirely, silently
     /// turning `do ... loop until done` into an infinite loop.
     loop_continue_stack: Vec<Option<String>>,
+    /// The typed module's sources and the one the statements now being
+    /// emitted came from, so a nested typed statement can name its own line.
+    sources: &'a [crate::semantic_ir::SemanticSource],
+    source_index: usize,
+}
+
+impl ErrorDataCtx<'_> {
+    /// The source position of a typed statement starting at `offset` in the
+    /// source being emitted.
+    fn position(&self, offset: usize) -> Option<SourcePos> {
+        self.sources.get(self.source_index)?.source_position_at(offset)
+    }
 }
 
 /// Emits the shared "an error just occurred" block a raise site (`ERROR`
@@ -6229,6 +6241,7 @@ fn render_c_semantic_callable_call_statement(
     expression: &crate::semantic_ir::Expression,
     caller: Option<&FnSig>,
     ctx: &ErrorDataCtx<'_>,
+    result_temp: Option<&str>,
     needs_math: &mut bool,
     temp_counter: &mut usize,
     supports_float: bool,
@@ -6470,8 +6483,14 @@ fn render_c_semantic_callable_call_statement(
         }
     }
     if !signature.is_void && signature.is_string {
-        let output = format!("bt_s_{staged_temp_counter}");
-        staged_temp_counter += 1;
+        let output = match result_temp {
+            Some(name) => name.to_string(),
+            None => {
+                let name = format!("bt_s_{staged_temp_counter}");
+                staged_temp_counter += 1;
+                name
+            }
+        };
         prelude.push_str(&format!("    char {output}[{STRING_BUFFER_SIZE}];\n"));
         rendered_arguments.push(output);
     }
@@ -6494,6 +6513,12 @@ fn render_c_semantic_callable_call_statement(
             prelude.push_str(&format!(
                 "    if ({status}.status) {{ fprintf(stderr, \"unhandled BASIC error %d\\n\", {status}.status); exit(1); }}\n"
             ));
+        }
+        // A hoisted value call keeps its result in a plain temporary.
+        if let (Some(name), false, false) = (result_temp, signature.is_void, signature.is_string) {
+            let (_, is_float) = numeric_c_type(signature.result_suffix?)?;
+            let c_type = if is_float { "double" } else { "int" };
+            prelude.push_str(&format!("    {c_type} {name} = {status}.value;\n"));
         }
     } else {
         prelude.push_str(&format!("    {call};\n"));
@@ -7458,6 +7483,7 @@ fn emit_c_semantic_do(
 fn emit_c_semantic_expression_statement(
     expression: &crate::semantic_ir::Expression,
     caller: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
     out: &mut String,
     needs_math: &mut bool,
     temp_counter: &mut usize,
@@ -7469,29 +7495,15 @@ fn emit_c_semantic_expression_statement(
     if let crate::semantic_ir::ExpressionKind::Call { name, .. } = &expression.kind {
         if functions
             .get(&fn_key(&BasicIdent::parse(name)))
-            .is_some_and(|signature| signature.is_void && !signature.try_result)
+            .is_some_and(|signature| signature.is_void)
         {
-            let handler_ids = HashMap::new();
-            let data_labels = HashMap::new();
-            let try_reachable = HashSet::new();
-            let context = ErrorDataCtx {
-                handler_ids: &handler_ids,
-                dispatch_labels: &[],
-                raise_site_count: 0,
-                raise_id: 0,
-                try_id: 0,
-                data_labels: &data_labels,
-                try_reachable: &try_reachable,
-                current_function_reachable: false,
-                current_try_catch: None,
-                loop_continue_stack: Vec::new(),
-            };
             let mut staged_math = *needs_math;
             let mut staged_counter = *temp_counter;
             let Some(rendered) = render_c_semantic_callable_call_statement(
                 expression,
                 caller,
-                &context,
+                ctx,
+                None,
                 &mut staged_math,
                 &mut staged_counter,
                 supports_float,
@@ -7549,6 +7561,176 @@ fn emit_c_semantic_expression_statement(
     true
 }
 
+/// Whether `expression` calls a `try`-reachable function that returns a value.
+fn c_semantic_contains_try_result_call(
+    expression: &crate::semantic_ir::Expression,
+    functions: &FunctionMap,
+) -> bool {
+    let mut probe = expression.clone();
+    let mut found = false;
+    c_semantic_visit_expressions_mut(&mut probe, &mut |expression| {
+        if let crate::semantic_ir::ExpressionKind::Call { name, .. } = &expression.kind {
+            found |= functions
+                .get(&fn_key(&BasicIdent::parse(name)))
+                .is_some_and(|signature| signature.try_result && !signature.is_void);
+        }
+    });
+    found
+}
+
+/// Calls `visit` on every sub-expression of `expression`, children before
+/// their parent, left to right.
+fn c_semantic_visit_expressions_mut(
+    expression: &mut crate::semantic_ir::Expression,
+    visit: &mut dyn FnMut(&mut crate::semantic_ir::Expression),
+) {
+    use crate::semantic_ir::ExpressionKind as Kind;
+    match &mut expression.kind {
+        Kind::Call { arguments, .. } => {
+            for argument in arguments {
+                c_semantic_visit_expressions_mut(argument, visit);
+            }
+        }
+        Kind::Index { index, .. } => c_semantic_visit_expressions_mut(index, visit),
+        Kind::MultiIndex { indices, .. } => {
+            for index in indices {
+                c_semantic_visit_expressions_mut(index, visit);
+            }
+        }
+        Kind::Member { base, arguments, .. } => {
+            if let Some(base) = base {
+                c_semantic_visit_expressions_mut(base, visit);
+            }
+            for argument in arguments.iter_mut().flatten() {
+                c_semantic_visit_expressions_mut(argument, visit);
+            }
+        }
+        Kind::Parenthesized(inner) => c_semantic_visit_expressions_mut(inner, visit),
+        Kind::Unary { operand, .. } => c_semantic_visit_expressions_mut(operand, visit),
+        Kind::Binary { left, right, .. } => {
+            c_semantic_visit_expressions_mut(left, visit);
+            c_semantic_visit_expressions_mut(right, visit);
+        }
+        Kind::RecordLiteral(fields) | Kind::PartialRecordLiteral(fields) => {
+            for field in fields {
+                c_semantic_visit_expressions_mut(&mut field.value, visit);
+            }
+        }
+        Kind::Name(_) | Kind::Literal(_) | Kind::Boolean(_) => {}
+    }
+    visit(expression);
+}
+
+/// The expressions a statement evaluates exactly once, in evaluation order,
+/// when it runs. A loop's own condition is deliberately absent: it is
+/// re-evaluated, so a call there cannot be hoisted ahead of the loop.
+fn c_semantic_statement_expressions_mut(
+    kind: &mut crate::semantic_ir::SemanticStatementKind,
+) -> Vec<&mut crate::semantic_ir::Expression> {
+    use crate::semantic_ir::{PrintToken, ReturnValue, SemanticStatementKind as Kind, ThrowValue};
+    match kind {
+        Kind::Assignment { target, value, .. } => vec![target, value],
+        // A bare call statement checks its own status; only its arguments
+        // can need hoisting.
+        Kind::Expression(crate::semantic_ir::Expression {
+            kind: crate::semantic_ir::ExpressionKind::Call { arguments, .. },
+            ..
+        }) => arguments.iter_mut().collect(),
+        Kind::Expression(expression) | Kind::Error(expression) => vec![expression],
+        Kind::Print { tokens, .. } => tokens
+            .iter_mut()
+            .filter_map(|token| match token {
+                PrintToken::Expression(expression) => Some(expression),
+                _ => None,
+            })
+            .collect(),
+        Kind::Return(ReturnValue::Value(value)) | Kind::Throw(ThrowValue::Value(value)) => {
+            vec![value]
+        }
+        Kind::If { condition, .. } => vec![condition],
+        Kind::SelectCase { selector, .. } => vec![selector],
+        _ => Vec::new(),
+    }
+}
+
+/// Whether a statement's once-evaluated expressions call a `try`-reachable
+/// value function, so it must go through the hoisting path.
+fn c_semantic_statement_has_try_result_call(
+    statement: &crate::semantic_ir::SemanticStatement,
+    functions: &FunctionMap,
+) -> bool {
+    let mut probe = statement.kind.clone();
+    c_semantic_statement_expressions_mut(&mut probe)
+        .into_iter()
+        .any(|expression| c_semantic_contains_try_result_call(expression, functions))
+}
+
+/// Rewrites every call to a `try`-reachable value function in the statement's
+/// once-evaluated expressions into a plain temporary, emitting the call, its
+/// status check and the temporary's declaration into `out` first, in
+/// evaluation order (the typed counterpart of `hoist_try_result_calls`).
+/// `None` means a call could not be rendered.
+fn hoist_c_semantic_try_result_calls(
+    statement: &mut crate::semantic_ir::SemanticStatement,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    supports_float: bool,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+    callable: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
+) -> Option<()> {
+    let mut failed = false;
+    for expression in c_semantic_statement_expressions_mut(&mut statement.kind) {
+        c_semantic_visit_expressions_mut(expression, &mut |expression| {
+            if failed {
+                return;
+            }
+            let crate::semantic_ir::ExpressionKind::Call { name, .. } = &expression.kind else {
+                return;
+            };
+            let Some(signature) = functions.get(&fn_key(&BasicIdent::parse(name))) else {
+                return;
+            };
+            if !signature.try_result || signature.is_void {
+                return;
+            }
+            let Some(suffix) = signature.result_suffix else {
+                failed = true;
+                return;
+            };
+            let temp_ident = BasicIdent {
+                name: format!("anf_{temp_counter}"),
+                suffix: Some(suffix),
+            };
+            *temp_counter += 1;
+            let value_name = c_var_name(&temp_ident, suffix);
+            let Some(rendered) = render_c_semantic_callable_call_statement(
+                expression,
+                callable,
+                ctx,
+                Some(&value_name),
+                needs_math,
+                temp_counter,
+                supports_float,
+                arrays,
+                functions,
+            ) else {
+                failed = true;
+                return;
+            };
+            out.push_str(&rendered);
+            expression.kind = crate::semantic_ir::ExpressionKind::Name(format!(
+                "{}{}",
+                temp_ident.name,
+                suffix
+            ));
+        });
+    }
+    (!failed).then_some(())
+}
+
 fn emit_c_semantic_for_body(
     statements: &[crate::semantic_ir::SemanticStatement],
     out: &mut String,
@@ -7566,11 +7748,58 @@ fn emit_c_semantic_for_body(
 ) -> bool {
     use crate::semantic_ir::SemanticStatementKind as Kind;
     for statement in statements {
+        // A call that can raise returns a wrapped status: hoist it out of the
+        // statement's expressions, then emit the rewritten statement.
+        if !gosub.ctx.try_reachable.is_empty() {
+            let mut rewritten = statement.clone();
+            let mut probe = false;
+            for expression in c_semantic_statement_expressions_mut(&mut rewritten.kind) {
+                probe |= c_semantic_contains_try_result_call(expression, functions);
+            }
+            if probe {
+                let mut staged = String::new();
+                if hoist_c_semantic_try_result_calls(
+                    &mut rewritten,
+                    &mut staged,
+                    needs_math,
+                    temp_counter,
+                    supports_float,
+                    arrays,
+                    functions,
+                    callable,
+                    &gosub.ctx,
+                )
+                .is_none()
+                {
+                    return false;
+                }
+                if !emit_c_semantic_for_body(
+                    std::slice::from_ref(&rewritten),
+                    &mut staged,
+                    needs_math,
+                    needs_string,
+                    temp_counter,
+                    supports_float,
+                    arrays,
+                    functions,
+                    data_labels,
+                    file_io,
+                    declaration_scope,
+                    callable,
+                    gosub,
+                ) {
+                    return false;
+                }
+                out.push_str(&staged);
+                continue;
+            }
+        }
         match &statement.kind {
             Kind::Expression(expression) => {
                 if !emit_c_semantic_expression_statement(
                     expression,
                     callable,
+                    &gosub.ctx,
                     out,
                     needs_math,
                     temp_counter,
@@ -7937,19 +8166,82 @@ fn emit_c_semantic_for_body(
                 path,
                 mode,
                 channel,
-                length,
+                ..
             } => {
-                if !emit_c_semantic_nested_output_open(
+                let Some(source_pos) = gosub.ctx.position(statement.span.start) else {
+                    return false;
+                };
+                if !emit_c_semantic_open(
                     path,
                     mode.kind,
                     channel,
-                    length.as_ref(),
                     out,
                     needs_math,
                     temp_counter,
                     file_io,
                     arrays,
                     functions,
+                    &source_pos,
+                    callable,
+                    &mut gosub.ctx,
+                ) {
+                    return false;
+                }
+            }
+            Kind::Throw(value) => {
+                if !emit_c_semantic_raise(
+                    value,
+                    statement.span.start,
+                    callable,
+                    out,
+                    needs_math,
+                    supports_float,
+                    arrays,
+                    functions,
+                    &mut gosub.ctx,
+                ) {
+                    return false;
+                }
+            }
+            Kind::Error(code) => {
+                let Some(position) = gosub.ctx.position(statement.span.start) else {
+                    return false;
+                };
+                let Some((text, is_float)) = render_c_semantic_numeric_expression_context(
+                    code,
+                    needs_math,
+                    supports_float,
+                    Some(arrays),
+                    Some(functions),
+                ) else {
+                    return false;
+                };
+                let code = coerce_numeric(text, is_float, false, needs_math);
+                if !emit_c_semantic_raise_code(&code, &position, callable, out, &mut gosub.ctx) {
+                    return false;
+                }
+            }
+            Kind::Try {
+                body: try_body,
+                catch,
+                finally_body,
+            } => {
+                if !emit_c_semantic_try(
+                    try_body,
+                    catch.as_ref(),
+                    finally_body,
+                    out,
+                    needs_math,
+                    needs_string,
+                    temp_counter,
+                    supports_float,
+                    arrays,
+                    functions,
+                    data_labels,
+                    file_io,
+                    declaration_scope,
+                    callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -9915,9 +10207,54 @@ fn render_c_semantic_throw_code(
     })
 }
 
-fn emit_c_semantic_throw(
+/// The raise a `throw`/`error` performs, in whichever context it sits: a
+/// `goto` to the enclosing `try`'s catch label, a status return from a
+/// `try`-reachable callable, or the top-level dispatch block.
+fn emit_c_semantic_raise_code(
+    code: &str,
+    position: &SourcePos,
+    callable: Option<&FnSig>,
+    out: &mut String,
+    ctx: &mut ErrorDataCtx<'_>,
+) -> bool {
+    if let Some(label) = ctx.current_try_catch.clone() {
+        out.push_str(&format!("    bcc_err = {code};\n"));
+        out.push_str(&format!("    bcc_erl = {};\n", position.line));
+        out.push_str(&format!(
+            "    bcc_err_file = \"{}\";\n",
+            escape_c_string_literal(&crate::diagnostics::display_source_filename(
+                &position.filename
+            ))
+        ));
+        out.push_str(&format!("    goto {label};\n"));
+    } else if ctx.current_function_reachable {
+        let Some(callable) = callable else {
+            return false;
+        };
+        emit_raise_in_callable_block(out, code, position.line, &position.filename, callable);
+    } else if callable.is_none() {
+        let id = ctx.raise_id;
+        ctx.raise_id += 1;
+        out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
+        emit_raise_block(
+            out,
+            code,
+            id,
+            position.line,
+            &position.filename,
+            ctx.dispatch_labels,
+        );
+        out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+    } else {
+        return false;
+    }
+    true
+}
+
+fn emit_c_semantic_raise(
     value: &crate::semantic_ir::ThrowValue,
-    source_pos: &SourcePos,
+    span_start: usize,
+    callable: Option<&FnSig>,
     out: &mut String,
     needs_math: &mut bool,
     supports_float: bool,
@@ -9925,98 +10262,171 @@ fn emit_c_semantic_throw(
     functions: &FunctionMap,
     ctx: &mut ErrorDataCtx<'_>,
 ) -> bool {
+    let Some(position) = ctx.position(span_start) else {
+        return false;
+    };
     let Some(code) =
         render_c_semantic_throw_code(value, needs_math, supports_float, arrays, functions)
     else {
         return false;
     };
-    let id = ctx.raise_id;
-    ctx.raise_id += 1;
-    out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-    emit_raise_block(
-        out,
-        &code,
-        id,
-        source_pos.line,
-        &source_pos.filename,
-        ctx.dispatch_labels,
-    );
-    out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
-    true
+    emit_c_semantic_raise_code(&code, &position, callable, out, ctx)
 }
 
-fn emit_c_semantic_callable_throw(
-    value: &crate::semantic_ir::ThrowValue,
-    source_pos: &SourcePos,
+/// `try`/`catch`/`finally`. Each body is emitted by `emit_c_semantic_for_body`
+/// with the active catch label installed on the context, so a raise inside it
+/// (a `throw`, a failed `open`, a status returned by a `try`-reachable call)
+/// jumps to the catch. The whole statement is staged and committed only if
+/// every part of it is emitted.
+fn emit_c_semantic_try(
+    try_body: &[crate::semantic_ir::SemanticStatement],
+    catch: Option<&crate::semantic_ir::CatchBinding>,
+    finally_body: &[crate::semantic_ir::SemanticStatement],
     out: &mut String,
     needs_math: &mut bool,
+    needs_string: &mut bool,
+    temp_counter: &mut usize,
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
-    signature: &FnSig,
-) -> bool {
-    let Some(code) =
-        render_c_semantic_throw_code(value, needs_math, supports_float, arrays, functions)
-    else {
-        return false;
-    };
-    emit_raise_in_callable_block(
-        out,
-        &code,
-        source_pos.line,
-        &source_pos.filename,
-        signature,
-    );
-    true
-}
-
-fn emit_c_semantic_nested_output_open(
-    path: &crate::semantic_ir::Expression,
-    mode: crate::semantic_ir::OpenModeKind,
-    channel: &crate::semantic_ir::Expression,
-    length: Option<&crate::semantic_ir::Expression>,
-    out: &mut String,
-    needs_math: &mut bool,
-    temp_counter: &mut usize,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
-    arrays: &ArrayTable,
-    functions: &FunctionMap,
+    declaration_scope: &[crate::semantic_ir::SemanticStatement],
+    callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
-    use crate::semantic_ir::{ExpressionKind, OpenModeKind, SemanticValueType};
-    if length.is_some() || path.value_type != SemanticValueType::String {
-        return false;
+    let mut staged_out = String::new();
+    let mut staged_math = *needs_math;
+    let mut staged_string = *needs_string;
+    let mut staged_counter = *temp_counter;
+    let mut staged_gosub = gosub.clone();
+
+    let id = staged_gosub.ctx.try_id;
+    staged_gosub.ctx.try_id += 1;
+    let catch_label = format!("bcc_try_{id}_catch");
+    let rethrow_label = format!("bcc_try_{id}_rethrow");
+    let finally_label = format!("bcc_try_{id}_finally");
+    let end_label = format!("bcc_try_{id}_end");
+    let pending_name = format!("bcc_try_{id}_pending");
+
+    staged_out.push_str(&format!("    int {pending_name} = 0;\n"));
+    staged_out.push_str(&format!("    bcc_on_error_target = {id};\n"));
+    let outer_try_catch = staged_gosub
+        .ctx
+        .current_try_catch
+        .replace(catch_label.clone());
+    macro_rules! emit_body {
+        ($statements:expr) => {
+            if !emit_c_semantic_for_body(
+                $statements,
+                &mut staged_out,
+                &mut staged_math,
+                &mut staged_string,
+                &mut staged_counter,
+                supports_float,
+                arrays,
+                functions,
+                data_labels,
+                file_io,
+                declaration_scope,
+                callable,
+                &mut staged_gosub,
+            ) {
+                return false;
+            }
+        };
     }
-    let open_mode = match mode {
-        OpenModeKind::Output => "w",
-        OpenModeKind::Append => "a",
-        _ => return false,
-    };
-    let ExpressionKind::Literal(channel) = &channel.kind else {
-        return false;
-    };
-    let Ok(channel) = channel.parse::<i64>() else {
-        return false;
-    };
-    if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
-        return false;
+    emit_body!(try_body);
+    staged_gosub.ctx.current_try_catch = outer_try_catch;
+    staged_out.push_str("    bcc_on_error_target = -1;\n");
+    staged_out.push_str(&format!("    goto {finally_label};\n"));
+
+    staged_out.push_str(&format!("    {catch_label}: ;\n"));
+    staged_out.push_str("    bcc_in_handler = 0;\n");
+    staged_out.push_str("    bcc_on_error_target = -1;\n");
+    if let Some(catch) = catch {
+        if !catch.filters.is_empty() {
+            let mut conditions = Vec::new();
+            for filter in &catch.filters {
+                let Some((text, is_float)) = render_c_semantic_numeric_expression_context(
+                    filter,
+                    &mut staged_math,
+                    supports_float,
+                    Some(arrays),
+                    Some(functions),
+                ) else {
+                    return false;
+                };
+                let code = coerce_numeric(text, is_float, false, &mut staged_math);
+                conditions.push(format!("(bcc_err == {code})"));
+            }
+            staged_out.push_str(&format!("    if (!({})) {{\n", conditions.join(" || ")));
+            staged_out.push_str(&format!("        {pending_name} = 1;\n"));
+            staged_out.push_str(&format!("        goto {finally_label};\n"));
+            staged_out.push_str("    }\n");
+        }
+        let catch_name = |name: &str, value_type: crate::semantic_ir::SemanticValueType| {
+            let mut ident = BasicIdent::parse(name);
+            if ident.suffix.is_none() {
+                ident.suffix = value_type.suffix().and_then(TypeSuffix::from_char);
+            }
+            c_var_name(&ident, effective_suffix(ident.suffix))
+        };
+        let err_c = catch_name(&catch.error, catch.error_type);
+        let erl_c = catch_name(&catch.line, catch.line_type);
+        staged_out.push_str(&format!("    {err_c} = bcc_err;\n"));
+        staged_out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
+        if let Some(source) = &catch.source {
+            let ident = semantic_ident_with_suffix(source, TypeSuffix::String);
+            let source_c = c_var_name(&ident, TypeSuffix::String);
+            staged_out.push_str(&format!(
+                "    snprintf({source_c}, {STRING_BUFFER_SIZE}, \"%s\", bcc_err_file);\n"
+            ));
+        }
+        let outer_try_catch = staged_gosub
+            .ctx
+            .current_try_catch
+            .replace(rethrow_label.clone());
+        emit_body!(&catch.body);
+        staged_gosub.ctx.current_try_catch = outer_try_catch;
+        staged_out.push_str("    bcc_on_error_target = -1;\n");
+        staged_out.push_str(&format!("    goto {finally_label};\n"));
+        staged_out.push_str(&format!("    {rethrow_label}: ;\n"));
+        staged_out.push_str(&format!("    {pending_name} = 1;\n"));
+    } else {
+        staged_out.push_str(&format!("    {pending_name} = 1;\n"));
     }
-    let Some((prelude, path)) = render_c_semantic_string_expression_context(
-        path,
-        needs_math,
-        temp_counter,
-        Some(arrays),
-        Some(functions),
-    ) else {
-        return false;
-    };
-    for line in prelude {
-        out.push_str(&line);
+
+    staged_out.push_str(&format!("    {finally_label}: ;\n"));
+    emit_body!(finally_body);
+    staged_out.push_str(&format!("    if ({pending_name}) {{\n"));
+    if let Some(label) = &staged_gosub.ctx.current_try_catch {
+        staged_out.push_str(&format!("        goto {label};\n"));
+    } else if staged_gosub.ctx.current_function_reachable {
+        let Some(caller) = callable else {
+            return false;
+        };
+        let value = if caller.is_string {
+            ", .value = bcc_out"
+        } else {
+            ""
+        };
+        staged_out.push_str(&format!(
+            "        return ({}){{ .status = bcc_err{value} }};\n",
+            try_result_type(caller)
+        ));
+    } else {
+        staged_out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
+        staged_out.push_str("        exit(1);\n");
     }
-    out.push_str(&format!(
-        "    bcc_files[{}] = fopen({path}, \"{open_mode}\");\n",
-        channel - 1
-    ));
-    file_io.used = true;
+    staged_out.push_str("    }\n");
+    staged_out.push_str(&format!("    {end_label}: ;\n"));
+
+    out.push_str(&staged_out);
+    *needs_math = staged_math;
+    *needs_string = staged_string;
+    *temp_counter = staged_counter;
+    *gosub = staged_gosub;
     true
 }
 
@@ -10184,7 +10594,13 @@ fn c_semantic_entries<'a>(
         let first = start + leading.len();
         let trailing_comment = matches!(statement.kind, Kind::Comment { block: false, .. }) && {
             let line_start = text[..first].rfind('\n').map_or(0, |index| index + 1);
-            !text[line_start..first].trim().is_empty()
+            let before = text[line_start..first].trim();
+            // A comment after a bare label stays; one after a statement is
+            // the statement's trailing comment.
+            let after_label = before
+                .strip_suffix(':')
+                .is_some_and(|name| !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'));
+            !before.is_empty() && !after_label
         };
         if !trailing_comment {
             if first_of_span && leading.matches('\n').count() >= 2 {
@@ -10950,10 +11366,10 @@ fn c_semantic_statements_by_source<'a>(
 /// Resolve a top-level semantic statement's source position through its root
 /// statement's source index. Top-level dispatch may expose children of a
 /// semantic `Line`, so both root and direct child identities are accepted.
-fn c_semantic_top_level_source_position(
+fn c_semantic_top_level_source_index(
     module: &crate::semantic_ir::SemanticModule,
     semantic: &crate::semantic_ir::SemanticStatement,
-) -> Option<SourcePos> {
+) -> Option<usize> {
     use crate::semantic_ir::SemanticStatementKind as Kind;
     for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
         let belongs_to_root = std::ptr::eq(root, semantic)
@@ -10963,13 +11379,21 @@ fn c_semantic_top_level_source_position(
                     if children.iter().any(|child| std::ptr::eq(child, semantic))
             );
         if belongs_to_root {
-            return module
-                .sources
-                .get(*source_index)?
-                .source_position_at(semantic.span.start);
+            return Some(*source_index);
         }
     }
     None
+}
+
+fn c_semantic_top_level_source_position(
+    module: &crate::semantic_ir::SemanticModule,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<SourcePos> {
+    let source_index = c_semantic_top_level_source_index(module, semantic)?;
+    module
+        .sources
+        .get(source_index)?
+        .source_position_at(semantic.span.start)
 }
 
 /// Resolve a callable semantic statement through its callable source index.
@@ -11653,6 +12077,11 @@ pub(crate) fn generate(
             current_function_reachable: false,
             current_try_catch: None,
             loop_continue_stack: Vec::new(),
+            sources: resolved
+                .semantic_module
+                .as_ref()
+                .map_or(&[], |module| module.sources.as_slice()),
+            source_index: 0,
         },
     };
     let mut body = String::new();
@@ -11704,9 +12133,33 @@ pub(crate) fn generate(
         }
         previous_blank = false;
         let gosub_checkpoint = gosub.clone();
+        if let (Some(semantic), Some(module)) = (semantic_statement, resolved.semantic_module.as_ref()) {
+            if let Some(source_index) = c_semantic_top_level_source_index(module, semantic) {
+                gosub.ctx.source_index = source_index;
+            }
+        }
         let semantic_emitted = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;
+                if !gosub.ctx.try_reachable.is_empty()
+                    && c_semantic_statement_has_try_result_call(semantic, &functions.funcs)
+                {
+                    return emit_c_semantic_for_body(
+                        std::slice::from_ref(semantic),
+                        &mut body,
+                        &mut needs_math,
+                        &mut needs_string,
+                        &mut temp_counter,
+                        functions.dialect.supports_float,
+                        &functions.arrays,
+                        &functions.funcs,
+                        &data_labels,
+                        &mut file_io,
+                        semantic_declarations,
+                        None,
+                        &mut gosub,
+                    );
+                }
                 match &semantic.kind {
                     Kind::Comment { block, text } => {
                         emit_c_semantic_comment(*block, text, &mut body);
@@ -11753,6 +12206,7 @@ pub(crate) fn generate(
                             expression,
                             None,
                             &gosub.ctx,
+                            None,
                             &mut needs_math,
                             &mut temp_counter,
                             functions.dialect.supports_float,
@@ -11768,6 +12222,7 @@ pub(crate) fn generate(
                         return emit_c_semantic_expression_statement(
                             expression,
                             None,
+                            &gosub.ctx,
                             &mut body,
                             &mut needs_math,
                             &mut temp_counter,
@@ -12230,25 +12685,21 @@ pub(crate) fn generate(
                         }
                         body.push_str("    }\n");
                     }
-                    Kind::Throw(value) => {
-                        let Some(source_pos) = resolved
-                            .semantic_module
-                            .as_ref()
-                            .and_then(|module| {
-                                c_semantic_top_level_source_position(module, semantic)
-                            })
-                        else {
-                            return false;
-                        };
-                        return emit_c_semantic_throw(
-                            value,
-                            &source_pos,
+                    Kind::Throw(_) | Kind::Error(_) | Kind::Try { .. } => {
+                        return emit_c_semantic_for_body(
+                            std::slice::from_ref(semantic),
                             &mut body,
                             &mut needs_math,
+                            &mut needs_string,
+                            &mut temp_counter,
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
-                            &mut gosub.ctx,
+                            &data_labels,
+                            &mut file_io,
+                            semantic_declarations,
+                            None,
+                            &mut gosub,
                         );
                     }
                     Kind::Read(targets) => {
@@ -13355,6 +13806,10 @@ fn emit_function_def(
             current_function_reachable: is_try_reachable,
             current_try_catch: None,
             loop_continue_stack: Vec::new(),
+            sources: semantic_module.map_or(&[], |module| module.sources.as_slice()),
+            source_index: semantic_module
+                .and_then(|module| semantic_callable_signature(module, func))
+                .map_or(0, |callable| callable.source_index),
         },
     };
     let callable_entries: Vec<(
@@ -13405,6 +13860,25 @@ fn emit_function_def(
         let emitted_semantically = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;
+                if !callable_gosub.ctx.try_reachable.is_empty()
+                    && c_semantic_statement_has_try_result_call(semantic, &functions.funcs)
+                {
+                    return emit_c_semantic_for_body(
+                        std::slice::from_ref(semantic),
+                        &mut body,
+                        needs_math,
+                        needs_string,
+                        temp_counter,
+                        functions.dialect.supports_float,
+                        &functions.arrays,
+                        &functions.funcs,
+                        data_labels,
+                        file_io,
+                        semantic_body.unwrap_or(&[]),
+                        Some(sig),
+                        &mut callable_gosub,
+                    );
+                }
                 match &semantic.kind {
                     Kind::Comment { block, text } => {
                         emit_c_semantic_comment(*block, text, &mut body);
@@ -13436,6 +13910,7 @@ fn emit_function_def(
                             expression,
                             Some(sig),
                             &callable_gosub.ctx,
+                            None,
                             needs_math,
                             temp_counter,
                             functions.dialect.supports_float,
@@ -13450,6 +13925,7 @@ fn emit_function_def(
                     Kind::Expression(expression) => emit_c_semantic_expression_statement(
                         expression,
                         Some(sig),
+                        &callable_gosub.ctx,
                         &mut body,
                         needs_math,
                         temp_counter,
@@ -13764,23 +14240,22 @@ fn emit_function_def(
                         &functions.funcs,
                         functions.dialect.supports_float,
                     ),
-                    Kind::Throw(value) if callable_gosub.ctx.current_function_reachable => {
-                        semantic_module
-                            .and_then(|module| {
-                                c_semantic_callable_source_position(module, func, semantic)
-                            })
-                            .is_some_and(|source_pos| {
-                                emit_c_semantic_callable_throw(
-                                    value,
-                                    &source_pos,
-                                    &mut body,
-                                    needs_math,
-                                    functions.dialect.supports_float,
-                                    &functions.arrays,
-                                    &functions.funcs,
-                                    sig,
-                                )
-                            })
+                    Kind::Throw(_) | Kind::Error(_) | Kind::Try { .. } => {
+                        emit_c_semantic_for_body(
+                            std::slice::from_ref(semantic),
+                            &mut body,
+                            needs_math,
+                            needs_string,
+                            temp_counter,
+                            functions.dialect.supports_float,
+                            &functions.arrays,
+                            &functions.funcs,
+                            data_labels,
+                            file_io,
+                            semantic_body.unwrap_or(&[]),
+                            Some(sig),
+                            &mut callable_gosub,
+                        )
                     }
                     Kind::Return(crate::semantic_ir::ReturnValue::Default) if sig.is_void => {
                         emit_byref_scalar_copyback(sig, &mut body);

@@ -1170,24 +1170,33 @@ mod semantic_driver_differential_tests {
         );
     }
 
-    /// C is AST-independent except for `try`/`catch`, whose typed emitter is
-    /// not written yet: the AST-driven emitter still owns those programs.
+    /// C output must not depend on `ResolvedProgram::program`: emptying the
+    /// AST leaves every corpus program's C unchanged.
     #[test]
-    fn c_output_is_independent_of_the_ast_except_for_try() {
+    fn c_output_is_independent_of_the_ast_for_the_corpus() {
         let dependent = ast_dependent_programs(Target::C);
-        let expected = [
-            "examples/adventure3000/stage12-refactored-bascal/adventure.bcl",
-            "examples/adventure3000/stage13-refactored-bascal/adventure.bcl",
-            "examples/adventure3000/stage14-refactored-bascal/adventure.bcl",
-            "examples/adventure3000/stage15-refactored-bascal/adventure.bcl",
-            "examples/adventure3000/stage16-refactored-bascal/adventure.bcl",
-            "examples/adventure3000/stage17-refactored-bascal/adventure.bcl",
-            "tests/fixtures/conformance/jvm_try.bcl",
-            "tests/fixtures/conformance/jvm_try_filter.bcl",
-            "tutorial/inventory.bcl",
-            "tutorial/portable_error_handling.bcl",
-        ];
-        assert_eq!(dependent, expected, "C AST-dependent programs changed");
+        assert!(
+            dependent.is_empty(),
+            "C output still depends on the AST for: {dependent:#?}"
+        );
+    }
+
+    /// `try`/`catch`/`finally` with an error filter and a source binding is
+    /// emitted for C from the typed IR alone.
+    #[test]
+    fn c_try_catch_is_emitted_from_typed_ir_without_the_ast() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
+        let program = root.join("tests/fixtures/conformance/jvm_try_filter.bcl");
+        let output = compile_file_impl(&program, &options, true)
+            .expect("try/catch compiles for C without the AST");
+        assert!(output.contains("bcc_on_error_target = 0;"), "{output}");
+        assert!(output.contains("if (!((bcc_err == 6) || (bcc_err == 7)))"), "{output}");
+        assert!(output.contains("bcc_try_0_finally: ;"), "{output}");
+        assert!(output.contains("bcc_err_file"), "{output}");
     }
 
     /// The JVM equivalent: every corpus program the JVM target accepts emits

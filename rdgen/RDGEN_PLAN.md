@@ -17625,3 +17625,9 @@ Iteration 5872 made the C top-level body and callable bodies driven by the typed
 Iteration 5873 fixed three typed-IR causes of C fallbacks. Library dependencies are loaded in declaration order and then prepended, so a library shared by two siblings lands where the legacy loader puts it. Bare undeclared names type as a single for C (`SemanticModule::bare_names_are_single`, set by the C driver before re-annotating, so BASIC output is unchanged). The typed C numeric renderer gained `rnd`, and the nested-statement emitter gained `FIELD`, `LSET` and `RSET`, so record writes inside loops and branches no longer fall back. `MidAssign` accepts any string lvalue.
 
 Iteration 5874 added `c_output_is_independent_of_the_ast_except_for_try`, which pins the remaining ten C programs that change with the AST emptied; all of them contain `try`/`catch`.
+
+Iteration 5875 moved the error-handling context into the C typed body state (`CSemanticGosubState` owns the `ErrorDataCtx`, so compound emitters stage `raise_id`, `try_id`, the active catch label and the `continue` targets together) and gave the context the typed module's sources so a nested statement can name its own line.
+
+Iteration 5876 added the typed C `try`/`catch`/`finally` emitter (`emit_c_semantic_try`), a unified typed raise for `throw`, `error` and a bare rethrow across the try, try-reachable-callable and top-level contexts, and routed nested `open` through the context-aware emitter. A bare call statement now checks its own status from the real context.
+
+Iteration 5877 added the typed counterpart of `hoist_try_result_calls`: a statement whose once-evaluated expressions call a `try`-reachable value function is rewritten so each call becomes a checked temporary emitted ahead of it. A comment after a bare label is kept. C output is now independent of the AST for every corpus program, and the gate test says so.
