@@ -916,6 +916,8 @@ const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char 
 /// not chained through several calls the way `MID$`/`LEFT$` results often
 /// are, so there's no risk of one call's result going stale before it's
 /// used, and no need to share `BCC_STRBUF_COUNT` slots with those.
+const TIMER_PROTO: &str = "static double bcc_timer(void);\n";
+const TIMER_BODY: &str = "static double bcc_timer(void) {\n    struct timespec ts;\n    timespec_get(&ts, TIME_UTC);\n    time_t t = ts.tv_sec;\n    struct tm* tm_info = localtime(&t);\n    return tm_info->tm_hour * 3600.0 + tm_info->tm_min * 60.0 + tm_info->tm_sec + ts.tv_nsec / 1e9;\n}\n\n";
 const DATE_PROTO: &str = "static const char* bcc_date(void);\n";
 const DATE_BODY: &str = "static const char* bcc_date(void) {\n    static char buf[11];\n    time_t t = time(NULL);\n    struct tm* tm_info = localtime(&t);\n    snprintf(buf, sizeof(buf), \"%02d-%02d-%04d\", tm_info->tm_mon + 1, tm_info->tm_mday, tm_info->tm_year + 1900);\n    return buf;\n}\n\n";
 
@@ -1438,7 +1440,11 @@ fn collect_semantic_typed_scalar_names(
     for (name, value_type) in
         crate::semantic_ir::SemanticModule::typed_names_in_statements(statements)
     {
-        if name.contains('.') {
+        if name.contains('.')
+            || ["err", "erl", "timer"]
+                .iter()
+                .any(|reserved| name.eq_ignore_ascii_case(reserved))
+        {
             continue;
         }
         let Some(suffix) = semantic_value_type_suffix(value_type) else {
@@ -1474,6 +1480,13 @@ fn collect_semantic_scalar_declarations(
         ) {
             match &expression.kind {
                 ExpressionKind::Name(name) => {
+                    // The bare system pseudo-variables are not storage.
+                    if ["err", "erl", "timer"]
+                        .iter()
+                        .any(|reserved| name.eq_ignore_ascii_case(reserved))
+                    {
+                        return;
+                    }
                     let Some(suffix) = semantic_value_type_suffix(expression.value_type) else {
                         return;
                     };
@@ -5649,6 +5662,16 @@ fn render_c_semantic_numeric_expression_context(
             }
         }
         ExprKind::Boolean(value) => Some((if *value { "-1" } else { "0" }.to_string(), false)),
+        // The bare system pseudo-variables `ERR`, `ERL` and `TIMER`.
+        ExprKind::Name(name) if name.eq_ignore_ascii_case("err") => {
+            Some(("bcc_err".to_string(), false))
+        }
+        ExprKind::Name(name) if name.eq_ignore_ascii_case("erl") => {
+            Some(("bcc_erl".to_string(), false))
+        }
+        ExprKind::Name(name) if name.eq_ignore_ascii_case("timer") && supports_float => {
+            Some(("bcc_timer()".to_string(), true))
+        }
         ExprKind::Name(name) => {
             let suffix = expression
                 .value_type
@@ -12991,7 +13014,10 @@ pub(crate) fn generate(
         // `COLOR_BODY`'s own doc comment).
         includes.push_str("#include <stdlib.h>\n");
     }
-    if needs_randomize_time || builtin_usage.needs_date_helper {
+    // `TIMER` renders as a call to `bcc_timer`; pull the helper in only when
+    // an emitted body actually calls it.
+    let needs_timer_helper = body.contains("bcc_timer()") || function_defs.contains("bcc_timer()");
+    if needs_randomize_time || builtin_usage.needs_date_helper || needs_timer_helper {
         includes.push_str("#include <time.h>\n");
     }
     if builtin_usage.needs_inkey_helper {
@@ -13121,6 +13147,10 @@ pub(crate) fn generate(
     if builtin_usage.needs_date_helper {
         runtime_protos.push_str(DATE_PROTO);
         runtime_body.push_str(DATE_BODY);
+    }
+    if needs_timer_helper {
+        runtime_protos.push_str(TIMER_PROTO);
+        runtime_body.push_str(TIMER_BODY);
     }
     if gosub_count > 0 {
         runtime_state.push_str(GOSUB_HELPER);
@@ -15042,7 +15072,9 @@ fn register_var(
     // that every read/write of the real `bcc_err`/`bcc_erl` state would
     // silently miss instead.
     if ident.suffix.is_none()
-        && (ident.name.eq_ignore_ascii_case("err") || ident.name.eq_ignore_ascii_case("erl"))
+        && (ident.name.eq_ignore_ascii_case("err")
+            || ident.name.eq_ignore_ascii_case("erl")
+            || ident.name.eq_ignore_ascii_case("timer"))
     {
         return;
     }
@@ -19652,6 +19684,10 @@ fn render_numeric_expr(
         }
         Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("erl") => {
             Ok(("bcc_erl".to_string(), false))
+        }
+        // `TIMER` -- seconds since midnight, as a double (see `TIMER_BODY`).
+        Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("timer") => {
+            Ok(("bcc_timer()".to_string(), true))
         }
         Expr::Ident(ident) => {
             let suffix = resolved_ident_suffix(ident, functions)

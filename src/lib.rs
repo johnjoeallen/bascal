@@ -1997,6 +1997,23 @@ end
     }
 
     #[test]
+    fn c_target_timer_reads_seconds_since_midnight() {
+        let source = "start# = timer\nelapsed# = timer - start#\nprint elapsed#\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("#include <time.h>"), "{output}");
+        assert!(output.contains("static double bcc_timer(void) {"), "{output}");
+        assert!(output.contains("bv_d_start = bcc_timer();"), "{output}");
+        assert!(output.contains("(bcc_timer() - bv_d_start)"), "{output}");
+        assert!(!output.contains("bv_f_timer"), "{output}");
+    }
+
+    #[test]
+    fn c_target_without_timer_carries_no_timer_helper() {
+        let output = compile_source_via_c_target("print 1\nend\n");
+        assert!(!output.contains("bcc_timer"), "{output}");
+    }
+
+    #[test]
     fn c_target_record_string_alignment_pads_right_aligned_fields() {
         let source = r#"record R
     left: string(8) left
