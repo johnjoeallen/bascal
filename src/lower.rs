@@ -39,12 +39,56 @@ pub(crate) struct Lowered {
 
 /// Run every post-parse lowering sub-pass, in order.
 pub(crate) fn lower(program: ast::Program) -> Result<Lowered, Vec<Diagnostic>> {
-    let (mut program, synthesized_buffer_names) = records::lower(program)?;
+    let (mut program, synthesized_buffer_names, trim_methods) = records::lower(program)?;
     inject_mid_assign_helper_if_used(&mut program)?;
+    inject_trim_libraries_if_used(&mut program, trim_methods)?;
     Ok(Lowered {
         program,
         synthesized_buffer_names,
     })
+}
+
+/// Splices in `com.bascal.stdlib.rtrim`/`ltrim` when unpacking a record's string
+/// fields called them (`trim_methods`) and the program hasn't already defined
+/// or required them, the same way `inject_mid_assign_helper_if_used` does.
+fn inject_trim_libraries_if_used(
+    program: &mut ast::Program,
+    trim_methods: records::TrimMethods,
+) -> Result<(), Vec<Diagnostic>> {
+    for (name, used) in [("rtrim", trim_methods.right), ("ltrim", trim_methods.left)] {
+        let already_defined = program.functions.iter().any(|f| {
+            f.receiver.is_some() && f.name.name.eq_ignore_ascii_case(name)
+        });
+        if !used || already_defined {
+            continue;
+        }
+        let symbol = format!("com.bascal.stdlib.{name}");
+        let relative = required_symbol_to_path(&symbol);
+        let path = stdlib_search_roots()
+            .into_iter()
+            .map(|root| root.join(&relative))
+            .find(|candidate| candidate.exists())
+            .ok_or_else(|| {
+                vec![Diagnostic::error(
+                    diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
+                    format!(
+                        "internal error: reading a record string field needs BASCAL's own \
+                         {symbol} method, but {} could not be found -- this looks like a \
+                         broken install; check that `com/` shipped alongside `bcc`",
+                        relative.display()
+                    ),
+                )]
+            })?;
+        let source = fs::read_to_string(&path).map_err(|err| {
+            vec![Diagnostic::error(
+                diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
+                format!("internal error: failed to read {}: {err}", path.display()),
+            )]
+        })?;
+        let library = parse_source(path.display().to_string(), &source)?;
+        program.functions.splice(0..0, library.functions);
+    }
+    Ok(())
 }
 
 /// If `program` uses `MID$` statement-form assignment anywhere (top-level

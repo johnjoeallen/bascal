@@ -2677,7 +2677,7 @@ items[1] = { name: "widget" }
 items.close()
 end
 "#;
-        let (lowered, _) = crate::records::lower(parse(source)).expect("should lower");
+        let (lowered, _, _) = crate::records::lower(parse(source)).expect("should lower");
         let msgs: Vec<String> = check_legacy_forms(&lowered)
             .into_iter()
             .map(|d| d.message)

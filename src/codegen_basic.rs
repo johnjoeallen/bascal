@@ -12,7 +12,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 // require-able library; see `lib::stdlib_search_roots`.
 pub(crate) const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
-    "str", "chr", "hex", "oct", "space", "environ", "command", "trim",
+    "str", "chr", "hex", "oct", "space", "environ", "command",
     // Multi-arg string (Expr::Call, but include for completeness)
     "left", "right", "mid", "instr", "format", "string", "input",
     // Single-arg numeric (no suffix → Expr::Call already, but included for safety)

@@ -118,10 +118,47 @@ def _compile_basic(source):
             return f.read().splitlines()
 
 
+# Libraries the compiler loads for the program on its own (a string field read
+# back out of a record file calls ltrim/rtrim). Their header comments and
+# subroutines are not what a doc example is about.
+IMPLICIT_LIBRARIES = ["ltrim", "rtrim"]
+
+
+@functools.lru_cache(maxsize=None)
+def implicit_library_comments():
+    comments = set()
+    for name in IMPLICIT_LIBRARIES:
+        path = os.path.join(ROOT, "com", "bascal", "stdlib", name + ".bcl")
+        for line in open(path):
+            if line.startswith("//"):
+                comments.add("' " + line[2:].strip())
+    return comments
+
+
+def without_implicit_libraries(lines):
+    kept = []
+    skipping = None
+    for line in lines:
+        text = strip_no(line)
+        if skipping:
+            if text == "' end function " + skipping:
+                skipping = None
+            continue
+        m = re.match(r"^' function (%s)\$" % "|".join(IMPLICIT_LIBRARIES), text)
+        if m:
+            skipping = m.group(1) + "$"
+            continue
+        if text in implicit_library_comments():
+            continue
+        kept.append(line)
+    return kept
+
+
 def body_lines(output):
-    """Drop the two header comments and the final END."""
+    """Drop the two header comments, the final END and implicit library code."""
     lines = [l for l in output if l.strip()]
     lines = [l for l in lines if not re.match(r"^\d*\s*' (BASCAL generated BASIC|Functions are transpiled)", l)]
+    lines = without_implicit_libraries(lines)
     while lines and re.match(r"^\d*\s*END\s*$", lines[-1]):
         lines.pop()
     return lines

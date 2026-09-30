@@ -1295,18 +1295,64 @@ end
         assert!(output.contains("GET #1, i"));
         // CVI/CVL/CVS/CVD take no suffix at all on real MBASIC/BASCOM.
         assert!(output.contains("sid% = CVI(dbIdBuf$)"));
-        // RTRIM$ isn't a real MBASIC/BASCOM builtin either -- string fields
-        // are unpacked through an inline LEN/MID$/LEFT$ trim loop instead.
+        // RTRIM$ isn't a real MBASIC/BASCOM builtin either -- a left-aligned
+        // string field is unpacked through the com.bascal.stdlib rtrim method.
         assert!(
-            output.contains("snametrimi% = LEN(dbNameBuf$)"),
-            "string field unpacking should trim inline, not call RTRIM$:\n{output}"
+            output.contains("rtrimSelf0$ = dbNameBuf$"),
+            "string field unpacking should call the rtrim method:\n{output}"
         );
         assert!(
-            !output.to_ascii_uppercase().contains("RTRIM$"),
+            !output.lines().any(|line| {
+                !line.trim_start().trim_start_matches(|c: char| c.is_ascii_digit()).trim_start().starts_with('\'')
+                    && line.to_ascii_uppercase().contains("RTRIM$(")
+            }),
             "RTRIM$ isn't valid on real MBASIC/BASCOM:\n{output}"
         );
-        assert!(output.contains("sname$ = LEFT$(dbNameBuf$, snametrimi%)"));
         assert!(output.contains("sscore# = CVD(dbScoreBuf$)"));
+    }
+
+    #[test]
+    fn record_string_unpack_trims_the_side_its_alignment_pads() {
+        let source = r#"record R
+    name: string(8) lpad
+    tag: string(8) rpad
+end record
+file db as R = open("align.dat")
+let s = db[1]
+print s.name + s.tag
+end
+"#;
+        let output = compile_source("align.bcl", source).expect("should compile");
+        // A left-aligned (LSET) field is padded on the right, an RSET one on the left.
+        assert!(output.contains("rtrimSelf0$ = dbNameBuf$"), "{output}");
+        assert!(output.contains("ltrimSelf0$ = dbTagBuf$"), "{output}");
+        assert!(!output.contains("ltrimSelf0$ = dbNameBuf$"), "{output}");
+        assert!(!output.contains("rtrimSelf0$ = dbTagBuf$"), "{output}");
+    }
+
+    #[test]
+    fn record_programs_that_never_read_a_string_field_load_no_trim_library() {
+        let source = r#"record R
+    name: string(8)
+end record
+file db as R = open("write_only.dat")
+db[1] = { name: "ab" }
+end
+"#;
+        let output = compile_source("write_only.bcl", source).expect("should compile");
+        assert!(!output.to_ascii_lowercase().contains("trim"), "{output}");
+    }
+
+    #[test]
+    fn stdlib_strings_provides_ltrim_rtrim_and_trim_once() {
+        let source = "program strs\nrequire com.bascal.stdlib.strings\nrequire com.bascal.stdlib.ltrim\n\
+                      s$ = \"  hi  \"\nprint trim$(s$); s$.ltrim(); s$.rtrim()\nend\n";
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("strs.bcl");
+        std::fs::write(&input, source).unwrap();
+        let output = compile_file(&input, &CompileOptions::new()).expect("should compile");
+        assert_eq!(output.matches("' function ltrim$").count(), 1, "{output}");
+        assert_eq!(output.matches("' function trim$").count(), 1, "{output}");
     }
 
     #[test]
@@ -1378,9 +1424,9 @@ end
         );
         assert!(
             // RTRIM$ isn't a real MBASIC/BASCOM builtin -- string fields are
-            // unpacked through an inline LEN/MID$/LEFT$ trim loop instead,
-            // and CVI/CVL/CVS/CVD take no suffix at all.
-            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
+            // unpacked through the stdlib rtrim method instead, and
+            // CVI/CVL/CVS/CVD take no suffix at all.
+            output.contains("rtrimSelf0$ = itemsNameBuf$") && output.contains("CVI(itemsQtyBuf$)"),
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(
@@ -1436,7 +1482,7 @@ end
             "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
         );
         assert!(
-            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
+            output.contains("rtrimSelf0$ = itemsNameBuf$") && output.contains("CVI(itemsQtyBuf$)"),
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(

@@ -1,0 +1,12 @@
+// String helpers that MBASIC/BASCOM 2.00 lack: ltrim$, rtrim$ and trim$. One
+// require gets all three; `require com.bascal.stdlib.ltrim` (or rtrim) still
+// works on its own, and requiring both never declares anything twice. See
+// ltrim.bcl and rtrim.bcl for why these are scalar methods.
+library strings
+
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+
+method trim[string]()
+    return ltrim$(rtrim$(self$))
+end method
