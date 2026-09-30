@@ -17601,3 +17601,9 @@ Iteration 5861 added regression tests for both.
 Design note: with the record transpile pass enabled for C, the typed stream aligns one-to-one with the AST siblings and C emits valid code, but through the generic `FIELD` buffer route rather than its record-aware typed helpers, which four C tests pin. That is a decision about C output, not a migration bug, so the pass stays off for C.
 
 Iteration 5862 ran the record transpile pass for the C target when a program declares no record types, so sequential `file` handles (`open ... for output`, `write`, `read`, `eof`, `close`) come from the typed IR. The typed expansion aligns one-to-one with the AST siblings and produces the same C. Record types still take C's own typed record helpers.
+
+Iteration 5863 added `eof(#ch)` on a literal channel and `CVI`/`CVL`/`CVS`/`CVD` of a `FIELD` string variable to the C typed numeric renderer.
+
+Iteration 5864 fixed the C one-argument call arm, which rendered its argument as a number before checking whether the name was a builtin, so a user function with a single string argument always declined; it now applies only to the builtin names. String-parameter calls with prelude-free string arguments render inside expressions.
+
+Iteration 5865 added regression tests for both.

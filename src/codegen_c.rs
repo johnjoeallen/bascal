@@ -5760,7 +5760,48 @@ fn render_c_semantic_numeric_expression_context(
         {
             render_c_semantic_array_bound(name, arguments, arrays?)
         }
-        ExprKind::Call { name, arguments } if arguments.len() == 1 => {
+        // `EOF(#ch)` on a literal channel.
+        ExprKind::Call { name, arguments }
+            if name.eq_ignore_ascii_case("eof")
+                && arguments.len() == 1
+                && matches!(&arguments[0].kind, ExprKind::Literal(_)) =>
+        {
+            let ExprKind::Literal(text) = &arguments[0].kind else {
+                return None;
+            };
+            let channel = text.parse::<i64>().ok().filter(|channel| *channel >= 1)?;
+            Some((format!("bcc_eof(bcc_files[{}])", channel - 1), false))
+        }
+        // `CVI`/`CVL`/`CVS`/`CVD` of a bare string variable (a `FIELD` buffer).
+        ExprKind::Call { name, arguments }
+            if arguments.len() == 1
+                && matches!(&arguments[0].kind, ExprKind::Name(_))
+                && arguments[0].value_type == crate::semantic_ir::SemanticValueType::String
+                && cv_unpack_fn(&BasicIdent::parse(name)).is_some() =>
+        {
+            let ExprKind::Name(variable) = &arguments[0].kind else {
+                return None;
+            };
+            let unpack = cv_unpack_fn(&BasicIdent::parse(name))?;
+            let variable = c_var_name(&BasicIdent::parse(variable), TypeSuffix::String);
+            Some((
+                format!("{unpack}({variable})"),
+                matches!(unpack, "bcc_cvs" | "bcc_cvd"),
+            ))
+        }
+        ExprKind::Call { name, arguments }
+            if arguments.len() == 1
+                && [
+                    "sqr", "sin", "cos", "tan", "atn", "log", "exp", "sgn", "abs", "int", "fix",
+                    "cint", "clng", "csng", "cdbl",
+                ]
+                .contains(
+                    &name
+                        .trim_end_matches(['%', '&', '!', '#', '$'])
+                        .to_ascii_lowercase()
+                        .as_str(),
+                ) =>
+        {
             let builtin = name.trim_end_matches(['%', '&', '!', '#', '$']);
             let (argument, is_float) = render_c_semantic_numeric_expression_context(
                 &arguments[0],
@@ -6073,7 +6114,6 @@ fn render_c_semantic_user_numeric_call(
             .iter()
             .skip(arguments.len())
             .any(|parameter| parameter.semantic_default.is_none())
-        || signature.params.iter().any(|parameter| parameter.is_string)
     {
         return None;
     }
@@ -6083,6 +6123,28 @@ fn render_c_semantic_user_numeric_call(
         let argument = arguments
             .get(index)
             .or(parameter.semantic_default.as_ref())?;
+        if parameter.is_string && parameter.array.is_none() {
+            // A string argument in an expression must render without a
+            // prelude (a literal, a variable, a plain concatenation).
+            if parameter.by_ref
+                || argument.value_type != crate::semantic_ir::SemanticValueType::String
+            {
+                return None;
+            }
+            let mut temp_counter = 0;
+            let (prelude, text) = render_c_semantic_string_expression_context(
+                argument,
+                needs_math,
+                &mut temp_counter,
+                arrays,
+                Some(functions),
+            )?;
+            if !prelude.is_empty() {
+                return None;
+            }
+            rendered_arguments.push(text);
+            continue;
+        }
         if parameter.array.is_some() {
             rendered_arguments.extend(render_c_semantic_array_argument(
                 parameter, argument, arrays,
@@ -29549,6 +29611,27 @@ mod dialect_tests {
         assert!(output.contains("printf(\"%d\\n\", 5)"), "{output}");
         assert!(output.contains("printf(\"%d\\n\", 4)"), "{output}");
         assert!(output.contains("printf(\"%d\\n\", 0)"), "{output}");
+    }
+
+    #[test]
+    fn c_semantic_call_with_a_string_argument_is_rendered_in_an_expression() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\nfunction f%(t$)\nreturn 0\nend function\na$ = \"xy\"\nprint 77\nprint 78\nend\n",
+            "program p\nfunction f%(t$)\nreturn len(t$)\nend function\na$ = \"xy\"\nprint f%(a$)\nr% = 1 + f%(\"lit\")\nend\n",
+        );
+        assert!(!output.contains("77") && !output.contains("78"), "AST print leaked: {output}");
+        assert!(output.contains("bf_i_f(bv_s_a)"), "{output}");
+        assert!(output.contains("bf_i_f(\"lit\")"), "{output}");
+    }
+
+    #[test]
+    fn c_semantic_eof_and_cv_unpack_are_rendered() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\nfield #1, 2 as b$\nx% = 0\ny% = 0\nend\n",
+            "program p\nfield #1, 2 as b$\nx% = eof(1)\ny% = cvi(b$)\nend\n",
+        );
+        assert!(output.contains("bcc_eof(bcc_files[0])"), "{output}");
+        assert!(output.contains("bcc_cvi(bv_s_b)"), "{output}");
     }
 
     #[test]
