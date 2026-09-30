@@ -633,6 +633,88 @@ fn reject_invalid_typed_semantics(
     }
 }
 
+/// Calls to names that are neither a user callable, a built-in, a declared
+/// array (or array parameter) nor a method. The BASIC target passes such names
+/// through to the BASIC dialect on purpose, so this is not part of the shared
+/// validation; the C and JVM targets cannot emit them at all and run it
+/// before code generation.
+pub fn reject_unknown_calls(module: &crate::semantic_ir::SemanticModule) -> Vec<Diagnostic> {
+    use crate::semantic_ir::{ExpressionKind, SemanticModule};
+    let mut diagnostics = Vec::new();
+    let mut declared_arrays: HashSet<String> = HashSet::new();
+    let base_name = |name: &str| {
+        name.trim_end_matches(['$', '%', '&', '!', '#'])
+            .to_ascii_lowercase()
+    };
+    declared_arrays.extend(
+        module
+            .top_level_dim_declarations()
+            .keys()
+            .map(|name| base_name(name)),
+    );
+    for callable in &module.callables {
+        declared_arrays.extend(callable.dim_declarations().keys().map(|name| base_name(name)));
+        declared_arrays.extend(
+            callable
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.array_axes > 0)
+                .map(|parameter| base_name(&parameter.name)),
+        );
+    }
+    // A parameter is a local name; how it is used is checked with more
+    // context (array rank and so on) later, so it is never reported here.
+    for callable in &module.callables {
+        declared_arrays.extend(callable.parameters.iter().map(|parameter| {
+            parameter
+                .name
+                .trim_end_matches(['$', '%', '&', '!', '#'])
+                .to_ascii_lowercase()
+        }));
+    }
+    let check = |source_index: usize,
+                 statements: &[crate::semantic_ir::SemanticStatement],
+                 diagnostics: &mut Vec<Diagnostic>| {
+        for call in SemanticModule::calls_in(statements) {
+            let ExpressionKind::Call { name, .. } = &call.kind else {
+                continue;
+            };
+            if module
+                .callables
+                .iter()
+                .any(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
+            {
+                continue;
+            }
+            let base = name
+                .trim_end_matches(['$', '%', '&', '!', '#'])
+                .to_ascii_lowercase();
+            let known = crate::codegen_basic::BASIC_BUILTINS.contains(&base.as_str())
+                || ["sizeof", "lbound", "ubound"].contains(&base.as_str())
+                || declared_arrays.contains(&base)
+                || name.contains('.');
+            if !known {
+                let position = module
+                    .sources
+                    .get(source_index)
+                    .map(|source| source.source_position(call.span))
+                    .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+                diagnostics.push(Diagnostic::error(
+                    position,
+                    format!("unknown function or array `{name}`"),
+                ));
+            }
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement), &mut diagnostics);
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body, &mut diagnostics);
+    }
+    diagnostics
+}
+
 /// Checks every call to a user callable against its declaration: the argument
 /// count must fit the parameters (defaults make trailing ones optional), and
 /// a `byref` scalar parameter needs a plain variable to write back to.

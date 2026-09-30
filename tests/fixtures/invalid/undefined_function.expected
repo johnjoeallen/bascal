@@ -1,4 +1,5 @@
-# gap: c, jvm report only a generic "not supported" message; give it a specific diagnostic
+# The BASIC targets deliberately pass an unrecognized function name through to
+# the BASIC dialect; C and the JVM cannot emit one, so they reject it up front.
 basic: ok
-c: Print is not supported by the minimal C backend yet
-jvm: Print is not supported by the minimal JVM backend yet
+c: unknown function or array `nosuch%`
+jvm: unknown function or array `nosuch%`

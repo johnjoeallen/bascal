@@ -248,6 +248,16 @@ fn compile_file_impl(
     for finding in semantic_warnings {
         eprintln!("{finding}");
     }
+    // The BASIC targets pass an unrecognized function name through to the
+    // BASIC dialect; C and the JVM cannot emit it, so say so up front.
+    if matches!(options.target, Target::C | Target::C64 | Target::Jvm) {
+        if let Some(module) = resolved.semantic_module.as_ref() {
+            let unknown = resolver::reject_unknown_calls(module);
+            if !unknown.is_empty() {
+                return Err(unknown);
+            }
+        }
+    }
     if matches!(options.target, Target::Basic | Target::Fbc) {
         let conflicts = if let Some(module) = resolved.semantic_module.as_ref() {
             codegen::check_generated_name_conflicts_semantic(module, &resolved.common_blocks)

@@ -1,0 +1,4 @@
+# See undefined_function.expected: BASIC passes unknown names through.
+basic: ok
+c: unknown function or array `helper%`
+jvm: unknown function or array `helper%`
