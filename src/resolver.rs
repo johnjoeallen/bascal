@@ -13,6 +13,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// AST scans that produce them still live in `codegen_basic` (they have
 /// other callers there); `resolve` just runs them once, up front, so no
 /// backend re-derives them.
+#[derive(Clone)]
 pub struct ResolvedProgram {
     pub(crate) program: Program,
     /// Generated semantic frontend output retained during backend migration.
@@ -92,6 +93,7 @@ impl ResolvedProgram {
 /// Semantic compilation keeps the resolved constant facts in the typed IR;
 /// this structure remains for AST-only callers and resolver diagnostics.
 /// The keying convention is documented on `ResolvedProgram::const_info`.
+#[derive(Clone)]
 pub struct ConstInfo {
     pub suffix: TypeSuffix,
     pub value: Expr,

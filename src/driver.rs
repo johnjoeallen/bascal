@@ -112,17 +112,28 @@ pub fn compile_source(
 /// `Target::C` -- see `codegen_c::GeneratedC`'s own doc comment for why
 /// that `.c` needs no paired file alongside it).
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
-    compile_file_impl(input, options, false)
+    compile_file_impl(input, options, AstUse::TypedFirst)
 }
 
-/// `compile_file`, optionally emptying the resolved AST's statement and
-/// function bodies before code generation. With `clear_ast` set, anything a
-/// backend still reads from the AST is missing from the output, which the
-/// tests use to measure how independent generation is of the legacy AST.
+/// How much of the resolved AST code generation may read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AstUse {
+    /// Generate from the typed module alone; fall back to the full resolved
+    /// program only when a backend cannot yet emit something from it.
+    TypedFirst,
+    /// The legacy AST-driven generation, never the typed-only attempt.
+    AstOnly,
+    /// The typed module alone; a backend that needs the AST fails.
+    TypedOnly,
+}
+
+/// `compile_file` with an explicit choice of how much AST generation may
+/// read; the tests use it to measure how independent generation is of the
+/// legacy AST.
 fn compile_file_impl(
     input: &Path,
     options: &CompileOptions,
-    clear_ast: bool,
+    ast_use: AstUse,
 ) -> Result<String, Vec<Diagnostic>> {
     let mut options = options.clone();
     if let Some(parent) = input.parent() {
@@ -223,9 +234,7 @@ fn compile_file_impl(
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;
-        // BASIC and the JVM consume the expanded primitives. C lowers record
-        // types through its own typed record helpers, so it only takes the
-        // expansion for programs with none (sequential file handles).
+        // Every backend consumes the expanded primitives.
         if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm | Target::C) {
             record_transpile::transpile(&mut module);
         }
@@ -236,13 +245,7 @@ fn compile_file_impl(
         }
         module
     });
-    let mut resolved = resolver::resolve_with_semantic(program, semantic_module)?;
-    if clear_ast {
-        resolved.program.statements.clear();
-        for function in &mut resolved.program.functions {
-            function.body.clear();
-        }
-    }
+    let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
     for finding in semantic_warnings {
         eprintln!("{finding}");
     }
@@ -256,12 +259,37 @@ fn compile_file_impl(
             return Err(conflicts);
         }
     }
+    // Generation is driven by the typed module; the resolved AST is only a
+    // compatibility fallback.
+    let generate = |resolved: &resolver::ResolvedProgram| {
+        generate_for_target(resolved, options, &synthesized_buffer_names)
+    };
+    if ast_use == AstUse::AstOnly {
+        return generate(&resolved);
+    }
+    let mut typed_only = resolved.clone();
+    typed_only.program.statements.clear();
+    for function in &mut typed_only.program.functions {
+        function.body.clear();
+    }
+    match (generate(&typed_only), ast_use) {
+        (Ok(output), _) => Ok(output),
+        (Err(error), AstUse::TypedOnly) => Err(error),
+        (Err(_), _) => generate(&resolved),
+    }
+}
+
+fn generate_for_target(
+    resolved: &resolver::ResolvedProgram,
+    options: &CompileOptions,
+    synthesized_buffer_names: &HashSet<String>,
+) -> Result<String, Vec<Diagnostic>> {
     match options.target {
         Target::Basic => {
             let basic = CodeGenerator::new()
                 .with_line_numbers(options.line_numbers)
-                .with_synthesized_buffer_names(synthesized_buffer_names)
-                .generate(&resolved)?;
+                .with_synthesized_buffer_names(synthesized_buffer_names.clone())
+                .generate(resolved)?;
             Ok(basic)
         }
         Target::Fbc => {
@@ -272,7 +300,7 @@ fn compile_file_impl(
             reject_semantic_fbc_incompatible_constructs(module)?;
             let basic = CodeGenerator::new()
                 .with_line_numbers(options.line_numbers)
-                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .with_synthesized_buffer_names(synthesized_buffer_names.clone())
                 .generate(&resolved)?;
             Ok(basic)
         }
@@ -1130,8 +1158,8 @@ mod semantic_driver_differential_tests {
         corpus_programs()
             .into_iter()
             .filter(|program| {
-                let with_ast = compile_file_impl(program, &options, false);
-                let without_ast = compile_file_impl(program, &options, true);
+                let with_ast = compile_file_impl(program, &options, AstUse::AstOnly);
+                let without_ast = compile_file_impl(program, &options, AstUse::TypedOnly);
                 match (with_ast, without_ast) {
                     (Ok(with_ast), Ok(without_ast)) => with_ast != without_ast,
                     // A program the target rejects has no output to depend on
@@ -1162,7 +1190,7 @@ mod semantic_driver_differential_tests {
             ..CompileOptions::new()
         };
         let program = root.join("tests/fixtures/conformance/nested_on_gosub.bcl");
-        let diagnostics = compile_file_impl(&program, &options, true)
+        let diagnostics = compile_file_impl(&program, &options, AstUse::TypedOnly)
             .expect_err("gosub is rejected without the AST too");
         assert!(
             diagnostics.iter().any(|d| d.message.contains("GOSUB is not supported")),
@@ -1191,7 +1219,7 @@ mod semantic_driver_differential_tests {
             ..CompileOptions::new()
         };
         let program = root.join("tests/fixtures/conformance/jvm_try_filter.bcl");
-        let output = compile_file_impl(&program, &options, true)
+        let output = compile_file_impl(&program, &options, AstUse::TypedOnly)
             .expect("try/catch compiles for C without the AST");
         assert!(output.contains("bcc_on_error_target = 0;"), "{output}");
         assert!(output.contains("if (!((bcc_err == 6) || (bcc_err == 7)))"), "{output}");
@@ -1238,7 +1266,11 @@ mod semantic_driver_differential_tests {
         };
         let program = root.join(std::env::var("DIFF_FILE").expect("DIFF_FILE"));
         let render = |clear_ast| {
-            compile_file_impl(&program, &options, clear_ast)
+            compile_file_impl(
+                &program,
+                &options,
+                if clear_ast { AstUse::TypedOnly } else { AstUse::AstOnly },
+            )
                 .unwrap_or_else(|error| format!("ERR {error:?}"))
         };
         fs::create_dir_all(root.join("tmp")).unwrap();
