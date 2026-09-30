@@ -29,6 +29,14 @@ use crate::semantic_ir::*;
 /// was rewritten, `false` (with `module` unchanged) if the program uses
 /// nothing the pass handles or uses something it does not yet model.
 pub fn transpile(module: &mut SemanticModule) -> bool {
+    transpile_reporting(module).is_some()
+}
+
+/// `transpile`, returning `None` when nothing was rewritten and otherwise
+/// whether the output calls the `com.bascal.stdlib` `ltrim`/`rtrim` methods
+/// (reading a string field back out of a record file), which the caller must
+/// then load, as MBASIC/BASCOM has no `LTRIM$`/`RTRIM$` of its own.
+pub fn transpile_reporting(module: &mut SemanticModule) -> Option<bool> {
     if module.records.is_empty()
         && !declares_file(&module.statements)
         && !module
@@ -36,15 +44,15 @@ pub fn transpile(module: &mut SemanticModule) -> bool {
             .iter()
             .any(|callable| declares_file(&callable.body))
     {
-        return false;
+        return None;
     }
     match Transpiler::run(module) {
-        Some(rewritten) => {
+        Some((rewritten, uses_trim)) => {
             *module = rewritten;
             module.records_transpiled = true;
-            true
+            Some(uses_trim)
         }
-        None => false,
+        None => None,
     }
 }
 
@@ -100,10 +108,12 @@ struct Transpiler<'a> {
     current_function: Option<String>,
     current_globals: HashSet<String>,
     unsupported: bool,
+    /// Set once a string field is unpacked with `ltrim`/`rtrim`.
+    uses_trim: bool,
 }
 
 impl<'a> Transpiler<'a> {
-    fn run(source: &'a SemanticModule) -> Option<SemanticModule> {
+    fn run(source: &'a SemanticModule) -> Option<(SemanticModule, bool)> {
         let mut transpiler = Transpiler {
             source,
             records: HashMap::new(),
@@ -114,6 +124,7 @@ impl<'a> Transpiler<'a> {
             current_function: None,
             current_globals: HashSet::new(),
             unsupported: false,
+            uses_trim: false,
         };
         transpiler.build_records()?;
         let record_methods = transpiler.build_methods()?;
@@ -165,7 +176,7 @@ impl<'a> Transpiler<'a> {
         if transpiler.unsupported {
             None
         } else {
-            Some(module)
+            Some((module, transpiler.uses_trim))
         }
     }
 
@@ -1031,16 +1042,31 @@ impl<'a> Transpiler<'a> {
                     call(function, vec![buffer], target.value_type, span),
                     span,
                 )),
-                None => out.extend(trim_statements(
-                    &buffer,
-                    &name_expr(
-                        &format!("{}%", camel_join(&[variable, &field.name, "trimI"])),
-                        SemanticValueType::Integer,
+                // Strip the padding the field was stored with: trailing
+                // spaces for a left-aligned (LSET) field, leading spaces for
+                // a right-aligned (RSET) one. MBASIC/BASCOM has no RTRIM$ or
+                // LTRIM$, so these are com.bascal.stdlib.strings methods.
+                None => {
+                    self.uses_trim = true;
+                    let trim = match layout.kind {
+                        LoweredRecordFieldKind::String { right_aligned: true } => "ltrim",
+                        _ => "rtrim",
+                    };
+                    out.push(assign(
+                        target.clone(),
+                        Expression {
+                            kind: ExpressionKind::Member {
+                                base: Some(Box::new(buffer)),
+                                member: trim.to_string(),
+                                arguments: Some(Vec::new()),
+                            },
+                            span,
+                            value_type: SemanticValueType::String,
+                            record_type: None,
+                        },
                         span,
-                    ),
-                    &target,
-                    span,
-                )),
+                    ));
+                }
             }
         }
         if let FileKind::Record(record_type) = info.kind {
@@ -1512,88 +1538,6 @@ fn value_type_of(suffix: TypeSuffix) -> SemanticValueType {
     }
 }
 
-fn binary(
-    left: Expression,
-    operator: &str,
-    right: Expression,
-    value_type: SemanticValueType,
-    span: SourceSpan,
-) -> Expression {
-    Expression {
-        kind: ExpressionKind::Binary {
-            left: Box::new(left),
-            operator: operator.to_string(),
-            right: Box::new(right),
-        },
-        span,
-        value_type,
-        record_type: None,
-    }
-}
-
-/// `counter = LEN(buf$) : WHILE counter > 0 && MID$(buf$, counter, 1) = " " :
-/// counter = counter - 1 : WEND : target$ = LEFT$(buf$, counter)` -- an inline
-/// right-trim built from `LEN`/`MID$`/`LEFT$`, which every target has.
-fn trim_statements(
-    buffer: &Expression,
-    counter: &Expression,
-    target: &Expression,
-    span: SourceSpan,
-) -> Vec<SemanticStatement> {
-    let integer = SemanticValueType::Integer;
-    let init = assign(
-        counter.clone(),
-        call("len", vec![buffer.clone()], integer, span),
-        span,
-    );
-    let condition = binary(
-        binary(counter.clone(), ">", int(0, span), integer, span),
-        "&&",
-        binary(
-            call(
-                "mid$",
-                vec![buffer.clone(), counter.clone(), int(1, span)],
-                SemanticValueType::String,
-                span,
-            ),
-            "=",
-            Expression {
-                kind: ExpressionKind::Literal("\" \"".to_string()),
-                span,
-                value_type: SemanticValueType::String,
-                record_type: None,
-            },
-            integer,
-            span,
-        ),
-        integer,
-        span,
-    );
-    let decrement = assign(
-        counter.clone(),
-        binary(counter.clone(), "-", int(1, span), integer, span),
-        span,
-    );
-    let while_loop = statement_of(
-        SemanticStatementKind::While {
-            condition,
-            body: vec![decrement],
-        },
-        span,
-    );
-    let finalize = assign(
-        target.clone(),
-        call(
-            "left$",
-            vec![buffer.clone(), counter.clone()],
-            SemanticValueType::String,
-            span,
-        ),
-        span,
-    );
-    vec![init, while_loop, finalize]
-}
-
 /// Whether any statement, at any depth, declares a `file`.
 fn declares_file(statements: &[SemanticStatement]) -> bool {
     statements.iter().any(|statement| match &statement.kind {
@@ -1793,8 +1737,8 @@ mod tests {
             shape(&module)[3..],
             [
                 "comment", "get", // read
-                "assign", "while", "assign", // flag: trim
-                "assign", "while", "assign", // desc: trim
+                "assign", // flag: rtrim
+                "assign", // desc: rtrim
                 "assign", "assign", // qty, price: unpack
                 "print", "end"
             ]

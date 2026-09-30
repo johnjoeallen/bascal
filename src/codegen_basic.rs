@@ -12,7 +12,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 // require-able library; see `lib::stdlib_search_roots`.
 pub(crate) const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
-    "str", "chr", "hex", "oct", "space", "environ", "command", "trim",
+    "str", "chr", "hex", "oct", "space", "environ", "command",
     // Multi-arg string (Expr::Call, but include for completeness)
     "left", "right", "mid", "instr", "format", "string", "input",
     // Single-arg numeric (no suffix → Expr::Call already, but included for safety)
@@ -2116,7 +2116,7 @@ mod tests {
 
     #[test]
     fn basic_record_program_is_emitted_from_typed_ir_without_the_ast_statements() {
-        let source = "record Part\n    desc: string(20)\n    qty: int16\nend record\n\
+        let source = "method rtrim$[string]()\n    return self$\nend method\nrecord Part\n    desc: string(20)\n    qty: int16\nend record\n\
              file inv as Part = open(\"inven.dat\")\n\
              inv[1] = { desc: \"x\", qty: 3 }\n\
              let p = inv[1]\nprint p.desc\ninv.close()\nend\n";
@@ -2147,7 +2147,8 @@ mod tests {
             "lset invdescbuf$ = \"x\"",
             "put #1, 1",
             "get #1, 1",
-            "pdesc$ = left$(invdescbuf$",
+            "rtrimself0$ = invdescbuf$",
+            "pdesc$ = bcct",
             "close #1",
         ] {
             assert!(folded.contains(expected), "missing {expected}:\n{output}");

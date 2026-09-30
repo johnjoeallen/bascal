@@ -100,16 +100,13 @@ FOR i! = 3 TO 1 STEP -1
     ' let s = db[...]  (whole-record read)
     GET #1, i
     sid% = CVI(dbIdBuf$)
-    snametrimi% = LEN(dbNameBuf$)
-10 IF (snametrimi% > 0) = 0 THEN GOTO 20
-    IF (MID$(dbNameBuf$, snametrimi%, 1) = " ") = 0 THEN GOTO 20
-        snametrimi% = snametrimi% - 1
-    GOTO 10
-20 REM END WHILE
-    sname$ = LEFT$(dbNameBuf$, snametrimi%)
+    rtrimSelf0$ = dbNameBuf$
+    GOSUB 50
+    BCCT2$ = rtrimResult0$
+    sname$ = BCCT2$
     sscore# = CVD(dbScoreBuf$)
     PRINT (((("[" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
-30 NEXT i!
+10 NEXT i!
 ```
 
 </div>
@@ -228,13 +225,10 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 ' let carol = db[...]  (whole-record read)
 GET #1, 3
 carolid% = CVI(dbIdBuf$)
-carolnametrimi% = LEN(dbNameBuf$)
-10 IF (carolnametrimi% > 0) = 0 THEN GOTO 20
-IF (MID$(dbNameBuf$, carolnametrimi%, 1) = " ") = 0 THEN GOTO 20
-    carolnametrimi% = carolnametrimi% - 1
-GOTO 10
-20 REM END WHILE
-carolname$ = LEFT$(dbNameBuf$, carolnametrimi%)
+rtrimSelf0$ = dbNameBuf$
+GOSUB 40
+BCCT1$ = rtrimResult0$
+carolname$ = BCCT1$
 carolscore# = CVD(dbScoreBuf$)
 carolname$ = "Carol Jones"
 carolscore# = 88.0

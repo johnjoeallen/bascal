@@ -1690,20 +1690,21 @@ impl Lowerer {
                     value: unpacked,
                 });
             } else {
-                // Real MBASIC/BASCOM has no RTRIM$ builtin -- strip the
-                // trailing space padding LSET left in the fixed-width
-                // buffer with an inline scan instead, built directly out
-                // of LEN/MID$/LEFT$, which every target actually has.
-                let counter_ident = BasicIdent {
-                    name: camel_join(&[&target.name, &f.name, "trimI"]),
-                    suffix: Some(TypeSuffix::Integer),
+                // A field LSET left-aligned is padded on the right, an RSET
+                // one on the left: strip that padding with the matching
+                // com.bascal.stdlib.strings method (MBASIC/BASCOM has no
+                // RTRIM$/LTRIM$ of its own).
+                let trim = match &f.ty {
+                    RecordFieldType::Str(_, RecordStringAlignment::Right) => "ltrim$",
+                    _ => "rtrim$",
                 };
-                record_locals.push(crate::semantic_ir::LoweredRecordLocal {
-                    name: counter_ident.name.clone(),
-                    value_type: crate::semantic_ir::SemanticValueType::Integer,
-                    owner: file_owner.clone(),
+                out.push(Statement::Assignment {
+                    target: Expr::Ident(scalar_ident),
+                    value: Expr::Call {
+                        name: BasicIdent::parse(trim),
+                        args: vec![Expr::Ident(buf_ident)],
+                    },
                 });
-                out.extend(trim_statements(&buf_ident, &counter_ident, &scalar_ident));
             }
         }
 
@@ -2527,73 +2528,6 @@ fn pack_expr(ty: &RecordFieldType, value: Expr) -> Expr {
     } else {
         value
     }
-}
-
-/// Builds `i% = LEN(buf$) : WHILE i% > 0 AND MID$(buf$,i%,1) = " " : i% = i%
-/// - 1 : WEND : target$ = LEFT$(buf$, i%)` -- a right-trim, done inline
-/// with LEN/MID$/LEFT$, since real MBASIC/BASCOM has no RTRIM$ builtin.
-/// The `AND` here has to be the short-circuit `AndAnd` form: once `i% =
-/// 0`, evaluating `MID$(buf$, 0, 1)` is itself a runtime error, so the
-/// second operand must never be reached once the first is false.
-fn trim_statements(
-    buf_ident: &BasicIdent,
-    counter_ident: &BasicIdent,
-    target_ident: &BasicIdent,
-) -> Vec<Statement> {
-    let buf = || Expr::Ident(buf_ident.clone());
-    let counter = || Expr::Ident(counter_ident.clone());
-
-    let init = Statement::Assignment {
-        target: counter(),
-        value: Expr::Call {
-            name: BasicIdent::parse("len"),
-            args: vec![buf()],
-        },
-    };
-
-    let condition = Expr::Binary {
-        left: Box::new(Expr::Binary {
-            left: Box::new(counter()),
-            op: BinaryOp::Gt,
-            right: Box::new(Expr::Integer(0)),
-        }),
-        op: BinaryOp::AndAnd,
-        right: Box::new(Expr::Binary {
-            left: Box::new(Expr::Call {
-                name: BasicIdent::parse("mid$"),
-                args: vec![buf(), counter(), Expr::Integer(1)],
-            }),
-            op: BinaryOp::Eq,
-            right: Box::new(Expr::String(" ".to_string())),
-        }),
-    };
-
-    let decrement = Statement::Assignment {
-        target: counter(),
-        value: Expr::Binary {
-            left: Box::new(counter()),
-            op: BinaryOp::Sub,
-            right: Box::new(Expr::Integer(1)),
-        },
-    };
-
-    let while_loop = Statement::While {
-        condition,
-        // Synthesized bookkeeping, never user-written source -- no real
-        // position to report, so this inner statement gets the same
-        // placeholder `generated_pos()` records.rs's own diagnostics use.
-        body: vec![Stmt::new(decrement, generated_pos())],
-    };
-
-    let finalize = Statement::Assignment {
-        target: Expr::Ident(target_ident.clone()),
-        value: Expr::Call {
-            name: BasicIdent::parse("left$"),
-            args: vec![buf(), counter()],
-        },
-    };
-
-    vec![init, while_loop, finalize]
 }
 
 /// Collects `global` declarations at any nesting depth in a callable body.

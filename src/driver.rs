@@ -82,15 +82,23 @@ pub fn compile_source(
     let filename = filename.into();
     let program = parse_source(filename.clone(), source)?;
     let lower::Lowered {
-        program,
+        mut program,
         synthesized_buffer_names,
         lowered_record_files,
     } = lower::lower(program)?;
     let mut semantic_module = semantic_ir::parse_and_adapt_named(filename.clone(), source)
-        .map_err(|error| vec![semantic_ir::parse_diagnostic(filename, &error)])?;
+        .map_err(|error| vec![semantic_ir::parse_diagnostic(filename.clone(), &error)])?;
     semantic_module.lowered_record_files = lowered_record_files;
     // `compile_source` always generates BASIC.
-    record_transpile::transpile(&mut semantic_module);
+    transpile_records(
+        Path::new(&filename),
+        &CompileOptions::default(),
+        &mut program,
+        &mut semantic_module,
+        &mut HashSet::new(),
+        &mut HashSet::new(),
+        &mut Vec::new(),
+    )?;
     let resolved = resolver::resolve_with_semantic(program, Some(semantic_module))?;
     let module = resolved
         .semantic_module
@@ -206,11 +214,12 @@ fn compile_file_impl(
     // backends receive the resolved typed IR with AST source locations and
     // compatibility metadata.
     let mut semantic_warnings = Vec::new();
+    let mut semantic_visited = HashSet::new();
     let semantic_module = load_semantic_module_recursive(
         input,
         true,
         options,
-        &mut HashSet::new(),
+        &mut semantic_visited,
         &mut semantic_warnings,
     )?;
 
@@ -223,7 +232,7 @@ fn compile_file_impl(
     }
 
     let lower::Lowered {
-        program,
+        mut program,
         synthesized_buffer_names,
         lowered_record_files,
     } = lower::lower(program)?;
@@ -235,7 +244,15 @@ fn compile_file_impl(
         module.lowered_record_files = lowered_record_files;
         // Every backend consumes the expanded primitives.
         if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm | Target::C) {
-            record_transpile::transpile(&mut module);
+            transpile_records(
+                input,
+                options,
+                &mut program,
+                &mut module,
+                &mut visited,
+                &mut semantic_visited,
+                &mut semantic_warnings,
+            )?;
         }
         if options.target == Target::C {
             // C storage needs a concrete type for every variable.
@@ -2482,6 +2499,38 @@ pub(crate) fn stdlib_search_roots() -> Vec<PathBuf> {
     }
     roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     roots
+}
+
+/// The libraries the record/file transpile calls without the program saying
+/// so: unpacking a string field is `ltrim`/`rtrim`, which MBASIC/BASCOM lack.
+const IMPLICIT_TRIM_LIBRARIES: [&str; 2] = ["com.bascal.stdlib.ltrim", "com.bascal.stdlib.rtrim"];
+
+/// Transpile the record/file DSL in `module`, then load
+/// `IMPLICIT_TRIM_LIBRARIES` ahead of the program if the result calls them. A
+/// library the program already required is not loaded twice.
+fn transpile_records(
+    input: &Path,
+    options: &CompileOptions,
+    program: &mut ast::Program,
+    module: &mut semantic_ir::SemanticModule,
+    ast_visited: &mut HashSet<PathBuf>,
+    semantic_visited: &mut HashSet<PathBuf>,
+    warnings: &mut Vec<Diagnostic>,
+) -> Result<(), Vec<Diagnostic>> {
+    if record_transpile::transpile_reporting(module) != Some(true) {
+        return Ok(());
+    }
+    for symbol in IMPLICIT_TRIM_LIBRARIES.iter().rev() {
+        let path = resolve_required_symbol(symbol, input, options)?;
+        let dependency = load_program_recursive(&path, false, options, ast_visited)?;
+        program.statements.splice(0..0, dependency.statements);
+        program.functions.splice(0..0, dependency.functions);
+        program.records.splice(0..0, dependency.records);
+        let dependency =
+            load_semantic_module_recursive(&path, false, options, semantic_visited, warnings)?;
+        module.prepend_dependency(dependency);
+    }
+    Ok(())
 }
 
 pub(crate) fn normalize_path(path: &Path) -> PathBuf {

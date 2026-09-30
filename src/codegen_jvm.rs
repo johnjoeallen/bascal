@@ -11957,7 +11957,7 @@ mod tests {
     }
 
     fn record_prefix() -> &'static str {
-        "record Part\n    desc: string(20)\n    qty: int16\n    price: float32\nend record\nfile inv as Part = open(\"inven.dat\")\n"
+        "method rtrim$[string]()\n    return self$\nend method\nrecord Part\n    desc: string(20)\n    qty: int16\n    price: float32\nend record\nfile inv as Part = open(\"inven.dat\")\n"
     }
 
     #[test]
