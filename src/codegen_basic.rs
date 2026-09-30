@@ -4974,9 +4974,9 @@ fn basic_semantic_dim(
             return None;
         }
         let ident = BasicIdent::parse(&declaration.name);
-        let type_clause = ident
-            .suffix
-            .is_none()
+        // Only an explicit `as <type>` becomes a type clause; a bare `dim x`
+        // stays `DIM x` (the resolver's default of single is not written out).
+        let type_clause = (ident.suffix.is_none() && declaration.type_annotation.is_some())
             .then(|| semantic_dim_type_name(declaration.element_type))
             .flatten()
             .map(|value| format!(" AS {value}"))
