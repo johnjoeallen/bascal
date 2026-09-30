@@ -1,5 +1,3 @@
-# The BASIC targets deliberately pass an unrecognized function name through to
-# the BASIC dialect; C and the JVM cannot emit one, so they reject it up front.
-basic: ok
-c: unknown function or array `nosuch%`
-jvm: unknown function or array `nosuch%`
+# A call to a name that is neither a built-in nor a user-defined function is an
+# error on every target.
+all: unknown function or array `nosuch%`

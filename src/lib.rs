@@ -941,21 +941,24 @@ end
         // lookup -- the real, type-checked fallback lives entirely in
         // records.rs's `try_ordinary_call_as_method` now. A mismatched
         // call falls through to the same "unknown function" passthrough
-        // any genuinely-undeclared identifier already gets under
-        // --target basic (trusting the real BASIC compiler to catch it),
-        // and a hard resolver-level error under --target c.
+        // any genuinely-undeclared identifier gets -- a hard error on every
+        // target.
         let source = "method ltrim$[string]()\n    return self$\nend method\n\
                        n% = 5\nprint ltrim$(n%)\nend\n";
-        let basic = compile_source("mismatched_receiver.bcl", source).expect("should compile");
+        let basic = compile_source("mismatched_receiver.bcl", source)
+            .expect_err("a call with no matching callable is an error");
         assert!(
-            !basic.contains("ltrimSelf0$ = n%"),
-            "a numeric argument must never be silently assigned into ltrim's string self:\n{basic}"
+            basic
+                .iter()
+                .any(|d| d.message.contains("unknown function or array `ltrim$`")),
+            "a numeric argument must never resolve to ltrim's string receiver: {basic:?}"
         );
-
         let c_err = compile_source_via_c_target_err(source);
         assert!(
-            !c_err.is_empty(),
-            "the C target should reject the mismatched call outright"
+            c_err
+                .iter()
+                .any(|d| d.message.contains("unknown function or array `ltrim$`")),
+            "the C target should reject the mismatched call outright: {c_err:?}"
         );
     }
 
@@ -1025,13 +1028,16 @@ end
 
     #[test]
     fn compiles_sort_driver_sample() {
-        let source = include_str!("../examples/sort_driver/sort_driver.bcl");
-        let output = compile_source("examples/sort_driver/sort_driver.bcl", source)
-            .expect("sample should compile");
-        assert!(output.contains("' require com.bascal.sort.bubbleSort"));
-        // Without the sort library bubbleSort% is not in the symbol table;
-        // it is emitted lowercase like any other user symbol, not uppercased.
-        assert!(output.contains("bubblesort%(bubbledata%)"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("examples/sort_driver/sort_driver.bcl");
+        let output = compile_file(&path, &CompileOptions::new()).unwrap_or_else(|diagnostics| {
+            panic!(
+                "sample should compile: {}",
+                diagnostics.iter().map(|d| d.to_string()).collect::<String>()
+            )
+        });
+        // The sort library is loaded, so `bubbleSort%` is a real callable.
+        assert!(output.contains("bubblesort"), "{output}");
         assert!(output.contains("END"));
     }
 

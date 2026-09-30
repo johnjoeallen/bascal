@@ -26005,7 +26005,7 @@ mod dialect_tests {
             "matched AST assignment wasn't used: {main}"
         );
         assert!(
-            !main.contains("unknownbuiltin"),
+            !main.contains("environ"),
             "unsupported semantic expression partially emitted: {main}"
         );
     }
@@ -26065,7 +26065,7 @@ mod dialect_tests {
             Some(
                 crate::semantic_ir::parse_and_adapt_named(
                     "c_discarded_unknown_expression.bcl",
-                    "unknownbuiltin(2)\nend\n",
+                    "environ$(2)\nend\n",
                 )
                 .unwrap(),
             ),

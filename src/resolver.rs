@@ -402,6 +402,7 @@ fn validate_with_semantic(
     if let Some(module) = semantic_module {
         reject_unknown_callable_parameter_annotations(module, &mut diagnostics);
         reject_invalid_typed_calls(module, &mut diagnostics);
+        diagnostics.extend(reject_unknown_calls(module));
         reject_invalid_typed_semantics(module, &mut diagnostics);
     }
 
@@ -634,11 +635,8 @@ fn reject_invalid_typed_semantics(
 }
 
 /// Calls to names that are neither a user callable, a built-in, a declared
-/// array (or array parameter) nor a method. The BASIC target passes such names
-/// through to the BASIC dialect on purpose, so this is not part of the shared
-/// validation; the C and JVM targets cannot emit them at all and run it
-/// before code generation.
-pub fn reject_unknown_calls(module: &crate::semantic_ir::SemanticModule) -> Vec<Diagnostic> {
+/// array (or array parameter) nor a method are errors on every target.
+fn reject_unknown_calls(module: &crate::semantic_ir::SemanticModule) -> Vec<Diagnostic> {
     use crate::semantic_ir::{ExpressionKind, SemanticModule};
     let mut diagnostics = Vec::new();
     let mut declared_arrays: HashSet<String> = HashSet::new();
