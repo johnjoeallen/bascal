@@ -164,6 +164,15 @@ groups = ["basic"]
 expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.examples.c_print_without_trailing_newline_flushes_stdout"
+kind = "test"
+source = "examples"
+name = "c_print_without_trailing_newline_flushes_stdout"
+description = "c_print_without_trailing_newline_flushes_stdout"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
 id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"
 kind = "test"
 source = "examples"
@@ -196,6 +205,15 @@ kind = "test"
 source = "examples"
 name = "freebasic_runs_builtin_scalar_methods_when_available"
 description = "Built-in scalar methods under FreeBASIC"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.freebasic_runs_continue_across_every_loop_kind_when_available"
+kind = "test"
+source = "examples"
+name = "freebasic_runs_continue_across_every_loop_kind_when_available"
+description = "freebasic_runs_continue_across_every_loop_kind_when_available"
 groups = ["tutorials", "basic", "c"]
 expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
 
@@ -245,6 +263,24 @@ groups = ["tutorials", "basic", "c"]
 expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.examples.gcc_runs_date_dollar_under_c_target_when_available"
+kind = "test"
+source = "examples"
+name = "gcc_runs_date_dollar_under_c_target_when_available"
+description = "gcc_runs_date_dollar_under_c_target_when_available"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+kind = "test"
+source = "examples"
+name = "gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+description = "gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
 id = "test.examples.gcc_runs_inventory_tutorial_under_c_target_when_available"
 kind = "test"
 source = "examples"
@@ -252,6 +288,15 @@ name = "gcc_runs_inventory_tutorial_under_c_target_when_available"
 description = "Interactive inventory case study"
 groups = ["c"]
 expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available"
+kind = "test"
+source = "examples"
+name = "gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available"
+description = "gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_remline_under_c_target_when_available"
@@ -272,11 +317,29 @@ groups = ["c"]
 expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.jvm_conformance.card_catalog_example_runs_under_jvm_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "card_catalog_example_runs_under_jvm_when_available"
+description = "card_catalog_example_runs_under_jvm_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
 id = "test.jvm_conformance.hello_world_transpiles_assembles_and_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "hello_world_transpiles_assembles_and_runs_when_available"
 description = "Hello-world assembly and execution"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_byref_scalar_parameters_write_back_to_the_caller_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_byref_scalar_parameters_write_back_to_the_caller_when_available"
+description = "jvm_byref_scalar_parameters_write_back_to_the_caller_when_available"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -295,6 +358,33 @@ kind = "test"
 source = "jvm_conformance"
 name = "jvm_catch_filters_and_source_bindings_run_when_available"
 description = "Catch filters and source bindings"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available"
+description = "jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_date_dollar_matches_mm_dd_yyyy_format_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_date_dollar_matches_mm_dd_yyyy_format_when_available"
+description = "jvm_date_dollar_matches_mm_dd_yyyy_format_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_double_to_string_rounds_to_six_significant_digits_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_double_to_string_rounds_to_six_significant_digits_when_available"
+description = "jvm_double_to_string_rounds_to_six_significant_digits_when_available"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -326,6 +416,78 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
 
 [[test]]
+id = "test.jvm_conformance.jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
+description = "jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_function_call_as_bare_statement_discards_its_result_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_function_call_as_bare_statement_discards_its_result_when_available"
+description = "jvm_function_call_as_bare_statement_discards_its_result_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_get_on_a_fresh_empty_file_does_not_throw_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_get_on_a_fresh_empty_file_does_not_throw_when_available"
+description = "jvm_get_on_a_fresh_empty_file_does_not_throw_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_inkey_polls_without_crashing_under_piped_input_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_inkey_polls_without_crashing_under_piped_input_when_available"
+description = "jvm_inkey_polls_without_crashing_under_piped_input_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_inkey_setup_does_not_disable_output_postprocessing"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_inkey_setup_does_not_disable_output_postprocessing"
+description = "jvm_inkey_setup_does_not_disable_output_postprocessing"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_input_after_inkey_reads_the_typed_value_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_input_after_inkey_reads_the_typed_value_when_available"
+description = "jvm_input_after_inkey_reads_the_typed_value_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_instr_and_stop_and_system_compile"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_instr_and_stop_and_system_compile"
+description = "jvm_instr_and_stop_and_system_compile"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+description = "jvm_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
 id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 kind = "test"
 source = "jvm_conformance"
@@ -335,22 +497,49 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
+id = "test.jvm_conformance.jvm_print_without_trailing_newline_flushes_stdout"
 kind = "test"
 source = "jvm_conformance"
-name = "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
-description = "BASCOM creates file; JVM validates binary compatibility"
-groups = ["core", "records", "jvm"]
-expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
+name = "jvm_print_without_trailing_newline_flushes_stdout"
+description = "jvm_print_without_trailing_newline_flushes_stdout"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes"
+id = "test.jvm_conformance.jvm_random_access_file_round_trips_when_available"
 kind = "test"
 source = "jvm_conformance"
-name = "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes"
-description = "JVM creates file; BASCOM validates binary compatibility"
-groups = ["core", "records", "jvm"]
-expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
+name = "jvm_random_access_file_round_trips_when_available"
+description = "jvm_random_access_file_round_trips_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_random_and_record_files_tutorial_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_random_and_record_files_tutorial_runs_when_available"
+description = "jvm_random_and_record_files_tutorial_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
+description = "jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available"
+description = "jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
@@ -471,13 +660,13 @@ groups = ["core", "basic", "c", "jvm", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
-id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access_file_records"
+id = "test.record_general_purpose.jvm_backend_compiles_random_access_file_records"
 kind = "test"
 source = "record_general_purpose"
-name = "jvm_backend_does_not_yet_support_random_access_file_records"
-description = "JVM random-file records produce the expected diagnostic"
-groups = ["jvm", "records"]
-expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
+name = "jvm_backend_compiles_random_access_file_records"
+description = "jvm_backend_compiles_random_access_file_records"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "test.record_general_purpose.nested_record_field_currently_fails"
@@ -516,11 +705,353 @@ groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
-id = "test.record_general_purpose.standalone_record_literal_currently_fails"
+id = "test.record_general_purpose.standalone_record_supports_init_assign_get_and_member_set"
 kind = "test"
 source = "record_general_purpose"
-name = "standalone_record_literal_currently_fails"
-description = "Standalone record literals are not yet supported"
+name = "standalone_record_supports_init_assign_get_and_member_set"
+description = "standalone_record_supports_init_assign_get_and_member_set"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.adventure_port_method_declarations_still_parse"
+kind = "test"
+source = "record_methods"
+name = "adventure_port_method_declarations_still_parse"
+description = "adventure_port_method_declarations_still_parse"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.assigning_between_unrelated_record_types_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "assigning_between_unrelated_record_types_is_rejected"
+description = "assigning_between_unrelated_record_types_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.builtin_scalar_method_syntax_is_unaffected"
+kind = "test"
+source = "record_methods"
+name = "builtin_scalar_method_syntax_is_unaffected"
+description = "builtin_scalar_method_syntax_is_unaffected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.colon_string_and_colon_dollar_are_equivalent"
+kind = "test"
+source = "record_methods"
+name = "colon_string_and_colon_dollar_are_equivalent"
+description = "colon_string_and_colon_dollar_are_equivalent"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_cycle_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "combines_cycle_is_rejected"
+description = "combines_cycle_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_does_not_combine_methods"
+kind = "test"
+source = "record_methods"
+name = "combines_does_not_combine_methods"
+description = "combines_does_not_combine_methods"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_does_not_imply_assignability"
+kind = "test"
+source = "record_methods"
+name = "combines_does_not_imply_assignability"
+description = "combines_does_not_imply_assignability"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_duplicate_field_between_source_and_local_declaration_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "combines_duplicate_field_between_source_and_local_declaration_is_rejected"
+description = "combines_duplicate_field_between_source_and_local_declaration_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_duplicate_field_between_two_sources_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "combines_duplicate_field_between_two_sources_is_rejected"
+description = "combines_duplicate_field_between_two_sources_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_duplicate_field_through_transitive_paths_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "combines_duplicate_field_through_transitive_paths_is_rejected"
+description = "combines_duplicate_field_through_transitive_paths_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_inline_method_stays_with_its_own_declaring_record"
+kind = "test"
+source = "record_methods"
+name = "combines_inline_method_stays_with_its_own_declaring_record"
+description = "combines_inline_method_stays_with_its_own_declaring_record"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_multiple_sources_all_contribute_fields"
+kind = "test"
+source = "record_methods"
+name = "combines_multiple_sources_all_contribute_fields"
+description = "combines_multiple_sources_all_contribute_fields"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_of_an_undeclared_record_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "combines_of_an_undeclared_record_is_rejected"
+description = "combines_of_an_undeclared_record_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_resolves_transitively_through_multiple_levels"
+kind = "test"
+source = "record_methods"
+name = "combines_resolves_transitively_through_multiple_levels"
+description = "combines_resolves_transitively_through_multiple_levels"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_runs_identically_on_c_and_jvm_when_available"
+kind = "test"
+source = "record_methods"
+name = "combines_runs_identically_on_c_and_jvm_when_available"
+description = "combines_runs_identically_on_c_and_jvm_when_available"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_single_source_contributes_its_fields"
+kind = "test"
+source = "record_methods"
+name = "combines_single_source_contributes_its_fields"
+description = "combines_single_source_contributes_its_fields"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.combines_with_its_own_explicitly_declared_method_works"
+kind = "test"
+source = "record_methods"
+name = "combines_with_its_own_explicitly_declared_method_works"
+description = "combines_with_its_own_explicitly_declared_method_works"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.every_suffix_shorthand_maps_through_the_existing_type_table"
+kind = "test"
+source = "record_methods"
+name = "every_suffix_shorthand_maps_through_the_existing_type_table"
+description = "every_suffix_shorthand_maps_through_the_existing_type_table"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.external_record_receiver_method_compiles_and_runs"
+kind = "test"
+source = "record_methods"
+name = "external_record_receiver_method_compiles_and_runs"
+description = "external_record_receiver_method_compiles_and_runs"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.external_scalar_receiver_method_compiles"
+kind = "test"
+source = "record_methods"
+name = "external_scalar_receiver_method_compiles"
+description = "external_scalar_receiver_method_compiles"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.inline_and_external_same_signature_is_a_duplicate_definition"
+kind = "test"
+source = "record_methods"
+name = "inline_and_external_same_signature_is_a_duplicate_definition"
+description = "inline_and_external_same_signature_is_a_duplicate_definition"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.inline_record_method_compiles_and_runs"
+kind = "test"
+source = "record_methods"
+name = "inline_record_method_compiles_and_runs"
+description = "inline_record_method_compiles_and_runs"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.jvm_lowering_uses_invokestatic_with_explicit_receiver_never_invokevirtual"
+kind = "test"
+source = "record_methods"
+name = "jvm_lowering_uses_invokestatic_with_explicit_receiver_never_invokevirtual"
+description = "jvm_lowering_uses_invokestatic_with_explicit_receiver_never_invokevirtual"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.jvm_record_method_runs_when_available"
+kind = "test"
+source = "record_methods"
+name = "jvm_record_method_runs_when_available"
+description = "jvm_record_method_runs_when_available"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.legacy_dual_type_bracket_form_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "legacy_dual_type_bracket_form_is_rejected"
+description = "legacy_dual_type_bracket_form_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.parser_accepts_bracket_receiver_with_dollar_shorthand_return"
+kind = "test"
+source = "record_methods"
+name = "parser_accepts_bracket_receiver_with_dollar_shorthand_return"
+description = "parser_accepts_bracket_receiver_with_dollar_shorthand_return"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.parser_accepts_bracket_receiver_with_named_return"
+kind = "test"
+source = "record_methods"
+name = "parser_accepts_bracket_receiver_with_named_return"
+description = "parser_accepts_bracket_receiver_with_named_return"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.parser_accepts_inline_record_method_with_dollar_shorthand_return"
+kind = "test"
+source = "record_methods"
+name = "parser_accepts_inline_record_method_with_dollar_shorthand_return"
+description = "parser_accepts_inline_record_method_with_dollar_shorthand_return"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.record_method_accepts_arguments"
+kind = "test"
+source = "record_methods"
+name = "record_method_accepts_arguments"
+description = "record_method_accepts_arguments"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.record_method_mutation_of_self_is_visible_to_the_caller"
+kind = "test"
+source = "record_methods"
+name = "record_method_mutation_of_self_is_visible_to_the_caller"
+description = "record_method_mutation_of_self_is_visible_to_the_caller"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type"
+kind = "test"
+source = "record_methods"
+name = "same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type"
+description = "same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.scalar_method_chaining_still_works"
+kind = "test"
+source = "record_methods"
+name = "scalar_method_chaining_still_works"
+description = "scalar_method_chaining_still_works"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.self_field_access_reads_the_receivers_own_field"
+kind = "test"
+source = "record_methods"
+name = "self_field_access_reads_the_receivers_own_field"
+description = "self_field_access_reads_the_receivers_own_field"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.spec_card_display_example_runs_identically_across_backends"
+kind = "test"
+source = "record_methods"
+name = "spec_card_display_example_runs_identically_across_backends"
+description = "spec_card_display_example_runs_identically_across_backends"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.suffix_and_declared_return_type_must_agree"
+kind = "test"
+source = "record_methods"
+name = "suffix_and_declared_return_type_must_agree"
+description = "suffix_and_declared_return_type_must_agree"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.unknown_receiver_type_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "unknown_receiver_type_is_rejected"
+description = "unknown_receiver_type_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.unrecognized_return_type_name_is_rejected"
+kind = "test"
+source = "record_methods"
+name = "unrecognized_return_type_name_is_rejected"
+description = "unrecognized_return_type_name_is_rejected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.zero_argument_record_method_compiles_and_runs"
+kind = "test"
+source = "record_methods"
+name = "zero_argument_record_method_compiles_and_runs"
+description = "zero_argument_record_method_compiles_and_runs"
 groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
