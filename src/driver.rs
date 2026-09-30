@@ -229,6 +229,11 @@ fn compile_file_impl(
         if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm | Target::C) {
             record_transpile::transpile(&mut module);
         }
+        if options.target == Target::C {
+            // C storage needs a concrete type for every variable.
+            module.bare_names_are_single = true;
+            module.annotate_types();
+        }
         module
     });
     let mut resolved = resolver::resolve_with_semantic(program, semantic_module)?;
@@ -671,6 +676,7 @@ fn load_semantic_module_recursive(
             statements: Vec::new(),
             statement_sources: Vec::new(),
             records_transpiled: false,
+            bare_names_are_single: false,
         });
     }
     let source = fs::read_to_string(&input).map_err(|error| {
@@ -683,11 +689,17 @@ fn load_semantic_module_recursive(
         .map_err(|error| vec![semantic_ir::parse_diagnostic(input.display().to_string(), &error)])?;
     warnings.extend(module.legacy_form_diagnostics());
     let dependencies = module.dependencies.clone();
-    // Each dependency is prepended, so walk the declarations backwards to
-    // retain the legacy loader's left-to-right sibling order.
-    for dependency in dependencies.into_iter().rev() {
+    // Load in declaration order so a library shared by two siblings lands
+    // where the first of them reaches it, as the legacy loader has it, then
+    // prepend backwards to retain the left-to-right sibling order.
+    let mut loaded = Vec::with_capacity(dependencies.len());
+    for dependency in &dependencies {
         let path = resolve_required_symbol(&dependency.path, &input, options)?;
-        let dependency = load_semantic_module_recursive(&path, false, options, visited, warnings)?;
+        loaded.push(load_semantic_module_recursive(
+            &path, false, options, visited, warnings,
+        )?);
+    }
+    for dependency in loaded.into_iter().rev() {
         module.prepend_dependency(dependency);
     }
     for dependency in &mut module.dependencies {
@@ -1156,6 +1168,26 @@ mod semantic_driver_differential_tests {
             diagnostics.iter().any(|d| d.message.contains("GOSUB is not supported")),
             "{diagnostics:?}"
         );
+    }
+
+    /// C is AST-independent except for `try`/`catch`, whose typed emitter is
+    /// not written yet: the AST-driven emitter still owns those programs.
+    #[test]
+    fn c_output_is_independent_of_the_ast_except_for_try() {
+        let dependent = ast_dependent_programs(Target::C);
+        let expected = [
+            "examples/adventure3000/stage12-refactored-bascal/adventure.bcl",
+            "examples/adventure3000/stage13-refactored-bascal/adventure.bcl",
+            "examples/adventure3000/stage14-refactored-bascal/adventure.bcl",
+            "examples/adventure3000/stage15-refactored-bascal/adventure.bcl",
+            "examples/adventure3000/stage16-refactored-bascal/adventure.bcl",
+            "examples/adventure3000/stage17-refactored-bascal/adventure.bcl",
+            "tests/fixtures/conformance/jvm_try.bcl",
+            "tests/fixtures/conformance/jvm_try_filter.bcl",
+            "tutorial/inventory.bcl",
+            "tutorial/portable_error_handling.bcl",
+        ];
+        assert_eq!(dependent, expected, "C AST-dependent programs changed");
     }
 
     /// The JVM equivalent: every corpus program the JVM target accepts emits

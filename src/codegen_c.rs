@@ -5806,6 +5806,27 @@ fn render_c_semantic_numeric_expression_context(
                 matches!(unpack, "bcc_cvs" | "bcc_cvd"),
             ))
         }
+        // `RND`/`RND(x)`; the no-argument form is `RND(1)`.
+        ExprKind::Call { name, arguments }
+            if name.eq_ignore_ascii_case("rnd")
+                && arguments.len() <= 1
+                && !functions.is_some_and(|functions| functions.contains_key(&fn_key(&BasicIdent::parse(name)))) =>
+        {
+            let argument = match arguments.first() {
+                Some(argument) => {
+                    let (inner, _) = render_c_semantic_numeric_expression_context(
+                        argument,
+                        needs_math,
+                        supports_float,
+                        arrays,
+                        functions,
+                    )?;
+                    format!("(double)({inner})")
+                }
+                None => "1.0".to_string(),
+            };
+            Some((format!("bcc_rnd({argument})"), true))
+        }
         ExprKind::Call { name, arguments }
             if arguments.len() == 1
                 && [
@@ -7952,6 +7973,36 @@ fn emit_c_semantic_for_body(
                     return false;
                 }
             }
+            Kind::Field {
+                channel,
+                bindings,
+                record_type,
+            } => {
+                if !apply_semantic_field_statement(
+                    channel,
+                    bindings,
+                    record_type.as_deref(),
+                    file_io,
+                ) {
+                    return false;
+                }
+            }
+            Kind::Lset { target, value } | Kind::Rset { target, value } => {
+                if !emit_c_semantic_field_string_assignment(
+                    target,
+                    value,
+                    matches!(&statement.kind, Kind::Rset { .. }),
+                    out,
+                    needs_math,
+                    temp_counter,
+                    file_io,
+                    arrays,
+                    functions,
+                    supports_float,
+                ) {
+                    return false;
+                }
+            }
             Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                 if !emit_c_semantic_get_put(
                     channel,
@@ -9418,13 +9469,14 @@ fn emit_c_semantic_mid_assign(
     arrays: &ArrayTable,
     functions: &FunctionMap,
 ) -> bool {
-    use crate::semantic_ir::{ExpressionKind, SemanticValueType};
+    use crate::semantic_ir::SemanticValueType;
     if target.value_type != SemanticValueType::String
         || value.value_type != SemanticValueType::String
     {
         return false;
     }
-    let ExpressionKind::Name(name) = &target.kind else {
+    let Some(target) = render_c_semantic_lvalue(target, arrays, functions, needs_math, supports_float)
+    else {
         return false;
     };
     let Some((start, start_float)) = render_c_semantic_numeric_expression_context(
@@ -9461,8 +9513,6 @@ fn emit_c_semantic_mid_assign(
         }
         None => format!("(int)strlen({value})"),
     };
-    let ident = crate::ast::BasicIdent::parse(name);
-    let target = c_var_name(&ident, crate::ast::TypeSuffix::String);
     for line in value_prelude {
         out.push_str(&line);
     }
@@ -10055,6 +10105,159 @@ fn semantic_get_put_facts(
         Kind::Get { require_existing, .. } => (require_existing.is_some(), None),
         Kind::Put { provided_fields, .. } => (false, provided_fields.as_deref()),
         _ => (false, None),
+    }
+}
+
+/// The top-level body of a module with no AST: its statements in source
+/// order, flattened out of their `Line` groups. A trailing comment on a
+/// statement's line is dropped and a blank source line after an entry becomes
+/// a `(None, None)` blank marker, both exactly as the AST form has them.
+fn c_semantic_body_entries(
+    module: &crate::semantic_ir::SemanticModule,
+) -> Vec<(
+    Option<&Stmt>,
+    Option<&crate::semantic_ir::SemanticStatement>,
+)> {
+    let flat: Vec<_> = module
+        .statements
+        .iter()
+        .enumerate()
+        .flat_map(|(index, statement)| {
+            let source_index = module.statement_sources.get(index).copied().unwrap_or(0);
+            c_flatten_lines(std::slice::from_ref(statement))
+                .into_iter()
+                .map(move |child| (child, source_index))
+        })
+        .collect();
+    c_semantic_entries(module, &flat)
+}
+
+/// A callable body's entries, the same way `c_semantic_body_entries` derives
+/// a program's.
+fn c_semantic_callable_entries<'a>(
+    module: &'a crate::semantic_ir::SemanticModule,
+    callable: &'a crate::semantic_ir::CallableSignature,
+) -> Vec<(
+    Option<&'a Stmt>,
+    Option<&'a crate::semantic_ir::SemanticStatement>,
+)> {
+    let flat: Vec<_> = c_flatten_lines(&callable.body)
+        .into_iter()
+        .map(|child| (child, callable.source_index))
+        .collect();
+    c_semantic_entries(module, &flat)
+}
+
+fn c_flatten_lines(
+    statements: &[crate::semantic_ir::SemanticStatement],
+) -> Vec<&crate::semantic_ir::SemanticStatement> {
+    statements
+        .iter()
+        .flat_map(|statement| match &statement.kind {
+            crate::semantic_ir::SemanticStatementKind::Line(children) => {
+                children.iter().collect::<Vec<_>>()
+            }
+            _ => vec![statement],
+        })
+        .collect()
+}
+
+fn c_semantic_entries<'a>(
+    module: &'a crate::semantic_ir::SemanticModule,
+    flat: &[(&'a crate::semantic_ir::SemanticStatement, usize)],
+) -> Vec<(
+    Option<&'a Stmt>,
+    Option<&'a crate::semantic_ir::SemanticStatement>,
+)> {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    let mut entries: Vec<(Option<&Stmt>, Option<&crate::semantic_ir::SemanticStatement>)> =
+        Vec::new();
+    let push_blank = |entries: &mut Vec<(Option<&Stmt>, Option<&crate::semantic_ir::SemanticStatement>)>| {
+        if entries.last().is_some_and(|entry| entry.1.is_some()) || entries.is_empty() {
+            entries.push((None, None));
+        }
+    };
+    for (position, (statement, source_index)) in flat.iter().enumerate() {
+        // Statements a transpile pass synthesizes from one source statement
+        // share its span; the blank-line rules apply once around the group.
+        let same_span = |other: Option<&(&crate::semantic_ir::SemanticStatement, usize)>| {
+            other.is_some_and(|(other, other_source)| {
+                other_source == source_index && other.span == statement.span
+            })
+        };
+        let first_of_span = !same_span(position.checked_sub(1).and_then(|index| flat.get(index)));
+        let last_of_span = !same_span(flat.get(position + 1));
+        let text = module
+            .sources
+            .get(*source_index)
+            .map(|source| source.text.as_str())
+            .unwrap_or("");
+        let start = statement.span.start.min(text.len());
+        let end = statement.span.end.min(text.len()).max(start);
+        // A span carries its leading whitespace; the statement proper starts
+        // after it.
+        let leading = &text[start..end];
+        let leading = &leading[..leading.len() - leading.trim_start().len()];
+        let first = start + leading.len();
+        let trailing_comment = matches!(statement.kind, Kind::Comment { block: false, .. }) && {
+            let line_start = text[..first].rfind('\n').map_or(0, |index| index + 1);
+            !text[line_start..first].trim().is_empty()
+        };
+        if !trailing_comment {
+            if first_of_span && leading.matches('\n').count() >= 2 {
+                push_blank(&mut entries);
+            }
+            entries.push((None, Some(*statement)));
+        }
+        if !last_of_span {
+            continue;
+        }
+        // The parser also puts a blank after a statement that blank lines
+        // follow, provided anything (another statement, a function) follows
+        // them.
+        // A `program`/`library` declaration between them counts as part of
+        // the gap, since it has no typed statement of its own.
+        let mut after = &text[end..];
+        loop {
+            let trimmed = after.trim_start();
+            let gap = &after[..after.len() - trimmed.len()];
+            if gap.matches('\n').count() >= 2 && !trimmed.is_empty() {
+                push_blank(&mut entries);
+                break;
+            }
+            let lower = trimmed.get(..8).unwrap_or("").to_ascii_lowercase();
+            if lower.starts_with("library ") || lower.starts_with("program ") {
+                after = trimmed.find('\n').map_or("", |index| &trimmed[index..]);
+                continue;
+            }
+            break;
+        }
+    }
+    entries
+}
+
+/// The diagnostic for a typed statement the C backend cannot emit and has no
+/// AST statement to fall back to.
+fn c_unsupported_typed_statement(
+    semantic: Option<&crate::semantic_ir::SemanticStatement>,
+    position: Option<SourcePos>,
+) -> String {
+    let kind = semantic.map_or_else(
+        || "statement".to_string(),
+        |semantic| {
+            format!("{:?}", semantic.kind)
+                .split([' ', '{', '('])
+                .next()
+                .unwrap_or("statement")
+                .to_string()
+        },
+    );
+    match position {
+        Some(position) => format!(
+            "{kind} is not supported by the C backend yet ({}:{})",
+            position.filename, position.line
+        ),
+        None => format!("{kind} is not supported by the C backend yet"),
     }
 }
 
@@ -11479,11 +11682,46 @@ pub(crate) fn generate(
         .as_ref()
         .map(|module| module.statements.as_slice())
         .unwrap_or(&[]);
-    for (index, statement) in program.statements.iter().enumerate() {
+    // Each top-level entry pairs an AST statement (the compatibility
+    // fallback) with its typed counterpart. Without AST statements the typed
+    // module alone drives the body.
+    let body_entries: Vec<(Option<&Stmt>, Option<&crate::semantic_ir::SemanticStatement>)> =
+        if program.statements.is_empty() {
+            resolved
+                .semantic_module
+                .as_ref()
+                .map(c_semantic_body_entries)
+                .unwrap_or_default()
+        } else {
+            program
+                .statements
+                .iter()
+                .enumerate()
+                .map(|(index, statement)| {
+                    (
+                        Some(statement),
+                        semantic_statements
+                            .as_ref()
+                            .and_then(|statements| statements[index]),
+                    )
+                })
+                .collect()
+        };
+    let mut previous_blank = false;
+    for (statement, semantic_statement) in body_entries {
+        // A run of blank lines collapses to one, whichever form it comes in.
+        let is_blank = semantic_statement.is_none()
+            && statement.is_none_or(|statement| matches!(statement.kind, Statement::BlankLine));
+        if is_blank {
+            if !previous_blank {
+                body.push('\n');
+            }
+            previous_blank = true;
+            continue;
+        }
+        previous_blank = false;
         let gosub_checkpoint = gosub;
-        let semantic_emitted = semantic_statements
-            .as_ref()
-            .and_then(|statements| statements[index])
+        let semantic_emitted = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;
                 match &semantic.kind {
@@ -12063,6 +12301,18 @@ pub(crate) fn generate(
             });
         if !semantic_emitted {
             gosub = gosub_checkpoint;
+            let Some(statement) = statement else {
+                let position = semantic_statement.and_then(|semantic| {
+                    resolved
+                        .semantic_module
+                        .as_ref()
+                        .and_then(|module| c_semantic_top_level_source_position(module, semantic))
+                });
+                return Err(vec![unsupported(&c_unsupported_typed_statement(
+                    semantic_statement,
+                    position,
+                ))]);
+            };
             emit_statement(
                 statement,
                 &mut body,
@@ -13125,9 +13375,52 @@ fn emit_function_def(
         current_try_catch: None,
         loop_continue_stack: Vec::new(),
     };
-    for (index, stmt) in func.body.iter().enumerate() {
-        let emitted_semantically = semantic_dispatch
-            .and_then(|items| items.get(index).copied().flatten())
+    let callable_entries: Vec<(
+        Option<&Stmt>,
+        Option<&crate::semantic_ir::SemanticStatement>,
+    )> = if func.body.is_empty() {
+        semantic_module
+            .and_then(|module| {
+                semantic_callable_signature(module, func)
+                    .map(|callable| c_semantic_callable_entries(module, callable))
+            })
+            .unwrap_or_default()
+    } else {
+        func.body
+            .iter()
+            .enumerate()
+            .map(|(index, stmt)| {
+                (
+                    Some(stmt),
+                    semantic_dispatch.and_then(|items| items.get(index).copied().flatten()),
+                )
+            })
+            .collect()
+    };
+    let mut previous_blank = false;
+    let mut previous_return = false;
+    for (stmt, semantic_statement) in callable_entries {
+        let is_blank = semantic_statement.is_none()
+            && stmt.is_none_or(|stmt| matches!(stmt.kind, Statement::BlankLine));
+        if is_blank {
+            if !previous_blank {
+                body.push('\n');
+            }
+            previous_blank = true;
+            continue;
+        }
+        previous_blank = false;
+        // The parser appends an implicit `return self` to a scalar method;
+        // one that directly follows a `return` is dead code the typed form
+        // never has.
+        let is_return = stmt.is_some_and(|stmt| {
+            matches!(stmt.kind, Statement::Return { .. } | Statement::ReturnVoid)
+        });
+        if is_return && previous_return {
+            continue;
+        }
+        previous_return = is_return;
+        let emitted_semantically = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;
                 match &semantic.kind {
@@ -13617,6 +13910,17 @@ fn emit_function_def(
                 }
             });
         if !emitted_semantically {
+            let Some(stmt) = stmt else {
+                let position = semantic_statement.and_then(|semantic| {
+                    let module = semantic_module?;
+                    let callable = semantic_callable_signature(module, func)?;
+                    module
+                        .sources
+                        .get(callable.source_index)?
+                        .source_position_at(semantic.span.start)
+                });
+                return Err(c_unsupported_typed_statement(semantic_statement, position));
+            };
             emit_statement(
                 stmt,
                 &mut body,

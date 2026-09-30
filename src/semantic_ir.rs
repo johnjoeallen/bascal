@@ -30,6 +30,10 @@ pub struct SemanticModule {
     /// primitive statements, so a backend may emit this module's statements
     /// directly instead of reading the AST's expanded siblings.
     pub records_transpiled: bool,
+    /// Type a bare, undeclared name as a single, the BASIC default, instead
+    /// of leaving it `Unknown`. Backends whose storage needs a concrete type
+    /// for every variable (C) set this and re-run `annotate_types`.
+    pub bare_names_are_single: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2125,7 +2129,20 @@ impl SemanticModule {
                                     .filter(|value_type| *value_type != SemanticValueType::Unknown)
                             })
                     })
-                    .unwrap_or_else(|| SemanticValueType::from_suffix(name.chars().last()));
+                    .unwrap_or_else(|| {
+                        // A bare name with no declaration is a single, the
+                        // BASIC default, as the AST resolver types it.
+                        match SemanticValueType::from_suffix(name.chars().last()) {
+                            SemanticValueType::Unknown
+                                if self.bare_names_are_single
+                                    && expression.record_type.is_none()
+                                    && !name.contains('.') =>
+                            {
+                                SemanticValueType::Single
+                            }
+                            other => other,
+                        }
+                    });
             }
             ExpressionKind::Literal(_) | ExpressionKind::Boolean(_) => {}
         }
@@ -4339,6 +4356,7 @@ pub fn adapt_module(program: &rdgen_frontend::Program) -> SemanticModule {
         statements,
         statement_sources,
         records_transpiled: false,
+        bare_names_are_single: false,
     };
     module.annotate_types();
     let const_types = module.const_types();
