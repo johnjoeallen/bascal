@@ -2878,6 +2878,7 @@ fn emit_jvm_semantic_block(
                 true
             }
             Kind::Stop | Kind::System => {
+                emit_inkey_restore(context, &mut node);
                 node.push_str("    iconst_0\n    invokestatic java/lang/System/exit (I)V\n");
                 true
             }

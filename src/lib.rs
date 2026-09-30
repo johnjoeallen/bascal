@@ -2014,6 +2014,31 @@ end
     }
 
     #[test]
+    fn jvm_target_restores_the_terminal_before_system_and_stop() {
+        for exit in ["system", "stop"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("exit.bcl");
+            std::fs::write(
+                &path,
+                format!("program p\nk$ = inkey$\nif k$ = \"q\" then\n{exit}\nend if\nprint k$\nend\n"),
+            )
+            .unwrap();
+            let options = CompileOptions {
+                target: Target::Jvm,
+                ..CompileOptions::new()
+            };
+            let output = compile_file(&path, &options).expect("compiles for the JVM");
+            // `stty sane` restores the terminal (setup uses other arguments):
+            // once on the early-exit path and once on the normal end.
+            let restores = output.matches("ldc \"sane\"").count();
+            assert!(
+                restores >= 2,
+                "`{exit}` must restore the terminal before exiting ({restores} restore(s)):\n{output}"
+            );
+        }
+    }
+
+    #[test]
     fn jvm_target_timer_reads_seconds_since_midnight() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("timer.bcl");
