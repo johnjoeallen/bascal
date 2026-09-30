@@ -6,7 +6,7 @@
 
 
 The starting point, checked in verbatim for reference and provenance: 1149
-lines of classic line-numbered BASIC, `GOSUB`/`GOTO` spaghetti, single-letter
+lines of classic line-numbered BASIC, `GOSUB`/`GOTO`-driven control flow, single-letter
 globals, and four sequential `DATA` files loaded with `FSEEK`-based random
 access. Nothing is changed here -- it exists so every later stage has
 something exact to diff against.
