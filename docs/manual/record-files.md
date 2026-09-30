@@ -20,7 +20,7 @@ record Student
 end record
 ```
 
-Supported fixed-width file field types and their packed width are `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), and `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` spellings remain accepted as aliases. A plain `string` member is variable-length and may be used on an in-memory record, but a record containing one cannot be used as a random-access file type because its packed width is undefined. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its fixed-width field widths, in declaration order.
+Supported fixed-width file field types and their packed width are `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), and `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` keywords remain accepted as synonyms. A plain `string` member is variable-length and may be used on an in-memory record, but a record containing one cannot be used as a random-access file type because its packed width is undefined. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its fixed-width field widths, in declaration order.
 
 ### file ... as ... = open(...)
 

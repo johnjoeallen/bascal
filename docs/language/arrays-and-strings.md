@@ -15,7 +15,7 @@ print "elements: "; sizeof(scores%)
 print "total: "; total%
 ```
 
-`dim scores%(30)` declares indices 0 through 30: 31 elements. `sizeof(scores%)` reads the bound, so a loop does not need to repeat it. Every array is indexed from base 0 — `OPTION BASE` is rejected outright as a transpile-time error under both targets, not something to reach for. A second axis works the same way: `dim grid%(2, 2)`; use `sizeof(grid%, 0)` or `sizeof(grid%, 1)`. `declare` is another spelling of `dim`.
+`dim scores%(30)` declares indices 0 through 30: 31 elements. `sizeof(scores%)` reads the bound, so a loop does not need to repeat it. Every array is indexed from base 0 — `OPTION BASE` is rejected outright as a transpile-time error under both targets, not something to reach for. A second axis works the same way: `dim grid%(2, 2)`; use `sizeof(grid%, 0)` or `sizeof(grid%, 1)`. `declare` is an synonym for `dim`.
 
 A scalar normally needs no declaration because BASIC creates it on first use. `--strict-vars` requires declarations and catches misspelled names, at the cost of no longer being a strict superset of BASIC.
 

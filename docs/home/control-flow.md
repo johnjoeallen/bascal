@@ -110,7 +110,7 @@ wend
 
 </div>
 
-`end while` and bare `end` close a `while` loop too — `wend` is classic BASIC's own spelling, accepted alongside them.
+`end while` and bare `end` close a `while` loop too — `wend` is classic BASIC's own keyword, accepted alongside them.
 
 </div>
 
@@ -172,7 +172,7 @@ end do
 
 ### 4. Post-check loop ("repeat until") and a mid-loop exit
 
-Classic BASIC has no `REPEAT`/`UNTIL` — a loop that must run its body at least once, or that needs to break out from the *middle* rather than the top, means the continuation test and the jump can't share one tidy spot the way `WHILE` can. BASCAL's `do ... loop until/while` is the direct `REPEAT`/`UNTIL` equivalent, in both polarities — same two spellings as `do while`/`do until` above, just tested at the bottom instead of the top, so the body always runs at least once. A true middle exit still needs `exit`, since no fixed top-or-bottom condition position can express "stop right here."
+Classic BASIC has no `REPEAT`/`UNTIL` — a loop that must run its body at least once, or that needs to break out from the *middle* rather than the top, means the continuation test and the jump can't share one tidy spot the way `WHILE` can. BASCAL's `do ... loop until/while` is the direct `REPEAT`/`UNTIL` equivalent, in both polarities — same two keywords as `do while`/`do until` above, just tested at the bottom instead of the top, so the body always runs at least once. A true middle exit still needs `exit`, since no fixed top-or-bottom condition position can express "stop right here."
 
 <div class="compare-grid" markdown="1">
 

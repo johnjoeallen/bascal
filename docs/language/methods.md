@@ -227,7 +227,7 @@ name$ = "  ada  "
 result$ = name$.ltrim().ucase().left(3)
 ```
 
-The ordinary-call spelling remains available for scalar methods: `ucase$(name$)` and `name$.ucase()` resolve to the same declaration when no ordinary function claims that name. A method and an ordinary function cannot share one callable identity.
+The ordinary-call format remains available for scalar methods: `ucase$(name$)` and `name$.ucase()` resolve to the same declaration when no ordinary function claims that name. A method and an ordinary function cannot share one callable identity.
 
 Built-in scalar methods such as `left`, `len`, `abs`, and `sin` are syntax for the corresponding BASIC intrinsic call, unaffected by any of the above — the new declaration grammar changes how a *method* is declared, not what a built-in method call means.
 

@@ -204,7 +204,7 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 
 </div>
 
-> **Why `?{ ... }`?** A few spellings for "partial record literal" were considered — `.{ ... }`, `<-{ ... }` — but `?` won because it reads as "this might be incomplete," the same sense it carries for optional values in most other languages, and it was free: nothing else in BASCAL's grammar used a bare `?`, so adding it couldn't collide with or reinterpret any existing program. It's also deliberately a *second* spelling rather than a relaxed `{ ... }` — keeping `{ ... }` strict means a record literal that's missing a field by accident is still always a transpile error. `?{ ... }` exists so that incompleteness has to be opted into explicitly, one call site at a time, instead of silently allowed everywhere.
+> **Why `?{ ... }`?** A few syntaxes for "partial record literal" were considered — `.{ ... }`, `<-{ ... }` — but `?` won because it reads as "this might be incomplete," the same sense it carries for optional values in most other languages, and it was free: nothing else in BASCAL's grammar used a bare `?`, so adding it couldn't collide with or reinterpret any existing program. It's also deliberately a *second* form rather than a relaxed `{ ... }` — keeping `{ ... }` strict means a record literal that's missing a field by accident is still always a transpile error. `?{ ... }` exists so that incompleteness has to be opted into explicitly, one call site at a time, instead of silently allowed everywhere.
 
 </div>
 

@@ -6,7 +6,7 @@
 
 BASCAL grew from **Ramtech BASIC**, a small preprocessor written in 1985 for
 the Microsoft BASIC applications developed at Ramtech Ireland. The programs
-were large business applications, built by a distributed team, with shared
+were large business applications, built by a distributed team of two, with shared
 routines copied into every program that used them.
 
 That copying made every library change a manual merge in each developer's

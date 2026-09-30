@@ -27,7 +27,7 @@ end for
 
 ### DO WHILE and DO UNTIL
 
-Two spellings of the same pre-check loop shape.
+Two forms of the same pre-check loop shape.
 
 ```bascal
 do while k% <= 3
