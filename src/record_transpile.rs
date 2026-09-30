@@ -527,6 +527,7 @@ impl<'a> Transpiler<'a> {
                 SemanticStatementKind::Field {
                     channel: int(fact.channel, span),
                     bindings,
+                    record_type: Some(record_type.to_string()),
                 },
                 span,
             ),
@@ -872,7 +873,13 @@ impl<'a> Transpiler<'a> {
         )
     }
 
-    fn put_statement(&self, channel: i64, index: Expression, span: SourceSpan) -> SemanticStatement {
+    fn put_statement(
+        &self,
+        channel: i64,
+        index: Expression,
+        provided_fields: Option<Vec<bool>>,
+        span: SourceSpan,
+    ) -> SemanticStatement {
         statement_of(
             SemanticStatementKind::Put {
                 channel: int(channel, span),
@@ -880,6 +887,7 @@ impl<'a> Transpiler<'a> {
                     position: Some(index),
                     record: None,
                 }),
+                provided_fields,
             },
             span,
         )
@@ -925,9 +933,11 @@ impl<'a> Transpiler<'a> {
             .into_iter()
             .map(|pair| (pair.name.to_ascii_lowercase(), pair.value))
             .collect();
-        let covers_every_field = fields
+        let provided_fields: Vec<bool> = fields
             .iter()
-            .all(|field| provided.contains_key(&field.name.to_ascii_lowercase()));
+            .map(|field| provided.contains_key(&field.name.to_ascii_lowercase()))
+            .collect();
+        let covers_every_field = provided_fields.iter().all(|present| *present);
         if partial && !covers_every_field {
             out.extend(self.get_existing(info.channel, fact.record_length, &index, span));
         }
@@ -942,7 +952,7 @@ impl<'a> Transpiler<'a> {
             };
             out.push(store);
         }
-        out.push(self.put_statement(info.channel, index, span));
+        out.push(self.put_statement(info.channel, index, Some(provided_fields), span));
         out
     }
 
@@ -970,7 +980,7 @@ impl<'a> Transpiler<'a> {
             };
             out.push(store);
         }
-        out.push(self.put_statement(info.channel, index, span));
+        out.push(self.put_statement(info.channel, index, None, span));
         out
     }
 
@@ -1067,7 +1077,17 @@ impl<'a> Transpiler<'a> {
             return Vec::new();
         };
         out.push(store);
-        out.push(self.put_statement(info.channel, index, span));
+        out.push(self.put_statement(
+            info.channel,
+            index,
+            Some(
+                fields
+                    .iter()
+                    .map(|field| field.name.eq_ignore_ascii_case(field_name))
+                    .collect(),
+            ),
+            span,
+        ));
         out
     }
 

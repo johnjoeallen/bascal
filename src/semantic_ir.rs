@@ -2365,7 +2365,7 @@ impl SemanticModule {
                     self.annotate_expression_types(target);
                 }
                 SemanticStatementKind::Get { channel, position, .. }
-                | SemanticStatementKind::Put { channel, position } => {
+                | SemanticStatementKind::Put { channel, position, .. } => {
                     self.annotate_expression_types(channel);
                     if let Some(position) = position {
                         if let Some(value) = &mut position.position {
@@ -2396,7 +2396,7 @@ impl SemanticModule {
                 SemanticStatementKind::FileDeclaration { path, .. } => {
                     self.annotate_expression_types(path)
                 }
-                SemanticStatementKind::Field { channel, bindings } => {
+                SemanticStatementKind::Field { channel, bindings, .. } => {
                     self.annotate_expression_types(channel);
                     for binding in bindings {
                         self.annotate_expression_types(&mut binding.length);
@@ -3054,7 +3054,7 @@ fn collect_semantic_statements(
                 collect_semantic_expression(target, names);
             }
             SemanticStatementKind::Get { channel, position, .. }
-            | SemanticStatementKind::Put { channel, position } => {
+            | SemanticStatementKind::Put { channel, position, .. } => {
                 collect_semantic_expression(channel, names);
                 if let Some(position) = position {
                     if let Some(value) = &position.position {
@@ -3087,7 +3087,7 @@ fn collect_semantic_statements(
                 names.insert(name.name.to_ascii_lowercase());
                 collect_semantic_expression(path, names);
             }
-            SemanticStatementKind::Field { channel, bindings } => {
+            SemanticStatementKind::Field { channel, bindings, .. } => {
                 collect_semantic_expression(channel, names);
                 for binding in bindings {
                     collect_semantic_expression(&binding.length, names);
@@ -3983,6 +3983,9 @@ pub enum SemanticStatementKind {
     Put {
         channel: Expression,
         position: Option<FilePosition>,
+        /// Set by the record DSL: which of the record's fields the write
+        /// supplies (`false` marks a partial update's untouched field).
+        provided_fields: Option<Vec<bool>>,
     },
     Lset {
         target: NamedReference,
@@ -4018,6 +4021,8 @@ pub enum SemanticStatementKind {
     Field {
         channel: Expression,
         bindings: Vec<FieldBinding>,
+        /// Set by the record DSL: the record type this `FIELD` lays out.
+        record_type: Option<String>,
     },
 }
 
@@ -5118,6 +5123,7 @@ fn adapt_statement_core(statement: &rdgen_frontend::StatementCore) -> SemanticSt
                 kind: SemanticStatementKind::Put {
                     channel: adapt_expression(channel),
                     position: position.as_ref().map(adapt_file_position),
+                    provided_fields: None,
                 },
                 span: *span,
             }
@@ -5252,6 +5258,7 @@ fn adapt_statement_core(statement: &rdgen_frontend::StatementCore) -> SemanticSt
                         .chain(rest.iter().map(|(_, value)| value.as_ref()))
                         .map(adapt_field_binding)
                         .collect(),
+                    record_type: None,
                 },
                 span: *span,
             }

@@ -5958,7 +5958,7 @@ fn basic_semantic_intrinsics(
                     output.extend(prelude);
                     output.push(format!("{prefix}{}", rendered_targets.join(", ")));
                 }
-                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                     let command = if matches!(&statement.kind, Kind::Get { .. }) {
                         "GET"
                     } else {
@@ -6042,7 +6042,7 @@ fn basic_semantic_intrinsics(
                     output.extend(lines);
                     output.push(format!("{command} {target} = {value}"));
                 }
-                Kind::Field { channel, bindings } => {
+                Kind::Field { channel, bindings, .. } => {
                     let Some(channel) = generator.semantic_const_expression(channel, None) else {
                         return false;
                     };
@@ -7139,7 +7139,7 @@ fn basic_semantic_callable_leaf(
             lines.push(format!("SEEK #{channel}, {position}"));
             Some(lines)
         }
-        Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+        Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
             let command = if matches!(&semantic.kind, Kind::Get { .. }) {
                 "GET"
             } else {
@@ -7192,7 +7192,7 @@ fn basic_semantic_callable_leaf(
             lines.push(format!("{command} #{channel}{position}"));
             Some(lines)
         }
-        Kind::Field { channel, bindings } => {
+        Kind::Field { channel, bindings, .. } => {
             let channel = generator.semantic_const_expression(channel, Some(function))?;
             let bindings = bindings
                 .iter()
@@ -13366,7 +13366,7 @@ fn collect_semantic_call_sites(
                     visit_expression(channel, scope, function_names, sites);
                     visit_expression(target, scope, function_names, sites);
                 }
-                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                     visit_expression(channel, scope, function_names, sites);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
@@ -13402,7 +13402,7 @@ fn collect_semantic_call_sites(
                 Kind::FileDeclaration { path, .. } => {
                     visit_expression(path, scope, function_names, sites)
                 }
-                Kind::Field { channel, bindings } => {
+                Kind::Field { channel, bindings, .. } => {
                     visit_expression(channel, scope, function_names, sites);
                     for binding in bindings {
                         visit_expression(&binding.length, scope, function_names, sites);

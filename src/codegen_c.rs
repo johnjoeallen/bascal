@@ -1109,6 +1109,9 @@ struct FileIoLayout {
     /// identical, and this avoids leaking channel/generation names into
     /// generated C for a program that already gives the shape a name.
     known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>,
+    /// The typed module's record file layouts; a typed `FIELD` that names a
+    /// record type resolves its field types and offsets through these.
+    lowered_files: Vec<crate::semantic_ir::LoweredRecordFile>,
     /// Record types whose reusable pack/unpack helpers have already been
     /// emitted. A helper takes the channel's current FIELD buffers as
     /// arguments, so every file declared with the same record type can
@@ -1288,6 +1291,7 @@ fn apply_field_layout(
 fn apply_semantic_field_statement(
     channel: &crate::semantic_ir::Expression,
     bindings: &[crate::semantic_ir::FieldBinding],
+    record_type: Option<&str>,
     layout: &mut FileIoLayout,
 ) -> bool {
     use crate::semantic_ir::ExpressionKind;
@@ -1297,6 +1301,18 @@ fn apply_semantic_field_statement(
     let Ok(channel) = channel.parse::<i64>() else {
         return false;
     };
+    if let Some(record_type) = record_type {
+        // A record DSL `FIELD`: its types and offsets are layout facts.
+        let Some(file) = layout
+            .lowered_files
+            .iter()
+            .find(|file| file.channel == channel && file.record_type.eq_ignore_ascii_case(record_type))
+            .cloned()
+        else {
+            return false;
+        };
+        return apply_lowered_record_file_layout(&file, layout).is_ok();
+    }
     let mut fields = Vec::with_capacity(bindings.len());
     for binding in bindings {
         if !binding.is_string || binding.type_suffix.as_deref() != Some("$") {
@@ -2011,7 +2027,7 @@ fn collect_semantic_byref_scalar_actuals(
                     visit_expr!(channel);
                     visit_expr!(target);
                 }
-                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                     visit_expr!(channel);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
@@ -2037,7 +2053,7 @@ fn collect_semantic_byref_scalar_actuals(
                     }
                 }
                 Kind::FileDeclaration { path, .. } => visit_expr!(path),
-                Kind::Field { channel, bindings } => {
+                Kind::Field { channel, bindings, .. } => {
                     visit_expr!(channel);
                     for binding in bindings {
                         visit_expr!(&binding.length);
@@ -2935,7 +2951,7 @@ fn collect_semantic_called_callables(
             collect_semantic_calls_in_expression(channel, functions, out)
                 && collect_semantic_calls_in_expression(target, functions, out)
         }
-        Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+        Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
             collect_semantic_calls_in_expression(channel, functions, out)
                 && position.as_ref().is_none_or(|position| {
                     position.position.as_ref().is_none_or(|value| {
@@ -2964,7 +2980,7 @@ fn collect_semantic_called_callables(
         Kind::FileDeclaration { path, .. } => {
             collect_semantic_calls_in_expression(path, functions, out)
         }
-        Kind::Field { channel, bindings } => {
+        Kind::Field { channel, bindings, .. } => {
             collect_semantic_calls_in_expression(channel, functions, out)
                 && bindings.iter().all(|binding| {
                     collect_semantic_calls_in_expression(&binding.length, functions, out)
@@ -4274,6 +4290,7 @@ fn apply_semantic_field_layouts_before_functions(
         Semantic(
             &'a crate::semantic_ir::Expression,
             &'a [crate::semantic_ir::FieldBinding],
+            Option<&'a str>,
         ),
         Lowered(&'a crate::semantic_ir::LoweredRecordFile),
     }
@@ -4289,10 +4306,10 @@ fn apply_semantic_field_layouts_before_functions(
         events: &mut Vec<LayoutEvent<'a>>,
     ) {
         match &statement.kind {
-            Kind::Field { channel, bindings } => events.push(LayoutEvent {
+            Kind::Field { channel, bindings, record_type } => events.push(LayoutEvent {
                 source_index,
                 offset: statement.span.start,
-                source: LayoutSource::Semantic(channel, bindings),
+                source: LayoutSource::Semantic(channel, bindings, record_type.as_deref()),
             }),
             Kind::FileDeclaration {
                 name,
@@ -4368,8 +4385,8 @@ fn apply_semantic_field_layouts_before_functions(
     events.sort_by_key(|event| (event.source_index, event.offset));
     for event in events {
         match event.source {
-            LayoutSource::Semantic(channel, bindings) => {
-                apply_semantic_field_statement(channel, bindings, layout);
+            LayoutSource::Semantic(channel, bindings, record_type) => {
+                apply_semantic_field_statement(channel, bindings, record_type, layout);
             }
             LayoutSource::Lowered(file) => apply_lowered_record_file_layout(file, layout)?,
         }
@@ -5032,7 +5049,7 @@ fn semantic_module_uses_name(module: &crate::semantic_ir::SemanticModule, name: 
                 semantic_expression_uses_name(channel, name)
                     || semantic_expression_uses_name(target, name)
             }
-            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                 semantic_expression_uses_name(channel, name)
                     || position.as_ref().is_some_and(|position| {
                         position.position.as_ref().is_some_and(|value| semantic_expression_uses_name(value, name))
@@ -5188,7 +5205,7 @@ fn semantic_module_uses_call(module: &crate::semantic_ir::SemanticModule, name: 
             Kind::Locate { row, column } => semantic_expression_uses_call(row, name) || semantic_expression_uses_call(column, name),
             Kind::Color { foreground, background } => semantic_expression_uses_call(foreground, name) || background.as_ref().is_some_and(|background| semantic_expression_uses_call(background, name)),
             Kind::OnBranch { selector, .. } => semantic_expression_uses_call(selector, name),
-            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                 semantic_expression_uses_call(channel, name)
                     || position.as_ref().is_some_and(|position| {
                         position.position.as_ref().is_some_and(|value| semantic_expression_uses_call(value, name))
@@ -5486,7 +5503,7 @@ fn semantic_module_uses_string_comparison(module: &crate::semantic_ir::SemanticM
                 expression_uses_string_comparison(channel)
                     || expression_uses_string_comparison(target)
             }
-            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                 expression_uses_string_comparison(channel)
                     || position.as_ref().is_some_and(|position| {
                         position
@@ -7935,13 +7952,16 @@ fn emit_c_semantic_for_body(
                     return false;
                 }
             }
-            Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+            Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                 if !emit_c_semantic_get_put(
                     channel,
                     position.as_ref(),
                     matches!(&statement.kind, Kind::Get { .. }),
+                    semantic_get_put_facts(&statement.kind).0,
+                    semantic_get_put_facts(&statement.kind).1,
                     out,
                     needs_math,
+                    temp_counter,
                     supports_float,
                     file_io,
                     arrays,
@@ -10025,12 +10045,28 @@ fn emit_c_semantic_seek(
     true
 }
 
+/// The record DSL's facts on a typed `GET`/`PUT`: whether a `GET` is a
+/// partial update's existence guard, and which fields a `PUT` supplies.
+fn semantic_get_put_facts(
+    kind: &crate::semantic_ir::SemanticStatementKind,
+) -> (bool, Option<&[bool]>) {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    match kind {
+        Kind::Get { require_existing, .. } => (require_existing.is_some(), None),
+        Kind::Put { provided_fields, .. } => (false, provided_fields.as_deref()),
+        _ => (false, None),
+    }
+}
+
 fn emit_c_semantic_get_put(
     channel: &crate::semantic_ir::Expression,
     position: Option<&crate::semantic_ir::FilePosition>,
     is_get: bool,
+    require_existing: bool,
+    provided_fields: Option<&[bool]>,
     out: &mut String,
     needs_math: &mut bool,
+    temp_counter: &mut usize,
     supports_float: bool,
     file_io: &mut FileIoLayout,
     arrays: &ArrayTable,
@@ -10043,14 +10079,14 @@ fn emit_c_semantic_get_put(
     let Ok(channel) = channel.parse::<i64>() else {
         return false;
     };
-    if !(1..=BCC_MAX_CHANNELS).contains(&channel)
-        || file_io
-            .channel_record_type
-            .get(&channel)
-            .is_some_and(Option::is_some)
-    {
+    if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
         return false;
     }
+    let record_type = file_io
+        .channel_record_type
+        .get(&channel)
+        .cloned()
+        .flatten();
     let Some(fields) = file_io.channel_fields.get(&channel).cloned() else {
         return false;
     };
@@ -10084,6 +10120,28 @@ fn emit_c_semantic_get_put(
         return false;
     };
     let position = coerce_numeric(position, is_float, false, needs_math);
+    if let Some(record_type) = record_type {
+        // The partial-update guard's read happens inside the typed PUT
+        // helper, where NULL fields make the operation atomic.
+        if is_get && require_existing {
+            return true;
+        }
+        return emit_c_semantic_dsl_record_call(
+            &record_type,
+            channel,
+            &position,
+            &fields,
+            is_get,
+            provided_fields,
+            out,
+            needs_math,
+            temp_counter,
+            supports_float,
+            file_io,
+            arrays,
+            functions,
+        );
+    }
     let generation = file_io
         .channel_generation
         .get(&channel)
@@ -10103,6 +10161,108 @@ fn emit_c_semantic_get_put(
         channel - 1,
     ));
     file_io.used = true;
+    true
+}
+
+/// The typed-IR counterpart of `emit_get_or_put`'s record-DSL branch: a
+/// `GET` names the record type's helper, and a `PUT` hands each supplied
+/// field's still-native value (captured by the preceding `LSET`) straight to
+/// the typed helper, with `NULL` marking a field a partial update leaves alone.
+fn emit_c_semantic_dsl_record_call(
+    record_type: &str,
+    channel: i64,
+    record_text: &str,
+    fields: &[FieldEntry],
+    is_get: bool,
+    provided_fields: Option<&[bool]>,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    supports_float: bool,
+    file_io: &mut FileIoLayout,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+) -> bool {
+    let idx = channel - 1;
+    let suffix = record_helper_suffix(record_type);
+    ensure_dsl_record_helpers(record_type, fields, file_io);
+    file_io.used = true;
+    if is_get {
+        let field_args = fields
+            .iter()
+            .map(|field| field.c_name.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let separator = if field_args.is_empty() { "" } else { ", " };
+        out.push_str(&format!(
+            "    bcc_get_record_{suffix}(bcc_files[{idx}], {record_text}{separator}{field_args});\n"
+        ));
+        return true;
+    }
+    let mut field_args = Vec::with_capacity(fields.len());
+    let mut preludes = String::new();
+    for (index, field) in fields.iter().enumerate() {
+        let provided = !provided_fields
+            .is_some_and(|provided| !provided.get(index).copied().unwrap_or(false));
+        if !provided {
+            field_args.push("NULL".to_string());
+            continue;
+        }
+        let Some(PendingFieldValue::Semantic(value)) =
+            file_io.pending_field_values.remove(&field.c_name)
+        else {
+            return false;
+        };
+        if field.is_string {
+            let Some((prelude, text)) = render_c_semantic_string_expression_context(
+                &value,
+                needs_math,
+                temp_counter,
+                Some(arrays),
+                Some(functions),
+            ) else {
+                return false;
+            };
+            for line in prelude {
+                preludes.push_str(&line);
+            }
+            field_args.push(text);
+        } else {
+            let Some((text, value_is_float)) = render_c_semantic_numeric_expression_context(
+                &value,
+                needs_math,
+                supports_float,
+                Some(arrays),
+                Some(functions),
+            ) else {
+                return false;
+            };
+            let Some(ty) = field.ty.clone() else {
+                return false;
+            };
+            let target_is_float = matches!(ty, RecordFieldType::Float32 | RecordFieldType::Float64);
+            let coerced = coerce_numeric(text, value_is_float, target_is_float, needs_math);
+            let tmp = format!("bcc_tmp_{}", *temp_counter);
+            *temp_counter += 1;
+            preludes.push_str(&format!(
+                "    {c_ty} {tmp} = {coerced};\n",
+                c_ty = record_field_c_type(ty)
+            ));
+            field_args.push(format!("&{tmp}"));
+        }
+    }
+    out.push_str(&preludes);
+    let field_args = field_args.join(", ");
+    let separator = if field_args.is_empty() { "" } else { ", " };
+    let call =
+        format!("bcc_put_record_{suffix}(bcc_files[{idx}], {record_text}{separator}{field_args})");
+    if provided_fields.is_some_and(|provided| provided.iter().any(|present| !present)) {
+        out.push_str(&format!(
+            "    if (!{call}) {{ fprintf(stderr, \"BASCAL: record %ld does not exist\\n\", (long){record_text}); exit(1); }}\n"
+        ));
+    } else {
+        out.push_str(&format!("    {call};\n"));
+    }
     true
 }
 
@@ -10869,6 +11029,11 @@ pub(crate) fn generate(
             .map(|file| (file.record_type.to_ascii_lowercase(), file.record_length))
             .collect(),
         known_record_layouts,
+        lowered_files: resolved
+            .semantic_module
+            .as_ref()
+            .map(|module| module.lowered_record_files.clone())
+            .unwrap_or_default(),
         record_helpers: std::collections::HashSet::new(),
         channel_generation: HashMap::new(),
         helper_defs: String::new(),
@@ -11340,8 +11505,8 @@ pub(crate) fn generate(
                     }
                     Kind::Global { .. } => {}
                     Kind::Erase(_) => {}
-                    Kind::Field { channel, bindings } => {
-                        return apply_semantic_field_statement(channel, bindings, &mut file_io);
+                    Kind::Field { channel, bindings, record_type } => {
+                        return apply_semantic_field_statement(channel, bindings, record_type.as_deref(), &mut file_io);
                     }
                     Kind::Lset { target, value } | Kind::Rset { target, value } => {
                         return emit_c_semantic_field_string_assignment(
@@ -11654,13 +11819,17 @@ pub(crate) fn generate(
                             &functions.funcs,
                         );
                     }
-                    Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                    Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
+                        let (require_existing, provided_fields) = semantic_get_put_facts(&semantic.kind);
                         return emit_c_semantic_get_put(
                             channel,
                             position.as_ref(),
                             matches!(&semantic.kind, Kind::Get { .. }),
+                            require_existing,
+                            provided_fields,
                             &mut body,
                             &mut needs_math,
+                            &mut temp_counter,
                             functions.dialect.supports_float,
                             &mut file_io,
                             &functions.arrays,
@@ -13132,8 +13301,8 @@ fn emit_function_def(
                             &mut callable_gosub,
                         )
                     }
-                    Kind::Field { channel, bindings } => {
-                        apply_semantic_field_statement(channel, bindings, file_io)
+                    Kind::Field { channel, bindings, record_type } => {
+                        apply_semantic_field_statement(channel, bindings, record_type.as_deref(), file_io)
                     }
                     Kind::Lset { target, value } | Kind::Rset { target, value } => {
                         emit_c_semantic_field_string_assignment(
@@ -13251,13 +13420,16 @@ fn emit_function_def(
                         &functions.arrays,
                         &functions.funcs,
                     ),
-                    Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                    Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                         emit_c_semantic_get_put(
                             channel,
                             position.as_ref(),
                             matches!(&semantic.kind, Kind::Get { .. }),
+                            semantic_get_put_facts(&semantic.kind).0,
+                            semantic_get_put_facts(&semantic.kind).1,
                             &mut body,
                             needs_math,
+                            temp_counter,
                             functions.dialect.supports_float,
                             file_io,
                             &functions.arrays,
@@ -20696,7 +20868,7 @@ fn reject_float(
                             exprs.push(value);
                         }
                         K::LineInput { channel, target } => exprs.extend([channel, target]),
-                        K::Get { channel, position, .. } | K::Put { channel, position } => {
+                        K::Get { channel, position, .. } | K::Put { channel, position, .. } => {
                             exprs.push(channel);
                             if let Some(p) = position {
                                 exprs.extend(p.position.iter());
@@ -20744,7 +20916,7 @@ fn reject_float(
                                 }
                             }
                         }
-                        K::Field { channel, bindings } => {
+                        K::Field { channel, bindings, .. } => {
                             exprs.push(channel);
                             exprs.extend(bindings.iter().map(|b| &b.length));
                         }

@@ -448,7 +448,7 @@ pub(crate) fn generate(
                                 &mut body,
                             );
                         }
-                        Kind::Put { channel, position } => {
+                        Kind::Put { channel, position, .. } => {
                             return emit_jvm_semantic_get_put(
                                 false,
                                 channel,
@@ -2836,7 +2836,7 @@ fn emit_jvm_semantic_block(
             Kind::Get { channel, position, .. } => {
                 emit_jvm_semantic_get_put(true, channel, position.as_ref(), context, &mut node)
             }
-            Kind::Put { channel, position } => {
+            Kind::Put { channel, position, .. } => {
                 emit_jvm_semantic_get_put(false, channel, position.as_ref(), context, &mut node)
             }
             Kind::Field { .. } => true,
@@ -5571,7 +5571,7 @@ fn collect_semantic_field_vars(
         use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
         for statement in statements {
             match &statement.kind {
-                Kind::Field { channel, bindings } => {
+                Kind::Field { channel, bindings, .. } => {
                     let ExpressionKind::Literal(channel) = &channel.kind else {
                         return Err(
                             "FIELD's channel number must be a literal under --target jvm"
@@ -6114,7 +6114,7 @@ fn collect_semantic_scalar_declarations(
                     }
                     register_byref_call_targets(value, callables, declarations);
                 }
-                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                     register_byref_call_targets(channel, callables, declarations);
                     if let Some(position) = position {
                         if let Some(value) = &position.position {
@@ -6388,7 +6388,7 @@ fn semantic_runtime_features(module: &crate::semantic_ir::SemanticModule) -> (bo
                         .iter()
                         .any(|binding| expression_uses_name(&binding.length, "inkey"));
                 }
-                Kind::Get { channel, position, .. } | Kind::Put { channel, position } => {
+                Kind::Get { channel, position, .. } | Kind::Put { channel, position, .. } => {
                     flags.0 = true;
                     flags.2 |= expression_uses_name(channel, "inkey")
                         || position.as_ref().is_some_and(|position| {
