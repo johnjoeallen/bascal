@@ -106,6 +106,7 @@ Every reference to a function, procedure, or variable is rewritten to match howe
 
 <span class="tag">Before</span>
 
+<!-- no-compile -->
 ```bascal
 program p
 require com.bascal.sort.bubbleSort
@@ -119,6 +120,7 @@ BUBBLESORT%(bubbleData%)
 
 <span class="tag">After `bcc --format`</span>
 
+<!-- no-compile -->
 ```bascal
 program p
 require com.bascal.sort.bubbleSort

@@ -18,12 +18,10 @@ BASCAL sums the field widths for you and generates the matching `FIELD` binding 
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-const REC_LEN  = 30   ' 2+20+8, by hand
-const DB_FILE  = "students.dat"
-
-open DB_FILE for random as #1 len = REC_LEN
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+```basic
+' file db as Student = open(...)  [30 bytes/record]
+OPEN "students.dat" FOR RANDOM AS #1 LEN = 30
+FIELD #1, 2 AS dbIdBuf$, 20 AS dbNameBuf$, 8 AS dbScoreBuf$
 ```
 
 </div>
@@ -61,11 +59,12 @@ Every declared field is required in the record literal — a field forgotten by 
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-lset idBuf$    = mki%(1)
-lset nameBuf$  = "Alice"
-lset scoreBuf$ = mkd#(95.0)
-put #1, 1
+```basic
+' db[...] = { ... }  (whole-record write)
+LSET dbIdBuf$ = MKI$(1)
+LSET dbNameBuf$ = "Alice"
+LSET dbScoreBuf$ = MKD$(95)
+PUT #1, 1
 ```
 
 </div>
@@ -96,14 +95,21 @@ db[1] = { id: 1, name: "Alice", score: 95.0 }
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-for i% = num_recs% to 1 step -1
-    get #1, i%
-    id%    = cvi%(idBuf$)
-    score# = cvd#(scoreBuf$)
-    print "[" + str$(id%) + "] " _
-        + rtrim$(nameBuf$) + " -- " + str$(score#)
-end for
+```basic
+FOR i = 3 TO 1 STEP -1
+    ' let s = db[...]  (whole-record read)
+    GET #1, i
+    sid% = CVI(dbIdBuf$)
+    snametrimi% = LEN(dbNameBuf$)
+10 IF (snametrimi% > 0) = 0 THEN GOTO 20
+    IF (MID$(dbNameBuf$, snametrimi%, 1) = " ") = 0 THEN GOTO 20
+        snametrimi% = snametrimi% - 1
+        GOTO 10
+20 REM END WHILE
+    sname$ = LEFT$(dbNameBuf$, snametrimi%)
+    sscore# = CVD(dbScoreBuf$)
+    PRINT (((("[" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
+30 NEXT i
 ```
 
 </div>
@@ -137,10 +143,12 @@ Bob just scraped a pass on re-mark — only the score changes, but `PUT` always 
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-get #1, 2
-lset scoreBuf$ = mkd#(61.5)
-put #1, 2
+```basic
+' db[...].score = ...  (partial-field update)
+IF LOF(#1) < (2) * 30 THEN ERROR 63
+GET #1, 2
+LSET dbScoreBuf$ = MKD$(61.5)
+PUT #1, 2
 ```
 
 </div>
@@ -171,11 +179,13 @@ Alice got married and re-sat the exam. Whether the fields you *didn't* list need
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-get #1, 1
-lset nameBuf$  = "Alice Smith"
-lset scoreBuf$ = mkd#(91.0)
-put #1, 1
+```basic
+' db[...] = ?{ ... }  (partial-record write)
+IF LOF(#1) < (1) * 30 THEN ERROR 63
+GET #1, 1
+LSET dbNameBuf$ = "Alice Smith"
+LSET dbScoreBuf$ = MKD$(91)
+PUT #1, 1
 ```
 
 </div>
@@ -194,7 +204,7 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 
 <div class="tally" markdown="1">
 
-**Generated BASIC:** 4 lines, 3 buffer names, 1 pack call, repeated per edit **BASCAL:** 1 line, still exactly one `GET` + one `PUT` generated
+**Generated BASIC:** an existence check, one `GET`, one `LSET` per field you list, one `PUT` **BASCAL:** 1 line, still exactly one `GET` + one `PUT` generated
 
 </div>
 
@@ -214,11 +224,25 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-get #1, 3
-lset nameBuf$  = "Carol Jones"
-lset scoreBuf$ = mkd#(88.0)
-put #1, 3
+```basic
+' let carol = db[...]  (whole-record read)
+GET #1, 3
+carolid% = CVI(dbIdBuf$)
+carolnametrimi% = LEN(dbNameBuf$)
+10 IF (carolnametrimi% > 0) = 0 THEN GOTO 20
+IF (MID$(dbNameBuf$, carolnametrimi%, 1) = " ") = 0 THEN GOTO 20
+    carolnametrimi% = carolnametrimi% - 1
+    GOTO 10
+20 REM END WHILE
+carolname$ = LEFT$(dbNameBuf$, carolnametrimi%)
+carolscore# = CVD(dbScoreBuf$)
+carolname$ = "Carol Jones"
+carolscore# = 88
+' db[...] = carol  (write back a let-bound record)
+LSET dbIdBuf$ = MKI$(carolid%)
+LSET dbNameBuf$ = carolname$
+LSET dbScoreBuf$ = MKD$(carolscore#)
+PUT #1, 3
 ```
 
 </div>
@@ -250,8 +274,9 @@ db[3] = carol
 
 <span class="tag">Generated BASIC</span>
 
-```bascal
-close #1
+```basic
+' db.close()
+CLOSE #1
 ```
 
 </div>

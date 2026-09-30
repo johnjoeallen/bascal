@@ -16,9 +16,9 @@ Six clauses mean six branch targets and a fall-through target to keep numbered a
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 score% = 85
 IF score% = 100 THEN GOTO 250
 IF score% >= 90 AND score% <= 99 THEN GOTO 270
@@ -81,9 +81,9 @@ A pre-check loop is one `IF ... THEN GOTO` guarding the top and one `GOTO` loopi
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 p% = 1
 400 IF p% >= 100 THEN GOTO 440
     PRINT "  "; p%
@@ -124,9 +124,9 @@ Same pre-check shape as `WHILE`, spelled two ways depending on whether the loop-
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 k% = 1
 670 IF k% > 3 THEN GOTO 700
     PRINT "  "; k%
@@ -178,9 +178,9 @@ Classic BASIC has no `REPEAT`/`UNTIL` — a loop that must run its body at least
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 ' body always runs at least once
 k% = 99
 810 PRINT "  "; k%
@@ -248,13 +248,13 @@ Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there'
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 IF (ptr% >= 0) = 0 THEN GOTO 10
-ispositive_n_0% = scores%(ptr%)
+isPositiveN0% = scores%(ptr%)
 GOSUB 20
-IF (ispositive_result_0% > 0) = 0 THEN GOTO 10
+IF (isPositiveResult0% > 0) = 0 THEN GOTO 10
     PRINT "safe to read"
 10 REM END IF
 ```
@@ -289,9 +289,9 @@ Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 ON ERROR GOTO 10
 OPEN filename$ FOR INPUT AS #1
 CLOSE #1
@@ -362,9 +362,9 @@ end for
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Generated BASIC</span>
+<span class="tag">Hand-rolled BASIC</span>
 
-```bascal
+```basic
 FOR i% = 1 TO 20
     IF (i% > 4) = 0 THEN GOTO 10
         PRINT i%

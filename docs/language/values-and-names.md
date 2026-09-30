@@ -3,13 +3,13 @@
 BASCAL follows the classic BASIC convention: a suffix says what a variable holds. Use `%` for integers, `$` for strings, `!` for single-precision numbers, `#` for doubles, and `&` for long integers. A variable needs no declaration to use — like classic BASIC, it springs into existence the first time you assign it — but `dim` (or its synonym `declare`) states its type up front, which a plain scalar assignment leaves the reader to work out from the suffix alone.
 
 ```bascal
-const TAX_RATE = .23
+const TAX_RATE = 0.23
 declare quantity%, description$, subtotal!
 
 quantity% = 3
 description$ = "notebooks"
 subtotal! = quantity% * 4.50
-print description$ + ": " + STR$(subtotal! * (1 + taxRate!))
+print description$ + ": " + STR$(subtotal! * (1 + TAX_RATE))
 ```
 
 The suffix travels with every use of the name. It is a small cost for a useful property: in a language with a BASIC target, the storage intent is visible at every call site.
