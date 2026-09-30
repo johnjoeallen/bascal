@@ -1,0 +1,4 @@
+program p
+x% = 5
+mid$(x%, 1, 1) = "a"
+end

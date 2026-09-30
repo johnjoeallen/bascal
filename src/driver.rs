@@ -1120,7 +1120,11 @@ mod semantic_driver_differential_tests {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    visit(&path, out);
+                    // `tests/fixtures/invalid` holds programs meant to be
+                    // rejected; they have their own test.
+                    if path.file_name().is_none_or(|name| name != "invalid") {
+                        visit(&path, out);
+                    }
                 } else if path.extension().is_some_and(|extension| extension == "bcl") {
                     out.push(path);
                 }
@@ -1202,6 +1206,142 @@ mod semantic_driver_differential_tests {
             dependent.is_empty(),
             "C output still depends on the AST for: {dependent:#?}"
         );
+    }
+
+    /// The growing corpus of invalid programs: every `tests/fixtures/invalid/
+    /// <name>.bcl` has a `<name>.expected` file with one line per expectation,
+    /// `<target>: ok` when the target must accept the program or
+    /// `<target>: <text>` when compiling it must fail with a diagnostic that
+    /// contains `<text>`. A target is `basic`, `c`, `jvm` or `all` (a specific
+    /// target line overrides `all`); blank lines and `#` comments are ignored.
+    /// Add a pair of files to extend it. See `tests/fixtures/invalid/README.md`.
+    #[test]
+    fn invalid_program_corpus_reports_the_expected_diagnostics() {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/invalid");
+        let mut programs: Vec<PathBuf> = fs::read_dir(&directory)
+            .expect("read tests/fixtures/invalid")
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "bcl"))
+            .collect();
+        programs.sort();
+        assert!(programs.len() >= 50, "the invalid-program corpus shrank");
+        let mut failures = Vec::new();
+        for program in &programs {
+            let name = program.file_name().unwrap().to_string_lossy().to_string();
+            let expected_path = program.with_extension("expected");
+            let Ok(expected_text) = fs::read_to_string(&expected_path) else {
+                failures.push(format!("{name}: missing {}", expected_path.display()));
+                continue;
+            };
+            let mut expectations: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for line in expected_text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let Some((target, text)) = line.split_once(':') else {
+                    failures.push(format!("{name}: malformed expectation `{line}`"));
+                    continue;
+                };
+                expectations.insert(target.trim().to_string(), text.trim().to_string());
+            }
+            for (label, target) in [
+                ("basic", Target::Basic),
+                ("c", Target::C),
+                ("jvm", Target::Jvm),
+            ] {
+                let Some(expectation) = expectations.get(label).or_else(|| expectations.get("all"))
+                else {
+                    failures.push(format!("{name}: no expectation for {label}"));
+                    continue;
+                };
+                let options = CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                };
+                match (compile_file(program, &options), expectation.as_str()) {
+                    (Ok(_), "ok") => {}
+                    (Ok(_), text) => failures.push(format!(
+                        "{name} [{label}]: expected an error containing `{text}` but it compiled"
+                    )),
+                    (Err(diagnostics), "ok") => failures.push(format!(
+                        "{name} [{label}]: expected it to compile but got: {}",
+                        diagnostics
+                            .iter()
+                            .map(|d| d.message.clone())
+                            .collect::<Vec<_>>()
+                            .join(" | ")
+                    )),
+                    (Err(diagnostics), text) => {
+                        if !diagnostics.iter().any(|d| d.message.contains(text)) {
+                            failures.push(format!(
+                                "{name} [{label}]: expected a diagnostic containing `{text}` but got: {}",
+                                diagnostics
+                                    .iter()
+                                    .map(|d| d.message.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(" | ")
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // Every expectation file must belong to a program.
+        for entry in fs::read_dir(&directory).unwrap().flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|extension| extension == "expected")
+                && !path.with_extension("bcl").exists()
+            {
+                failures.push(format!("{}: no matching .bcl", path.display()));
+            }
+        }
+        assert!(failures.is_empty(), "invalid-program corpus:\n{}", failures.join("\n"));
+    }
+
+    /// Debug aid: `BAD_DIR=<dir> cargo test --lib show_invalid_program_diagnostics
+    /// -- --ignored --nocapture` compiles every `.bcl` in the directory for each
+    /// target both AST-driven and typed-only and prints the diagnostics.
+    #[test]
+    #[ignore]
+    fn show_invalid_program_diagnostics() {
+        let directory = PathBuf::from(std::env::var("BAD_DIR").expect("BAD_DIR"));
+        let mut files: Vec<PathBuf> = fs::read_dir(&directory)
+            .expect("read BAD_DIR")
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "bcl"))
+            .collect();
+        files.sort();
+        let summary = |result: Result<String, Vec<Diagnostic>>| match result {
+            Ok(_) => "OK".to_string(),
+            Err(diagnostics) => diagnostics
+                .iter()
+                .map(|d| d.message.replace('\n', " "))
+                .collect::<Vec<_>>()
+                .join(" | "),
+        };
+        for file in files {
+            for (name, target) in [
+                ("basic", Target::Basic),
+                ("c", Target::C),
+                ("jvm", Target::Jvm),
+            ] {
+                let options = CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                };
+                let ast = summary(compile_file_impl(&file, &options, AstUse::AstOnly));
+                let typed = summary(compile_file_impl(&file, &options, AstUse::TypedOnly));
+                let flag = if ast == typed { "same" } else { "DIFF" };
+                println!(
+                    "{flag} {} [{name}]\n    ast:   {ast}\n    typed: {typed}",
+                    file.file_name().unwrap().to_string_lossy()
+                );
+            }
+        }
     }
 
     /// `try`/`catch`/`finally` with an error filter and a source binding is

@@ -401,12 +401,303 @@ fn validate_with_semantic(
     reject_duplicate_consts(program, &mut diagnostics);
     if let Some(module) = semantic_module {
         reject_unknown_callable_parameter_annotations(module, &mut diagnostics);
+        reject_invalid_typed_calls(module, &mut diagnostics);
+        reject_invalid_typed_semantics(module, &mut diagnostics);
     }
 
     if diagnostics.is_empty() {
         Ok(())
     } else {
         Err(diagnostics)
+    }
+}
+
+/// Semantic rules that hold for every target and that the typed IR can check
+/// on its own: a `for` variable is numeric,
+/// `swap` and assignment keep string and numeric apart, `mid$` assigns into a
+/// string, and arithmetic, comparisons and array subscripts do not mix the two
+/// kinds. A value whose type is unknown is never reported.
+fn reject_invalid_typed_semantics(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use crate::semantic_ir::{
+        AssignmentOperator, ExpressionKind, SemanticModule, SemanticStatement,
+        SemanticStatementKind as Kind, SemanticValueType as Type,
+    };
+
+    fn is_string(value_type: Type) -> Option<bool> {
+        match value_type {
+            Type::String => Some(true),
+            Type::Integer | Type::Long | Type::Single | Type::Double | Type::Boolean => {
+                Some(false)
+            }
+            Type::Unknown => None,
+        }
+    }
+
+    fn statements(
+        list: &[SemanticStatement],
+        depth: usize,
+        consts: &HashSet<String>,
+        position: &dyn Fn(crate::rdgen_frontend::SourceSpan) -> SourcePos,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for statement in list {
+            match &statement.kind {
+                Kind::Assignment { target, .. }
+                    if matches!(&target.kind, ExpressionKind::Name(name)
+                        if consts.contains(name.trim_end_matches(['%', '&', '!', '#', '$']).to_ascii_lowercase().as_str())) =>
+                {
+                    let ExpressionKind::Name(name) = &target.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("cannot assign to `{name}`: it is a const"),
+                    ));
+                }
+                Kind::Assignment {
+                    target,
+                    operator: AssignmentOperator::Assign,
+                    value,
+                } => {
+                    if let (Some(target_is_string), Some(value_is_string)) =
+                        (is_string(target.value_type), is_string(value.value_type))
+                    {
+                        if target_is_string != value_is_string {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                if target_is_string {
+                                    "type mismatch: cannot assign a numeric value to a string variable"
+                                } else {
+                                    "type mismatch: cannot assign a string value to a numeric variable"
+                                },
+                            ));
+                        }
+                    }
+                }
+                Kind::For {
+                    variable,
+                    variable_type: Type::String,
+                    ..
+                } => diagnostics.push(Diagnostic::error(
+                    position(statement.span),
+                    format!("`for` loop variable `{variable}` must be numeric"),
+                )),
+                Kind::Swap { left, right } => {
+                    if let (Some(a), Some(b)) =
+                        (is_string(left.value_type), is_string(right.value_type))
+                    {
+                        if a != b {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                "SWAP's two operands must be the same kind (both string, or both numeric)",
+                            ));
+                        }
+                    }
+                }
+                Kind::MidAssign { target, .. } if is_string(target.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "`mid$` assignment needs a string variable as its target",
+                    ));
+                }
+                _ => {}
+            }
+            let inner = |body: &[SemanticStatement], depth, diagnostics: &mut Vec<Diagnostic>| {
+                statements(body, depth, consts, position, diagnostics)
+            };
+            match &statement.kind {
+                Kind::Line(body) => inner(body, depth, diagnostics),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    inner(then_body, depth, diagnostics);
+                    inner(else_body, depth, diagnostics);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    inner(body, depth + 1, diagnostics)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        inner(&case.body, depth, diagnostics);
+                    }
+                    inner(else_body, depth, diagnostics);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    inner(body, depth, diagnostics);
+                    if let Some(catch) = catch {
+                        inner(&catch.body, depth, diagnostics);
+                    }
+                    inner(finally_body, depth, diagnostics);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn expressions(
+        list: &[SemanticStatement],
+        position: &dyn Fn(crate::rdgen_frontend::SourceSpan) -> SourcePos,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for expression in SemanticModule::expressions_in(list) {
+            match &expression.kind {
+                ExpressionKind::Binary {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    let (Some(left_string), Some(right_string)) =
+                        (is_string(left.value_type), is_string(right.value_type))
+                    else {
+                        continue;
+                    };
+                    let operator = operator.trim().to_ascii_uppercase();
+                    let mixes = left_string != right_string;
+                    let bad = match operator.as_str() {
+                        "+" | "=" | "<>" | "<" | ">" | "<=" | ">=" => mixes,
+                        "-" | "*" | "/" | "^" | "\\" | "MOD" | "AND" | "OR" | "XOR" | "EQV"
+                        | "IMP" => left_string || right_string,
+                        _ => false,
+                    };
+                    if bad {
+                        diagnostics.push(Diagnostic::error(
+                            position(expression.span),
+                            format!(
+                                "type mismatch: `{}` cannot combine a string and a number this way",
+                                operator.to_ascii_lowercase()
+                            ),
+                        ));
+                    }
+                }
+                ExpressionKind::Index { index, .. } if index.value_type == Type::String => {
+                    diagnostics.push(Diagnostic::error(
+                        position(index.span),
+                        "an array subscript must be numeric",
+                    ));
+                }
+                ExpressionKind::MultiIndex { indices, .. } => {
+                    for index in indices.iter().filter(|index| index.value_type == Type::String) {
+                        diagnostics.push(Diagnostic::error(
+                            position(index.span),
+                            "an array subscript must be numeric",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let top_level_consts: HashSet<String> = module
+        .top_level_const_names()
+        .into_iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    let position_in = |source_index: usize| {
+        move |span: crate::rdgen_frontend::SourceSpan| {
+            module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1))
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let position = position_in(*source_index);
+        statements(
+            std::slice::from_ref(statement),
+            0,
+            &top_level_consts,
+            &position,
+            diagnostics,
+        );
+        expressions(std::slice::from_ref(statement), &position, diagnostics);
+    }
+    for callable in &module.callables {
+        let position = position_in(callable.source_index);
+        let mut consts = top_level_consts.clone();
+        consts.extend(callable.const_initializers().into_keys());
+        statements(&callable.body, 0, &consts, &position, diagnostics);
+        expressions(&callable.body, &position, diagnostics);
+    }
+}
+
+/// Checks every call to a user callable against its declaration: the argument
+/// count must fit the parameters (defaults make trailing ones optional), and
+/// a `byref` scalar parameter needs a plain variable to write back to.
+fn reject_invalid_typed_calls(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use crate::semantic_ir::{ExpressionKind, Passing, SemanticModule};
+
+    let mut check = |source_index: usize, statements: &[crate::semantic_ir::SemanticStatement]| {
+        for call in SemanticModule::calls_in(statements) {
+            let ExpressionKind::Call { name, arguments } = &call.kind else {
+                continue;
+            };
+            let Some(callable) = module
+                .callables
+                .iter()
+                .find(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
+            else {
+                continue;
+            };
+            let position = module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(call.span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+            let required = callable
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.default.is_none())
+                .count();
+            if arguments.len() < required || arguments.len() > callable.parameters.len() {
+                diagnostics.push(Diagnostic::error(
+                    position,
+                    format!(
+                        "`{name}` expects {} argument(s), got {}",
+                        callable.parameters.len(),
+                        arguments.len()
+                    ),
+                ));
+                continue;
+            }
+            for (parameter, argument) in callable.parameters.iter().zip(arguments) {
+                if parameter.passing == Some(Passing::ByRef)
+                    && parameter.array_axes == 0
+                    && !matches!(argument.kind, ExpressionKind::Name(_))
+                {
+                    diagnostics.push(Diagnostic::error(
+                        position.clone(),
+                        format!(
+                            "`byref` parameter `{}` of `{name}` was called with an argument that \
+                             isn't a plain variable -- byref requires somewhere to write the \
+                             result back to",
+                            parameter.name
+                        ),
+                    ));
+                }
+            }
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement));
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body);
     }
 }
 

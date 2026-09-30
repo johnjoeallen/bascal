@@ -1,0 +1,4 @@
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: `nope%` isn't a known array, so `LBOUND` can't determine its size
+c: `nope%` isn't a known array, so `lbound` can't determine its size
+jvm: Print is not supported by the minimal JVM backend yet

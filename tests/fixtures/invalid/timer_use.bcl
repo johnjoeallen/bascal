@@ -1,0 +1,4 @@
+program p
+t# = timer
+print t#
+end

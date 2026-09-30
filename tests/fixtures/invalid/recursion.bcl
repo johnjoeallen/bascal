@@ -1,0 +1,9 @@
+program p
+function f%(n%)
+if n% = 0 then
+return 0
+end if
+return f%(n% - 1)
+end function
+print f%(3)
+end

@@ -1,0 +1,2 @@
+# accepted today: redimensioning an array is not diagnosed.
+all: ok

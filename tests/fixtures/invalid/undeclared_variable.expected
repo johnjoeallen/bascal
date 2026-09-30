@@ -1,0 +1,5 @@
+# BASIC semantics: an unassigned variable reads as 0, so this is valid; the JVM backend rejects it.
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: ok
+jvm: Print is not supported by the minimal JVM backend yet

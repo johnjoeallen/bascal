@@ -1,0 +1,5 @@
+program p
+open "f.dat" for random as #1 len = 4
+field #1, 4 as b$
+get #1
+end

@@ -1,0 +1,6 @@
+program p
+procedure p()
+print 1
+end procedure
+x% = p()
+end

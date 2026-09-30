@@ -1,0 +1,4 @@
+program p
+on error goto handler
+error 5
+end

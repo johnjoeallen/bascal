@@ -1,0 +1,1 @@
+all: type mismatch: cannot assign a string value to a numeric variable

@@ -1,0 +1,1 @@
+all: `OPTION BASE` isn't supported -- BASCAL only supports the default base-0 array indexing (see docs/ma

@@ -1,0 +1,4 @@
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: `on error goto` is not supported with --target c; use `try`/`catch`/`finally` for portable error han
+jvm: OnErrorGoto is not supported by the minimal JVM backend yet

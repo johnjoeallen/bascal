@@ -1,0 +1,9 @@
+program p
+function outer%()
+function inner%()
+return 1
+end function
+return 2
+end function
+print outer%()
+end

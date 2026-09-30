@@ -1,0 +1,4 @@
+program p
+option base 1
+dim a%(3)
+end

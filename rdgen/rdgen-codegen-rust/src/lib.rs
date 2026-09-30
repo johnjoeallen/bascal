@@ -2805,8 +2805,12 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
         fn collect_bcl_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
             for entry in std::fs::read_dir(directory).unwrap() {
                 let path = entry.unwrap().path();
+                // `tests/fixtures/invalid` holds programs that are meant to be
+                // rejected, some of them by the parser.
                 if path.is_dir() {
-                    collect_bcl_files(&path, files);
+                    if path.file_name().is_none_or(|name| name != "invalid") {
+                        collect_bcl_files(&path, files);
+                    }
                 } else if path.extension().is_some_and(|extension| extension == "bcl") {
                     files.push(path);
                 }

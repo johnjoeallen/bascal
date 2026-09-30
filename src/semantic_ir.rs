@@ -317,6 +317,20 @@ impl SemanticModule {
         names.typed
     }
 
+    /// Every expression node in a statement list, parents before children.
+    pub fn expressions_in(statements: &[SemanticStatement]) -> Vec<Expression> {
+        let mut calls = SemanticCalls::default();
+        collect_semantic_statements(statements, &mut calls);
+        calls.expressions
+    }
+
+    /// Every call expression in a statement list, outermost first.
+    pub fn calls_in(statements: &[SemanticStatement]) -> Vec<Expression> {
+        let mut calls = SemanticCalls::default();
+        collect_semantic_statements(statements, &mut calls);
+        calls.calls
+    }
+
     pub fn global_declarations_in(statements: &[SemanticStatement]) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
         collect_semantic_global_declarations(statements, &mut names, &mut BTreeMap::new());
@@ -2739,6 +2753,16 @@ fn resolve_record_field_path<'a>(
 trait SemanticNameSink {
     fn insert(&mut self, name: String) -> bool;
 
+    /// Called for every call expression the walker meets.
+    fn call(&mut self, expression: &Expression) {
+        let _ = expression;
+    }
+
+    /// Called for every expression node the walker meets, parents first.
+    fn expression(&mut self, expression: &Expression) {
+        let _ = expression;
+    }
+
     fn insert_typed(&mut self, name: String, value_type: SemanticValueType) {
         let _ = value_type;
         self.insert(name.to_ascii_lowercase());
@@ -2748,6 +2772,27 @@ trait SemanticNameSink {
 impl SemanticNameSink for BTreeSet<String> {
     fn insert(&mut self, name: String) -> bool {
         BTreeSet::insert(self, name)
+    }
+}
+
+#[derive(Default)]
+struct SemanticCalls {
+    names: BTreeSet<String>,
+    calls: Vec<Expression>,
+    expressions: Vec<Expression>,
+}
+
+impl SemanticNameSink for SemanticCalls {
+    fn insert(&mut self, name: String) -> bool {
+        self.names.insert(name)
+    }
+
+    fn call(&mut self, expression: &Expression) {
+        self.calls.push(expression.clone());
+    }
+
+    fn expression(&mut self, expression: &Expression) {
+        self.expressions.push(expression.clone());
     }
 }
 
@@ -2773,11 +2818,13 @@ fn collect_semantic_expression(
     expression: &Expression,
     names: &mut impl SemanticNameSink,
 ) {
+    names.expression(expression);
     match &expression.kind {
         ExpressionKind::Name(name) => {
             names.insert_typed(name.clone(), expression.value_type);
         }
         ExpressionKind::Call { arguments, .. } => {
+            names.call(expression);
             for argument in arguments {
                 collect_semantic_expression(argument, names);
             }

@@ -1,0 +1,4 @@
+# gap: c, jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: SelectCase is not supported by the minimal C backend yet
+jvm: SelectCase is not supported by the minimal JVM backend yet

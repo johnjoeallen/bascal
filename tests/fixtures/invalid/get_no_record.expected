@@ -1,0 +1,4 @@
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: GET/PUT with no record number ("next sequential record") isn't supported by the minimal C backend ye
+jvm: Get is not supported by the minimal JVM backend yet

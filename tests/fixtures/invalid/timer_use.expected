@@ -1,0 +1,4 @@
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: ok
+jvm: Assignment is not supported by the minimal JVM backend yet

@@ -1,0 +1,4 @@
+# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+basic: ok
+c: LSET/RSET on `x$` isn't supported by the minimal C backend yet -- only a variable declared by a (lit
+jvm: Lset is not supported by the minimal JVM backend yet

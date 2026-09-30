@@ -4877,6 +4877,10 @@ pub struct CodeGenerator {
     // program that never uses `catch err%, erl%, source$` gets byte-for-
     // byte the same output it always has.
     needs_source_lookup: bool,
+    /// Errors found by rendering helpers that only borrow the generator
+    /// immutably (array-bound builtins on a typed path); merged into
+    /// `diagnostics` before generation finishes.
+    deferred_errors: std::cell::RefCell<Vec<String>>,
     // The original `.bcl` filename `statement()` most recently emitted a
     // `source_file_marker` for -- lets it emit one only when the file
     // actually changes from one statement to the next. `None` until the
@@ -8584,6 +8588,7 @@ impl CodeGenerator {
             error_handler_procedures: HashSet::new(),
             try_handler_stack: Vec::new(),
             needs_source_lookup: false,
+            deferred_errors: std::cell::RefCell::new(Vec::new()),
             current_marker_file: None,
         }
     }
@@ -8939,6 +8944,18 @@ impl CodeGenerator {
             }
             for function in &program.functions {
                 self.function(function, resolved.semantic_module.as_ref());
+            }
+        }
+        for message in self.deferred_errors.take() {
+            if !self
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message == message)
+            {
+                self.diagnostics.push(Diagnostic::error(
+                    SourcePos::new("<validation>", 1, 1),
+                    message,
+                ));
             }
         }
         if !self.diagnostics.is_empty() {
@@ -11218,16 +11235,17 @@ impl CodeGenerator {
                         Some(axis) => Some(Expr::Integer(semantic_integer_literal_axis(axis)?)),
                     };
                     let array = BasicIdent::parse(array_name);
-                    return match name.to_ascii_lowercase().as_str() {
-                        "sizeof" => self
-                            .resolve_sizeof(&array, axis.as_ref(), current_function)
-                            .ok(),
-                        "lbound" => self
-                            .resolve_lbound(&array, axis.as_ref(), current_function)
-                            .ok(),
-                        _ => self
-                            .resolve_ubound(&array, axis.as_ref(), current_function)
-                            .ok(),
+                    let resolved = match name.to_ascii_lowercase().as_str() {
+                        "sizeof" => self.resolve_sizeof(&array, axis.as_ref(), current_function),
+                        "lbound" => self.resolve_lbound(&array, axis.as_ref(), current_function),
+                        _ => self.resolve_ubound(&array, axis.as_ref(), current_function),
+                    };
+                    return match resolved {
+                        Ok(text) => Some(text),
+                        Err(message) => {
+                            self.deferred_errors.borrow_mut().push(message);
+                            Some("1".to_string())
+                        }
                     };
                 }
                 let arguments = arguments
