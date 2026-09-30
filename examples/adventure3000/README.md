@@ -23,7 +23,7 @@ source from scratch.
   unmodified, checked in verbatim for reference and provenance.
 - **`stage2-minimal-bascal/`** -- the same program as valid `.bcl` source,
   changed as little as the language actually allows. Variable names, the
-  `GOSUB` spaghetti, single-letter globals, and the `DATA`/`READ` tables
+  `GOSUB`-based structure, single-letter globals, and the `DATA`/`READ` tables
   are untouched. What *did* have to change, because BASCAL genuinely has
   no equivalent, turned out to be more than expected:
   - Every numbered line that's an actual `goto`/`gosub`/`restore`/
@@ -36,7 +36,7 @@ source from scratch.
   - BASCAL's `for` loop has no raw `NEXT`-terminated form -- it's always
     a structured `for ... end for` block. Most of the original's ~30
     loops convert to that directly, but around a third jump out of the
-    loop body mid-iteration via `GOTO` (classic spaghetti-BASIC), which a
+    loop body mid-iteration via `GOTO` (a classic BASIC idiom), which a
     structured block can't represent -- those became manual
     `X = A : L: if X > B then goto Lend ... X = X + step : goto L : Lend:`
     loops instead, verified individually to actually be jumped out of

@@ -6,7 +6,7 @@
 
 
 The same program as valid `.bcl` source, changed as little as the language
-actually allows -- variable names, the `GOSUB` spaghetti, and the `DATA`/
+actually allows -- variable names, the `GOSUB` structure, and the `DATA`/
 `READ` tables are all untouched. What *did* have to change, because BASCAL
 genuinely has no equivalent, turned out to be more than expected:
 
@@ -18,7 +18,7 @@ genuinely has no equivalent, turned out to be more than expected:
 - BASCAL's `for` loop has no raw `NEXT`-terminated form -- it's always a
   structured `for ... end for` block. Most of the original's ~30 loops
   convert directly, but around a third jump out of the loop body
-  mid-iteration via `GOTO` (classic spaghetti-BASIC), which a structured
+  mid-iteration via `GOTO` (a classic BASIC idiom), which a structured
   block can't represent -- those became manual `X = A : L: if X > B then
   goto Lend ... X = X + step : goto L : Lend:` loops instead.
 - A related, initially-missed bug: several loops also contain an internal
