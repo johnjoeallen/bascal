@@ -1,4 +1,3 @@
-# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
 basic: ok
-c: `input` with more than one variable isn't supported by the minimal C backend yet -- give each variab
-jvm: Input is not supported by the minimal JVM backend yet
+c: `input` with more than one variable isn't supported with --target c
+jvm: `input` with more than one variable isn't supported with --target jvm

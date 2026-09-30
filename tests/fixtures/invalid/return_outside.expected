@@ -1,4 +1,3 @@
-# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
 basic: ok
 c: `return` outside of a function isn't supported by the minimal C backend
-jvm: Return is not supported by the minimal JVM backend yet
+jvm: `return` outside of a function isn't supported with --target jvm

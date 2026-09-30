@@ -3004,6 +3004,31 @@ fn emit_jvm_semantic_block(
     true
 }
 
+thread_local! {
+    /// Why the typed JVM emitter last declined something the user can act on
+    /// (for instance a variable read before it is assigned). Reported in place
+    /// of the generic "not supported" text by `first_unsupported_semantic_statement`.
+    static JVM_DECLINE_REASON: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn jvm_record_decline(reason: &str) {
+    JVM_DECLINE_REASON.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(reason.to_string());
+        }
+    });
+}
+
+fn jvm_clear_decline() {
+    JVM_DECLINE_REASON.with(|slot| *slot.borrow_mut() = None);
+}
+
+fn jvm_take_decline() -> Option<String> {
+    JVM_DECLINE_REASON.with(|slot| slot.borrow_mut().take())
+}
+
 /// The diagnostic for the first top-level typed statement the typed JVM
 /// emitter declines, worded like the compatibility emitter's own.
 fn first_unsupported_semantic_statement(
@@ -3020,6 +3045,7 @@ fn first_unsupported_semantic_statement(
     };
     statements.iter().find_map(|statement| {
         let mut scratch = String::new();
+        jvm_clear_decline();
         if emit_jvm_semantic_block(
             std::slice::from_ref(statement),
             context,
@@ -3053,6 +3079,9 @@ fn first_unsupported_semantic_statement(
             if let Some(message) = first_unsupported_semantic_statement(&owned, context) {
                 return Some(message);
             }
+        }
+        if let Some(reason) = jvm_take_decline() {
+            return Some(reason);
         }
         Some(match &statement.kind {
             Kind::Gosub(_)
@@ -3540,6 +3569,13 @@ fn emit_jvm_semantic_numeric_expression_inner(
 ) -> Result<NumericType, String> {
     use crate::semantic_ir::{ExpressionKind as Kind, SemanticValueType as ValueType};
     match &expression.kind {
+        // `TIMER`: seconds since local midnight, as a double.
+        Kind::Name(name) if name.eq_ignore_ascii_case("timer") => {
+            out.push_str(
+                "    invokestatic java/time/LocalTime/now ()Ljava/time/LocalTime;\n    invokevirtual java/time/LocalTime/toNanoOfDay ()J\n    l2d\n    ldc2_w 1000000000.0\n    ddiv\n",
+            );
+            Ok(NumericType::Double)
+        }
         Kind::Boolean(value) => {
             out.push_str(if *value {
                 "    iconst_m1\n"
@@ -9646,9 +9682,9 @@ impl JvmContext {
                 return Ok(variable);
             }
         }
-        Err(format!(
-            "`{ident}` must be assigned or declared before use under --target jvm"
-        ))
+        let message = format!("`{ident}` must be assigned or declared before use under --target jvm");
+        jvm_record_decline(&message);
+        Err(message)
     }
 
     fn function(&self, ident: &BasicIdent) -> Option<FunctionSig> {

@@ -1,4 +1,4 @@
-# gap: c, jvm report only a generic "not supported" message; give it a specific diagnostic
+# BASIC only warns about `exit` outside a loop; C and the JVM reject it.
 basic: ok
-c: Exit is not supported by the minimal C backend yet
-jvm: Exit is not supported by the minimal JVM backend yet
+c: `exit` outside of a loop isn't supported with --target c
+jvm: `exit` outside of a loop isn't supported with --target jvm

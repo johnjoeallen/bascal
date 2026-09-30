@@ -677,6 +677,150 @@ fn reject_invalid_typed_semantics(
     }
 }
 
+/// Limits of the C and JVM targets that classic BASIC does not share, reported
+/// before code generation with one clear message instead of a backend's
+/// generic "not supported": `exit`/`continue` outside a loop, `input` with
+/// several variables, `GET`/`PUT` with no record number, `LSET`/`RSET` on a
+/// variable no `FIELD` declared, and, on the JVM, `on error goto`, `resume`
+/// and `return` outside a function.
+pub fn reject_target_limits(
+    module: &crate::semantic_ir::SemanticModule,
+    target: &str,
+    jvm: bool,
+) -> Vec<Diagnostic> {
+    use crate::semantic_ir::{InputSource, SemanticStatement, SemanticStatementKind as Kind};
+
+    fn visit(
+        list: &[SemanticStatement],
+        depth: usize,
+        in_callable: bool,
+        f: &mut dyn FnMut(&SemanticStatement, usize, bool),
+    ) {
+        for statement in list {
+            f(statement, depth, in_callable);
+            match &statement.kind {
+                Kind::Line(body) => visit(body, depth, in_callable, f),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, depth, in_callable, f);
+                    visit(else_body, depth, in_callable, f);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    visit(body, depth + 1, in_callable, f)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        visit(&case.body, depth, in_callable, f);
+                    }
+                    visit(else_body, depth, in_callable, f);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    visit(body, depth, in_callable, f);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, depth, in_callable, f);
+                    }
+                    visit(finally_body, depth, in_callable, f);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let base = |name: &str| {
+        name.trim_end_matches(['$', '%', '&', '!', '#'])
+            .to_ascii_lowercase()
+    };
+    // Every variable a FIELD statement binds, anywhere.
+    let mut fielded: HashSet<String> = HashSet::new();
+    {
+        let mut note = |statement: &SemanticStatement, _: usize, _: bool| {
+            if let Kind::Field { bindings, .. } = &statement.kind {
+                fielded.extend(bindings.iter().map(|binding| base(&binding.name)));
+            }
+        };
+        visit(&module.statements, 0, false, &mut note);
+        for callable in &module.callables {
+            visit(&callable.body, 0, true, &mut note);
+        }
+    }
+
+    // A bare `return` in a program that uses `gosub` returns from the gosub,
+    // and the JVM already rejects `gosub` itself.
+    let has_gosub = module.top_level_gosub_count() > 0;
+    let mut diagnostics = Vec::new();
+    let mut check = |source_index: usize, list: &[SemanticStatement], in_callable: bool| {
+        let position = |span| {
+            module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1))
+        };
+        let mut found: Vec<Diagnostic> = Vec::new();
+        visit(list, 0, in_callable, &mut |statement, depth, in_callable| {
+            let mut report = |message: String| {
+                found.push(Diagnostic::error(position(statement.span), message));
+            };
+            match &statement.kind {
+                Kind::Exit if depth == 0 => {
+                    report(format!("`exit` outside of a loop isn't supported with --target {target}"));
+                }
+                Kind::Continue if depth == 0 => {
+                    report(format!("`continue` outside of a loop isn't supported with --target {target}"));
+                }
+                Kind::Input {
+                    source: InputSource::Console(_),
+                    targets,
+                } if targets.len() > 1 => report(format!(
+                    "`input` with more than one variable isn't supported with --target {target} -- give each variable its own `input` statement"
+                )),
+                Kind::Get { position: at, .. } | Kind::Put { position: at, .. }
+                    if at.as_ref().is_none_or(|at| at.position.is_none()) =>
+                {
+                    report(format!(
+                        "GET/PUT with no record number (\"next sequential record\") isn't supported with --target {target} -- always pass an explicit record number"
+                    ));
+                }
+                Kind::Lset { target: variable, .. } | Kind::Rset { target: variable, .. }
+                    if !fielded.contains(&base(&variable.name)) =>
+                {
+                    report(format!(
+                        "LSET/RSET on `{}` isn't supported with --target {target} -- only a variable declared by a FIELD is",
+                        variable.name
+                    ));
+                }
+                Kind::OnErrorGoto(_) if jvm => report(
+                    "`on error goto` is not supported with --target jvm; use `try`/`catch`/`finally` for portable error handling".to_string(),
+                ),
+                Kind::Resume(_) if jvm => report(
+                    "`resume` is not supported with --target jvm; use `try`/`catch`/`finally` for portable error handling".to_string(),
+                ),
+                Kind::Return(_) if jvm && !in_callable && !has_gosub => report(
+                    "`return` outside of a function isn't supported with --target jvm".to_string(),
+                ),
+                _ => {}
+            }
+        });
+        diagnostics.extend(found);
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement), false);
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body, true);
+    }
+    diagnostics
+}
+
 /// Calls to names that are neither a user callable, a built-in, a declared
 /// array (or array parameter) nor a method are errors on every target.
 fn reject_unknown_calls(module: &crate::semantic_ir::SemanticModule) -> Vec<Diagnostic> {

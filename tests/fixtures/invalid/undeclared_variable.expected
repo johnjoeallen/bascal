@@ -1,5 +1,4 @@
-# BASIC semantics: an unassigned variable reads as 0, so this is valid; the JVM backend rejects it.
-# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
+# BASIC semantics: an unassigned variable reads as 0, so BASIC and C accept this; the JVM needs a variable to be assigned or declared first.
 basic: ok
 c: ok
-jvm: Print is not supported by the minimal JVM backend yet
+jvm: `nosuchvar%` must be assigned or declared before use under --target jvm

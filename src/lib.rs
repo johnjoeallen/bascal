@@ -2014,6 +2014,22 @@ end
     }
 
     #[test]
+    fn jvm_target_timer_reads_seconds_since_midnight() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("timer.bcl");
+        std::fs::write(&path, "program p\nstart# = timer\nprint timer - start#\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::Jvm,
+            ..CompileOptions::new()
+        };
+        let output = compile_file(&path, &options).expect("timer compiles for the JVM");
+        assert!(
+            output.contains("java/time/LocalTime/toNanoOfDay ()J") && output.contains("ddiv"),
+            "{output}"
+        );
+    }
+
+    #[test]
     fn c_target_without_timer_carries_no_timer_helper() {
         let output = compile_source_via_c_target("print 1\nend\n");
         assert!(!output.contains("bcc_timer"), "{output}");

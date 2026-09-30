@@ -248,6 +248,17 @@ fn compile_file_impl(
     for finding in semantic_warnings {
         eprintln!("{finding}");
     }
+    // Limits the C and JVM targets have and classic BASIC does not.
+    if matches!(options.target, Target::C | Target::C64 | Target::Jvm) {
+        if let Some(module) = resolved.semantic_module.as_ref() {
+            let jvm = options.target == Target::Jvm;
+            let limits =
+                resolver::reject_target_limits(module, if jvm { "jvm" } else { "c" }, jvm);
+            if !limits.is_empty() {
+                return Err(limits);
+            }
+        }
+    }
     if matches!(options.target, Target::Basic | Target::Fbc) {
         let conflicts = if let Some(module) = resolved.semantic_module.as_ref() {
             codegen::check_generated_name_conflicts_semantic(module, &resolved.common_blocks)

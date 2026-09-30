@@ -1,4 +1,4 @@
-# gap: c, jvm report only a generic "not supported" message; give it a specific diagnostic
+# BASIC only warns about `continue` outside a loop; C and the JVM reject it.
 basic: ok
-c: Continue is not supported by the minimal C backend yet
-jvm: Continue is not supported by the minimal JVM backend yet
+c: `continue` outside of a loop isn't supported with --target c
+jvm: `continue` outside of a loop isn't supported with --target jvm
