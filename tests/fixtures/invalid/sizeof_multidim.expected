@@ -1,4 +1,1 @@
-# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
-basic: `g%` has 2 dimensions -- SIZEOF needs an axis argument, e.g. `SIZEOF(g%, 0)`
-c: `g%` has 2 dimensions -- sizeof needs an axis argument, e.g. `sizeof(g%, 0)`
-jvm: Print is not supported by the minimal JVM backend yet
+all: `g%` has 2 dimensions -- sizeof needs an axis argument, e.g. `sizeof(g%, 0)`

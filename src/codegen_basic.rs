@@ -4567,12 +4567,12 @@ mod tests {
         let source = "const count = sizeof(missing%)\nprint count\nend\n";
         let parsed = crate::parse_source("unknown_semantic_bound.bcl".to_string(), source).unwrap();
         let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
-        let resolved = crate::resolver::resolve_with_semantic(
+        let diagnostics = crate::resolver::resolve_with_semantic(
             program,
             Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
         )
-        .unwrap();
-        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        .err()
+        .expect("the resolver rejects the invalid array bound");
         assert!(
             diagnostics.iter().any(|diagnostic| {
                 diagnostic.message.contains("missing%")
@@ -4588,12 +4588,12 @@ mod tests {
         let parsed =
             crate::parse_source("invalid_semantic_bound_axis.bcl".to_string(), source).unwrap();
         let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
-        let resolved = crate::resolver::resolve_with_semantic(
+        let diagnostics = crate::resolver::resolve_with_semantic(
             program,
             Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
         )
-        .unwrap();
-        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        .err()
+        .expect("the resolver rejects the invalid array bound");
         assert!(
             diagnostics
                 .iter()
@@ -4608,16 +4608,16 @@ mod tests {
         let parsed =
             crate::parse_source("missing_semantic_bound_axis.bcl".to_string(), source).unwrap();
         let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
-        let resolved = crate::resolver::resolve_with_semantic(
+        let diagnostics = crate::resolver::resolve_with_semantic(
             program,
             Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
         )
-        .unwrap();
-        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        .err()
+        .expect("the resolver rejects the invalid array bound");
         assert!(
             diagnostics
                 .iter()
-                .any(|diagnostic| { diagnostic.message.contains("SIZEOF needs an axis argument") }),
+                .any(|diagnostic| { diagnostic.message.contains("sizeof needs an axis argument") }),
             "{diagnostics:?}"
         );
     }
@@ -4672,18 +4672,17 @@ mod tests {
             let parsed =
                 crate::parse_source("missing_bound_axis.bcl".to_string(), &source).unwrap();
             let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
-            let resolved = crate::resolver::resolve_with_semantic(
+            let diagnostics = crate::resolver::resolve_with_semantic(
                 program,
                 Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
             )
-            .unwrap();
-            let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+            .err()
+        .expect("the resolver rejects the invalid array bound");
             assert!(
                 diagnostics.iter().any(|diagnostic| {
-                    diagnostic.message.contains(&format!(
-                        "{} needs an axis argument",
-                        builtin.to_uppercase()
-                    ))
+                    diagnostic
+                        .message
+                        .contains(&format!("{builtin} needs an axis argument"))
                 }),
                 "{builtin}: {diagnostics:?}"
             );

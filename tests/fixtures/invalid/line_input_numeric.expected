@@ -1,4 +1,1 @@
-# gap: jvm report only a generic "not supported" message; give it a specific diagnostic
-basic: ok
-c: LINE INPUT # requires a string (`$`-suffixed) target
-jvm: Open is not supported by the minimal JVM backend yet
+all: LINE INPUT # requires a string (`$`-suffixed) target

@@ -498,6 +498,49 @@ fn reject_invalid_typed_semantics(
                         }
                     }
                 }
+                Kind::SelectCase {
+                    selector, cases, ..
+                } => {
+                    if let Some(selector_is_string) = is_string(selector.value_type) {
+                        let mismatched = cases.iter().flat_map(|case| &case.values).any(|value| {
+                            let types: Vec<Type> = match value {
+                                crate::semantic_ir::CaseValue::Comparison { value, .. } => {
+                                    vec![value.value_type]
+                                }
+                                crate::semantic_ir::CaseValue::Value {
+                                    first, range_end, ..
+                                } => std::iter::once(first.value_type)
+                                    .chain(range_end.iter().map(|end| end.value_type))
+                                    .collect(),
+                            };
+                            types
+                                .into_iter()
+                                .filter_map(is_string)
+                                .any(|value_is_string| value_is_string != selector_is_string)
+                        });
+                        if mismatched {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                "type mismatch: a `case` value must be the same kind (string or numeric) as the `select case` expression",
+                            ));
+                        }
+                    }
+                }
+                Kind::LineInput { target, .. } if is_string(target.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "LINE INPUT # requires a string (`$`-suffixed) target",
+                    ));
+                }
+                Kind::Print {
+                    destination: crate::semantic_ir::PrintDestination::Using { format, .. },
+                    ..
+                } if is_string(format.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "`print using` needs a string format",
+                    ));
+                }
                 Kind::MidAssign { target, .. } if is_string(target.value_type) == Some(false) => {
                     diagnostics.push(Diagnostic::error(
                         position(statement.span),
@@ -722,16 +765,95 @@ fn reject_invalid_typed_calls(
 ) {
     use crate::semantic_ir::{ExpressionKind, Passing, SemanticModule};
 
-    let mut check = |source_index: usize, statements: &[crate::semantic_ir::SemanticStatement]| {
+    // The spans of calls that are statements in their own right: only those
+    // may call a procedure.
+    fn statement_calls(
+        list: &[crate::semantic_ir::SemanticStatement],
+        spans: &mut HashSet<(usize, usize)>,
+    ) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in list {
+            match &statement.kind {
+                Kind::Expression(expression)
+                    if matches!(expression.kind, ExpressionKind::Call { .. }) =>
+                {
+                    spans.insert((expression.span.start, expression.span.end));
+                }
+                Kind::Line(body) => statement_calls(body, spans),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    statement_calls(then_body, spans);
+                    statement_calls(else_body, spans);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    statement_calls(body, spans)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        statement_calls(&case.body, spans);
+                    }
+                    statement_calls(else_body, spans);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    statement_calls(body, spans);
+                    if let Some(catch) = catch {
+                        statement_calls(&catch.body, spans);
+                    }
+                    statement_calls(finally_body, spans);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // The rank of a declared array, looking in the callable's own scope
+    // (its dims and array parameters) before the program's.
+    let array_rank = |callable: Option<&crate::semantic_ir::CallableSignature>, name: &str| {
+        let key = name.to_ascii_lowercase();
+        let base = key.trim_end_matches(['$', '%', '&', '!', '#']).to_string();
+        let matches = |declared: &str| {
+            let declared = declared.to_ascii_lowercase();
+            declared == key || declared.trim_end_matches(['$', '%', '&', '!', '#']) == base
+        };
+        if let Some(callable) = callable {
+            if let Some(parameter) = callable
+                .parameters
+                .iter()
+                .find(|parameter| parameter.array_axes > 0 && matches(&parameter.name))
+            {
+                return Some(parameter.array_axes);
+            }
+            if let Some(declaration) = callable
+                .dim_declarations()
+                .into_values()
+                .find(|declaration| declaration.array_axes > 0 && matches(&declaration.name))
+            {
+                return Some(declaration.array_axes);
+            }
+        }
+        module
+            .top_level_dim_declarations()
+            .into_values()
+            .find(|declaration| declaration.array_axes > 0 && matches(&declaration.name))
+            .map(|declaration| declaration.array_axes)
+    };
+
+    let mut check = |source_index: usize,
+                     statements: &[crate::semantic_ir::SemanticStatement],
+                     scope: Option<&crate::semantic_ir::CallableSignature>| {
+        let mut statement_spans = HashSet::new();
+        statement_calls(statements, &mut statement_spans);
         for call in SemanticModule::calls_in(statements) {
             let ExpressionKind::Call { name, arguments } = &call.kind else {
-                continue;
-            };
-            let Some(callable) = module
-                .callables
-                .iter()
-                .find(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
-            else {
                 continue;
             };
             let position = module
@@ -739,6 +861,63 @@ fn reject_invalid_typed_calls(
                 .get(source_index)
                 .map(|source| source.source_position(call.span))
                 .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+            let lower = name.to_ascii_lowercase();
+            if ["sizeof", "lbound", "ubound"].contains(&lower.as_str()) {
+                let builtin = lower.as_str();
+                match arguments.first().map(|argument| &argument.kind) {
+                    Some(ExpressionKind::Name(array)) => match array_rank(scope, array) {
+                        None => diagnostics.push(Diagnostic::error(
+                            position,
+                            format!(
+                                "`{array}` isn't a known array, so `{builtin}` can't determine its size"
+                            ),
+                        )),
+                        Some(rank) => match arguments.get(1).map(|axis| &axis.kind) {
+                            None if rank > 1 => diagnostics.push(Diagnostic::error(
+                                position,
+                                format!(
+                                    "`{array}` has {rank} dimensions -- {builtin} needs an axis argument, e.g. `{builtin}({array}, 0)`"
+                                ),
+                            )),
+                            Some(ExpressionKind::Literal(axis))
+                                if axis.parse::<usize>().is_ok_and(|axis| axis >= rank) =>
+                            {
+                                diagnostics.push(Diagnostic::error(
+                                    position,
+                                    format!(
+                                        "`{array}` only has {rank} dimension{} -- axis {axis} doesn't exist",
+                                        if rank == 1 { "" } else { "s" }
+                                    ),
+                                ));
+                            }
+                            _ => {}
+                        },
+                    },
+                    _ => diagnostics.push(Diagnostic::error(
+                        position,
+                        format!(
+                            "`{builtin}` expects an array name, e.g. `{builtin}(arr%)` or `{builtin}(grid%, 1)`"
+                        ),
+                    )),
+                }
+                continue;
+            }
+            let Some(callable) = module
+                .callables
+                .iter()
+                .find(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
+            else {
+                continue;
+            };
+            if callable.kind == crate::semantic_ir::CallableKind::Procedure
+                && !statement_spans.contains(&(call.span.start, call.span.end))
+            {
+                diagnostics.push(Diagnostic::error(
+                    position.clone(),
+                    format!("`{name}` is a procedure and returns no value, so it cannot be used in an expression"),
+                ));
+                continue;
+            }
             let required = callable
                 .parameters
                 .iter()
@@ -774,10 +953,10 @@ fn reject_invalid_typed_calls(
         }
     };
     for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
-        check(*source_index, std::slice::from_ref(statement));
+        check(*source_index, std::slice::from_ref(statement), None);
     }
     for callable in &module.callables {
-        check(callable.source_index, &callable.body);
+        check(callable.source_index, &callable.body, Some(callable));
     }
 }
 
