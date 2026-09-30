@@ -37,13 +37,13 @@ transpiles to:
 ```basic
 IF (n% > 3) = 0 THEN GOTO 10
     PRINT "big"
-GOTO 20
+    GOTO 20
 10 PRINT "small"
 20 REM END IF
 30 IF (n% > 0) = 0 THEN GOTO 40
     PRINT n%
     n% = n% - 1
-GOTO 30
+    GOTO 30
 40 REM END WHILE
 ```
 

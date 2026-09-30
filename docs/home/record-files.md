@@ -63,7 +63,7 @@ Every declared field is required in the record literal — a field forgotten by 
 ' db[...] = { ... }  (whole-record write)
 LSET dbIdBuf$ = MKI$(1)
 LSET dbNameBuf$ = "Alice"
-LSET dbScoreBuf$ = MKD$(95.0)
+LSET dbScoreBuf$ = MKD$(95)
 PUT #1, 1
 ```
 
@@ -96,7 +96,7 @@ db[1] = { id: 1, name: "Alice", score: 95.0 }
 <span class="tag">Generated BASIC</span>
 
 ```basic
-FOR i! = 3 TO 1 STEP -1
+FOR i = 3 TO 1 STEP -1
     ' let s = db[...]  (whole-record read)
     GET #1, i
     sid% = CVI(dbIdBuf$)
@@ -104,12 +104,12 @@ FOR i! = 3 TO 1 STEP -1
 10 IF (snametrimi% > 0) = 0 THEN GOTO 20
     IF (MID$(dbNameBuf$, snametrimi%, 1) = " ") = 0 THEN GOTO 20
         snametrimi% = snametrimi% - 1
-    GOTO 10
+        GOTO 10
 20 REM END WHILE
     sname$ = LEFT$(dbNameBuf$, snametrimi%)
     sscore# = CVD(dbScoreBuf$)
     PRINT (((("[" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
-30 NEXT i!
+30 NEXT i
 ```
 
 </div>
@@ -184,7 +184,7 @@ Alice got married and re-sat the exam. Whether the fields you *didn't* list need
 IF LOF(#1) < (1) * 30 THEN ERROR 63
 GET #1, 1
 LSET dbNameBuf$ = "Alice Smith"
-LSET dbScoreBuf$ = MKD$(91.0)
+LSET dbScoreBuf$ = MKD$(91)
 PUT #1, 1
 ```
 
@@ -232,12 +232,12 @@ carolnametrimi% = LEN(dbNameBuf$)
 10 IF (carolnametrimi% > 0) = 0 THEN GOTO 20
 IF (MID$(dbNameBuf$, carolnametrimi%, 1) = " ") = 0 THEN GOTO 20
     carolnametrimi% = carolnametrimi% - 1
-GOTO 10
+    GOTO 10
 20 REM END WHILE
 carolname$ = LEFT$(dbNameBuf$, carolnametrimi%)
 carolscore# = CVD(dbScoreBuf$)
 carolname$ = "Carol Jones"
-carolscore# = 88.0
+carolscore# = 88
 ' db[...] = carol  (write back a let-bound record)
 LSET dbIdBuf$ = MKI$(carolid%)
 LSET dbNameBuf$ = carolname$

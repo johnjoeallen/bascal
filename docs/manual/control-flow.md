@@ -349,8 +349,7 @@ end if
 IF (ptr% >= 0) = 0 THEN GOTO 10
 ispositiveN0% = scores%(ptr%)
 GOSUB 20
-BCCT1% = ispositiveResult0%
-IF (BCCT1% > 0) = 0 THEN GOTO 10
+IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
     PRINT "safe to read"
 10 REM END IF
 ```
