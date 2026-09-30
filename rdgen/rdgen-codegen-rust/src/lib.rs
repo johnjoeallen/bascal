@@ -113,8 +113,15 @@ fn emit_rule(
     output_types: &std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
     let enum_name = type_name(&rule.output.0);
-    output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
+    // `PartialEq` is written out by `emit_partial_eq` below, not derived: a
+    // derived `eq` is `#[inline]`, and for mutually recursive rules (e.g. a
+    // block-if tail and its continuation) rustc's MIR inliner reports a query
+    // cycle when optimizing in release mode.
+    output.push_str("#[derive(Clone, Debug)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
+    // Each variant's field names (always struct-style, always ending in
+    // `span`), for the `PartialEq` impl.
+    let mut variant_fields: Vec<(String, Vec<String>)> = Vec::new();
     let mut variants = std::collections::HashSet::new();
     let mut spanned_variants: Vec<String> = Vec::new();
     let mut precedence_variants: std::collections::HashMap<String, Vec<rdgen_ir::FieldBinding>> =
@@ -137,6 +144,7 @@ fn emit_rule(
         output.push_str(&variant);
         if rule.lexical && is_default_constructor(rule, alternative) {
             output.push_str(" {\n        text: Token,\n        span: SourceSpan,\n    },\n");
+            variant_fields.push((variant.clone(), vec!["text".to_owned(), "span".to_owned()]));
             spanned_variants.push(variant);
             continue;
         }
@@ -185,6 +193,7 @@ fn emit_rule(
             ));
         }
         output.push_str("        span: SourceSpan,\n    },\n");
+        variant_fields.push((variant.clone(), sorted_names(&field_names)));
         spanned_variants.push(variant);
     }
     for table in precedence {
@@ -224,6 +233,8 @@ fn emit_rule(
                 output.push_str(&format!("        {}: {},\n", generated_name, field_type));
             }
             output.push_str("        span: SourceSpan,\n    },\n");
+            field_names.insert("span".to_owned());
+            variant_fields.push((variant.clone(), sorted_names(&field_names)));
             spanned_variants.push(variant);
         }
         for prefix in &table.prefix_operators {
@@ -262,6 +273,8 @@ fn emit_rule(
                 output.push_str(&format!("        {}: {},\n", generated_name, field_type));
             }
             output.push_str("        span: SourceSpan,\n    },\n");
+            field_names.insert("span".to_owned());
+            variant_fields.push((variant.clone(), sorted_names(&field_names)));
             spanned_variants.push(variant);
         }
     }
@@ -275,7 +288,51 @@ fn emit_rule(
         ));
     }
     output.push_str("        }\n    }\n}\n\n");
+    emit_partial_eq(output, &enum_name, &variant_fields);
     Ok(())
+}
+
+fn sorted_names(names: &std::collections::HashSet<String>) -> Vec<String> {
+    let mut names: Vec<String> = names.iter().cloned().collect();
+    names.sort();
+    names
+}
+
+/// `impl PartialEq` for a generated rule enum, field by field. Not derived, and
+/// `#[inline(never)]`, because rustc's MIR inliner hits a query cycle
+/// ("cycle detected when optimizing MIR for ...::eq") on the derived `eq` of
+/// mutually recursive generated types when building in release mode.
+fn emit_partial_eq(output: &mut String, enum_name: &str, variants: &[(String, Vec<String>)]) {
+    output.push_str(&format!("impl PartialEq for {} {{\n", enum_name));
+    output.push_str("    #[inline(never)]\n    #[allow(unreachable_patterns)]\n");
+    output.push_str("    fn eq(&self, other: &Self) -> bool {\n        match (self, other) {\n");
+    for (variant, fields) in variants {
+        let bind = |prefix: &str| {
+            fields
+                .iter()
+                .enumerate()
+                .map(|(index, name)| format!("{}: {}{}", name, prefix, index))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let same = if fields.is_empty() {
+            "true".to_owned()
+        } else {
+            (0..fields.len())
+                .map(|index| format!("a{} == b{}", index, index))
+                .collect::<Vec<_>>()
+                .join(" && ")
+        };
+        output.push_str(&format!(
+            "            ({0}::{1} {{ {2} }}, {0}::{1} {{ {3} }}) => {4},\n",
+            enum_name,
+            variant,
+            bind("a"),
+            bind("b"),
+            same
+        ));
+    }
+    output.push_str("            _ => false,\n        }\n    }\n}\n\n");
 }
 
 fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) -> String {
