@@ -5752,6 +5752,14 @@ fn render_c_semantic_numeric_expression_context(
             )?;
             Some((format!("bcc_instr({source}, {needle})"), false))
         }
+        ExprKind::Call { name, arguments }
+            if ["sizeof", "lbound", "ubound"]
+                .iter()
+                .any(|builtin| name.eq_ignore_ascii_case(builtin))
+                && (1..=2).contains(&arguments.len()) =>
+        {
+            render_c_semantic_array_bound(name, arguments, arrays?)
+        }
         ExprKind::Call { name, arguments } if arguments.len() == 1 => {
             let builtin = name.trim_end_matches(['%', '&', '!', '#', '$']);
             let (argument, is_float) = render_c_semantic_numeric_expression_context(
@@ -5949,6 +5957,95 @@ fn render_c_semantic_numeric_expression_context(
     }
 }
 
+/// `SIZEOF`/`LBOUND`/`UBOUND` of a declared array along a literal axis.
+/// `LBOUND` is always `0` (`OPTION BASE` is rejected), `UBOUND` the declared
+/// top index and `SIZEOF` the element count, one more than that. An array
+/// parameter's bound is its hidden runtime length.
+fn render_c_semantic_array_bound(
+    name: &str,
+    arguments: &[crate::semantic_ir::Expression],
+    arrays: &ArrayTable,
+) -> Option<(String, bool)> {
+    use crate::semantic_ir::ExpressionKind;
+    let builtin = name.to_ascii_lowercase();
+    let ExpressionKind::Name(array_name) = &arguments[0].kind else {
+        return None;
+    };
+    let info = arrays.get(&array_c_name(&BasicIdent::parse(array_name)))?;
+    let axis = match arguments.get(1).map(|argument| &argument.kind) {
+        Some(ExpressionKind::Literal(text)) => text.parse::<usize>().ok()?,
+        Some(_) => return None,
+        None if info.bounds.len() == 1 => 0,
+        None => return None,
+    };
+    if axis >= info.bounds.len() {
+        return None;
+    }
+    if builtin == "lbound" {
+        return Some(("0".to_string(), false));
+    }
+    let bound = match info.runtime_len.as_ref().and_then(|lengths| lengths.get(axis)) {
+        Some(runtime) => format!("({runtime} - 1)"),
+        None => info.bounds[axis].to_string(),
+    };
+    if builtin == "ubound" {
+        return Some((bound, false));
+    }
+    Some((
+        match bound.parse::<i64>() {
+            Ok(n) => (n + 1).to_string(),
+            Err(_) => format!("({bound} + 1)"),
+        },
+        false,
+    ))
+}
+
+/// The C arguments that pass an array to an array parameter: its runtime or
+/// declared lengths, then the array itself (a flattened pointer for a
+/// multidimensional fixed array).
+fn render_c_semantic_array_argument(
+    parameter: &FnParam,
+    argument: &crate::semantic_ir::Expression,
+    arrays: Option<&ArrayTable>,
+) -> Option<Vec<String>> {
+    let array = parameter.array.as_ref()?;
+    let crate::semantic_ir::ExpressionKind::Name(argument_name) = &argument.kind else {
+        return None;
+    };
+    if parameter.is_string || numeric_c_type(parameter.suffix).is_none() {
+        return None;
+    }
+    let mut argument_ident = crate::ast::BasicIdent::parse(argument_name);
+    if argument_ident.suffix.is_none() {
+        argument_ident.suffix = Some(parameter.suffix);
+    }
+    if argument
+        .value_type
+        .suffix()
+        .and_then(crate::ast::TypeSuffix::from_char)
+        != Some(parameter.suffix)
+    {
+        return None;
+    }
+    let key = array_c_name(&argument_ident);
+    let info = arrays?.get(&key)?;
+    if info.bounds.len() != array.rank || info.element_type != numeric_c_type(parameter.suffix) {
+        return None;
+    }
+    let mut rendered = info.runtime_len.clone().unwrap_or_else(|| {
+        info.bounds
+            .iter()
+            .map(|bound| (bound + 1).to_string())
+            .collect()
+    });
+    rendered.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {
+        key
+    } else {
+        format!("&{key}{}", "[0]".repeat(info.bounds.len()))
+    });
+    Some(rendered)
+}
+
 fn render_c_semantic_user_numeric_call(
     expression: &crate::semantic_ir::Expression,
     name: &str,
@@ -5976,10 +6073,7 @@ fn render_c_semantic_user_numeric_call(
             .iter()
             .skip(arguments.len())
             .any(|parameter| parameter.semantic_default.is_none())
-        || signature
-            .params
-            .iter()
-            .any(|parameter| parameter.is_string || parameter.array.is_some())
+        || signature.params.iter().any(|parameter| parameter.is_string)
     {
         return None;
     }
@@ -5989,6 +6083,12 @@ fn render_c_semantic_user_numeric_call(
         let argument = arguments
             .get(index)
             .or(parameter.semantic_default.as_ref())?;
+        if parameter.array.is_some() {
+            rendered_arguments.extend(render_c_semantic_array_argument(
+                parameter, argument, arrays,
+            )?);
+            continue;
+        }
         if parameter.by_ref {
             let crate::semantic_ir::ExpressionKind::Name(argument_name) = &argument.kind else {
                 return None;
@@ -6599,44 +6699,10 @@ fn render_c_semantic_string_call_with_signature(
         let argument = arguments
             .get(index)
             .or(parameter.semantic_default.as_ref())?;
-        if let Some(array) = &parameter.array {
-            let ExpressionKind::Name(argument_name) = &argument.kind else {
-                return None;
-            };
-            if parameter.is_string || numeric_c_type(parameter.suffix).is_none() {
-                return None;
-            }
-            let mut argument_ident = crate::ast::BasicIdent::parse(argument_name);
-            if argument_ident.suffix.is_none() {
-                argument_ident.suffix = Some(parameter.suffix);
-            }
-            if argument
-                .value_type
-                .suffix()
-                .and_then(crate::ast::TypeSuffix::from_char)
-                != Some(parameter.suffix)
-            {
-                return None;
-            }
-            let array_table = arrays?;
-            let key = array_c_name(&argument_ident);
-            let info = array_table.get(&key)?;
-            if info.bounds.len() != array.rank
-                || info.element_type != numeric_c_type(parameter.suffix)
-            {
-                return None;
-            }
-            rendered_arguments.extend(info.runtime_len.clone().unwrap_or_else(|| {
-                info.bounds
-                    .iter()
-                    .map(|bound| (bound + 1).to_string())
-                    .collect()
-            }));
-            rendered_arguments.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {
-                key
-            } else {
-                format!("&{key}{}", "[0]".repeat(info.bounds.len()))
-            });
+        if parameter.array.is_some() {
+            rendered_arguments.extend(render_c_semantic_array_argument(
+                parameter, argument, arrays,
+            )?);
             continue;
         }
 
@@ -29470,6 +29536,30 @@ mod dialect_tests {
             crate::semantic_ir::parse_and_adapt_named("c_diverging.bcl", semantic_source).unwrap();
         let resolved = resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
         generate(&resolved, Target::C).expect("C generation").app
+    }
+
+    #[test]
+    fn c_semantic_array_bounds_are_computed_from_the_array_table() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\ndim g%(4)\nprint 91\nprint 92\nprint 93\nend\n",
+            "program p\ndim g%(4)\nprint sizeof(g%)\nprint ubound(g%)\nprint lbound(g%)\nend\n",
+        );
+        assert!(!output.contains(", 9"), "AST print leaked: {output}");
+        // sizeof is the top index plus one, ubound the top index, lbound zero.
+        assert!(output.contains("printf(\"%d\\n\", 5)"), "{output}");
+        assert!(output.contains("printf(\"%d\\n\", 4)"), "{output}");
+        assert!(output.contains("printf(\"%d\\n\", 0)"), "{output}");
+    }
+
+    #[test]
+    fn c_semantic_call_passes_an_array_argument() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\ndim g%(4)\nfunction f%(arr%(?))\nreturn 0\nend function\nprint 99\nend\n",
+            "program p\ndim g%(4)\nfunction f%(arr%(?))\nreturn sizeof(arr%)\nend function\nn% = f%(g%)\nend\n",
+        );
+        assert!(!output.contains("99"), "AST print leaked: {output}");
+        // The declared length, then the array itself.
+        assert!(output.contains("bf_i_f(5, bv_i_g)"), "{output}");
     }
 
     #[test]

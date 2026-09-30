@@ -17591,3 +17591,11 @@ Iteration 5857 updated the driver-level backend differential tests to build BASI
 Iteration 5858 added `sizeof`, `lbound` and `ubound` on declared arrays to the JVM typed expression emitter, using the AST emitter's array-shape and slot helpers. Function bodies that use them as loop bounds and the array-bound prints no longer fall back to the AST.
 
 The remaining JVM AST use in the tutorial and example corpus (74 statements, mostly `files.bcl`) is feature-level, not migration: the JVM has no sequential files, no ordered string comparison (`>=`/`<=` on strings), no `timer`, and no `gosub` inside a nested block, so those programs do not compile on the JVM by either path.
+
+Iteration 5859 added `sizeof`, `lbound` and `ubound` on declared arrays to the C typed numeric renderer (an array parameter uses its hidden runtime length). The arm has to precede the generic one-argument call arm, which would otherwise decline the single-argument forms.
+
+Iteration 5860 let the C typed numeric call renderer pass array arguments, sharing one `render_c_semantic_array_argument` helper with the string-call renderer. `arrays.bcl` and `procedures.bcl` are now emitted from typed IR entirely; `sort_driver` is down to `timer`, which C does not implement on either path.
+
+Iteration 5861 added regression tests for both.
+
+Design note: with the record transpile pass enabled for C, the typed stream aligns one-to-one with the AST siblings and C emits valid code, but through the generic `FIELD` buffer route rather than its record-aware typed helpers, which four C tests pin. That is a decision about C output, not a migration bug, so the pass stays off for C.
