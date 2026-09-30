@@ -17587,3 +17587,7 @@ Status after this pass: BASIC emits every top-level statement and nearly every f
 Iteration 5856 added the pack and unpack builtins (`MKI$`, `MKL$`, `MKS$`, `MKD$`, `CVI`, `CVL`, `CVS`, `CVD`) to the JVM typed expression emitter, with the AST emitter's bytecode, and enabled `record_transpile` for the JVM target. A test removes the AST's top-level statements and checks file declaration, whole write, whole read, write-back, partial update and close are all emitted from the typed module. The end-to-end JVM runs of `inventory`, `card_catalog` and `random_and_record_files` pass, and none of those programs reads an AST statement any more; AST-emitted statements across the JVM corpus fell from 146 to 93.
 
 Iteration 5857 updated the driver-level backend differential tests to build BASIC and JVM expectations from the transpiled module, as the driver does.
+
+Iteration 5858 added `sizeof`, `lbound` and `ubound` on declared arrays to the JVM typed expression emitter, using the AST emitter's array-shape and slot helpers. Function bodies that use them as loop bounds and the array-bound prints no longer fall back to the AST.
+
+The remaining JVM AST use in the tutorial and example corpus (74 statements, mostly `files.bcl`) is feature-level, not migration: the JVM has no sequential files, no ordered string comparison (`>=`/`<=` on strings), no `timer`, and no `gosub` inside a nested block, so those programs do not compile on the JVM by either path.

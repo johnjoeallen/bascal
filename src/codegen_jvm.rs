@@ -3714,6 +3714,14 @@ fn emit_jvm_semantic_numeric_expression_inner(
             }
         }
         Kind::Call { name, arguments }
+            if ["sizeof", "lbound", "ubound"]
+                .iter()
+                .any(|builtin| jvm_semantic_builtin_name(name) == *builtin)
+                && (1..=2).contains(&arguments.len()) =>
+        {
+            emit_jvm_semantic_array_bound(name, arguments, out, context)
+        }
+        Kind::Call { name, arguments }
             if jvm_semantic_numeric_builtin(name, arguments).is_some() =>
         {
             emit_jvm_semantic_numeric_builtin(name, arguments, out, context)
@@ -4322,6 +4330,55 @@ fn emit_jvm_semantic_numeric_builtin(
             Ok(NumericType::Double)
         }
     }
+}
+
+/// `SIZEOF`/`LBOUND`/`UBOUND` of a declared array, on a literal axis.
+fn emit_jvm_semantic_array_bound(
+    name: &str,
+    arguments: &[crate::semantic_ir::Expression],
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<NumericType, String> {
+    use crate::semantic_ir::ExpressionKind as Kind;
+    let builtin = jvm_semantic_builtin_name(name);
+    let upper = builtin.to_ascii_uppercase();
+    let Kind::Name(array_name) = &arguments[0].kind else {
+        return Err(format!("JVM {upper} requires an array identifier"));
+    };
+    let array = BasicIdent::parse(array_name);
+    let shape = context
+        .arrays
+        .get(&variable_key(&array))
+        .ok_or_else(|| format!("unknown JVM array `{array}`"))?;
+    let axis = match arguments.get(1).map(|argument| &argument.kind) {
+        Some(Kind::Literal(text)) => text
+            .parse::<usize>()
+            .map_err(|_| "JVM array bound axis must be a literal integer".to_string())?,
+        Some(_) => return Err("JVM array bound axis must be a literal integer".to_string()),
+        None if shape.dimensions.len() == 1 => 0,
+        None => {
+            return Err(format!(
+                "JVM {upper} requires an axis for multidimensional arrays"
+            ));
+        }
+    };
+    if axis >= shape.dimensions.len() {
+        return Err(format!("JVM array axis {axis} is out of range"));
+    }
+    if builtin == "lbound" {
+        out.push_str("    iconst_0\n");
+    } else if context.array_slots.contains_key(&variable_key(&array)) {
+        context.emit_array_axis_length(&array, axis, out);
+        if builtin == "ubound" {
+            out.push_str("    iconst_1\n    isub\n");
+        }
+    } else {
+        emit_jvm_array_dimension(&shape.dimensions[axis], out, context)?;
+        if builtin == "sizeof" {
+            out.push_str("    iconst_1\n    iadd\n");
+        }
+    }
+    Ok(NumericType::Int)
 }
 
 /// `STR$(n)`: the string form of a numeric argument.
@@ -16374,6 +16431,17 @@ mod tests {
         assert!(!output.contains("ast marker"), "{output}");
         assert!(output.contains("java/lang/StringBuilder"), "{output}");
         assert!(output.contains("newarray char"), "{output}");
+    }
+
+    #[test]
+    fn jvm_semantic_array_bounds_are_emitted_from_typed_ir() {
+        let output = generate_jvm_with_diverging_semantic_source(
+            "dim a%(4)\nprint \"ast marker\"\nprint \"ast marker\"\nprint \"ast marker\"\nend\n",
+            "dim a%(4)\nprint sizeof(a%)\nprint lbound(a%, 0)\nprint ubound(a%, 0)\nend\n",
+        );
+        assert!(!output.contains("ast marker"), "{output}");
+        // sizeof is the declared top index plus one; ubound is the top index.
+        assert!(output.contains("ldc 4\n    iconst_1\n    iadd"), "{output}");
     }
 
     #[test]
