@@ -4113,6 +4113,10 @@ fn jvm_semantic_string_builtin(name: &str, argument_count: usize) -> Option<&'st
     match (jvm_semantic_builtin_name(name).as_str(), argument_count) {
         ("chr", 1) => Some("chr"),
         ("str", 1) => Some("str"),
+        ("mki", 1) => Some("mki"),
+        ("mkl", 1) => Some("mkl"),
+        ("mks", 1) => Some("mks"),
+        ("mkd", 1) => Some("mkd"),
         ("mid", 2) => Some("mid2"),
         ("mid", 3) => Some("mid3"),
         ("left", 2) => Some("left"),
@@ -4149,6 +4153,29 @@ fn emit_jvm_semantic_string_builtin(
             );
         }
         Some("str") => emit_jvm_semantic_str_builtin(&arguments[0], out, context)?,
+        Some(pack @ ("mki" | "mkl" | "mks" | "mkd")) => {
+            let (size, natural) = match pack {
+                "mki" => (2, NumericType::Int),
+                "mkl" => (4, NumericType::Int),
+                "mks" => (4, NumericType::Double),
+                _ => (8, NumericType::Double),
+            };
+            out.push_str(&format!(
+                "    ldc {size}\n    invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n"
+            ));
+            let numeric = emit_jvm_semantic_numeric_expression(&arguments[0], out, context)?;
+            coerce_top(numeric, natural, out);
+            out.push_str(match pack {
+                "mki" => "    i2s\n    invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;\n",
+                "mkl" => "    invokevirtual java/nio/ByteBuffer/putInt (I)Ljava/nio/ByteBuffer;\n",
+                "mks" => "    d2f\n    invokevirtual java/nio/ByteBuffer/putFloat (F)Ljava/nio/ByteBuffer;\n",
+                _ => "    invokevirtual java/nio/ByteBuffer/putDouble (D)Ljava/nio/ByteBuffer;\n",
+            });
+            out.push_str("    invokevirtual java/nio/ByteBuffer/array ()[B\n");
+            emit_wrap_bytes_as_string(out);
+        }
         Some("mid3") => {
             emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
             emit_jvm_semantic_int_argument(&arguments[1], out, context)?;
@@ -4203,6 +4230,10 @@ fn jvm_semantic_numeric_builtin(
         ("asc", 1) if is_string(0) => Some("asc"),
         ("val", 1) if is_string(0) => Some("val"),
         ("instr", 2) if is_string(0) && is_string(1) => Some("instr"),
+        ("cvi", 1) if is_string(0) => Some("cvi"),
+        ("cvl", 1) if is_string(0) => Some("cvl"),
+        ("cvs", 1) if is_string(0) => Some("cvs"),
+        ("cvd", 1) if is_string(0) => Some("cvd"),
         ("abs", 1) if is_numeric(0) => Some("abs"),
         ("sqr", 1) if is_numeric(0) => Some("sqr"),
         ("int", 1) if is_numeric(0) => Some("int"),
@@ -4241,6 +4272,18 @@ fn emit_jvm_semantic_numeric_builtin(
             emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
             out.push_str("    invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D\n");
             Ok(NumericType::Double)
+        }
+        unpack @ ("cvi" | "cvl" | "cvs" | "cvd") => {
+            emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
+            emit_wrap_string_as_little_endian_bytebuffer(out);
+            let (read, result) = match unpack {
+                "cvi" => ("getShort ()S\n", NumericType::Int),
+                "cvl" => ("getInt ()I\n", NumericType::Int),
+                "cvs" => ("getFloat ()F\n    f2d\n", NumericType::Double),
+                _ => ("getDouble ()D\n", NumericType::Double),
+            };
+            out.push_str(&format!("    invokevirtual java/nio/ByteBuffer/{read}"));
+            Ok(result)
         }
         "instr" => {
             emit_jvm_semantic_string_expression(&arguments[0], out, context)?;
@@ -11718,6 +11761,53 @@ mod tests {
             &mut String::new(),
         );
         assert!(!handled, "the nested file open would have been dropped");
+    }
+
+    /// The JVM for `source` with the record DSL transpiled and the AST's
+    /// top-level statements removed, so only the typed module can supply them.
+    fn jvm_typed_only(source: &str) -> Result<String, Vec<crate::diagnostics::Diagnostic>> {
+        let parsed = crate::parse_source("jvm_typed_only.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered {
+            program,
+            lowered_record_files,
+            ..
+        } = crate::lower::lower(parsed).unwrap();
+        let mut semantic =
+            crate::semantic_ir::parse_and_adapt_named("jvm_typed_only.bcl", source).unwrap();
+        semantic.lowered_record_files = lowered_record_files;
+        assert!(crate::record_transpile::transpile(&mut semantic));
+        let mut resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        resolved.program.statements.clear();
+        super::generate(&resolved)
+    }
+
+    fn record_prefix() -> &'static str {
+        "record Part\n    desc: string(20)\n    qty: int16\n    price: float32\nend record\nfile inv as Part = open(\"inven.dat\")\n"
+    }
+
+    #[test]
+    fn jvm_record_operations_are_emitted_from_typed_ir_without_the_ast() {
+        for (label, body) in [
+            ("file declaration", ""),
+            ("whole write", "inv[1] = { desc: \"x\", qty: 3, price: 1.5 }\n"),
+            ("whole read", "let p = inv[1]\nprint p.desc + p.qty\n"),
+            ("write back", "let p = inv[1]\np.qty = 5\ninv[2] = p\n"),
+            ("partial update", "inv[3].qty = 9\n"),
+            ("close", "inv.close()\n"),
+        ] {
+            let source = format!("{}{body}end\n", record_prefix());
+            let output = jvm_typed_only(&source).unwrap_or_else(|e| panic!("{label}: {e:?}"));
+            assert!(
+                output.contains("RandomAccessFile/<init>"),
+                "{label} was not emitted from the typed module:\n{output}"
+            );
+            if label != "file declaration" && label != "close" {
+                assert!(
+                    output.contains("bccBufs"),
+                    "{label} has no record buffer access:\n{output}"
+                );
+            }
+        }
     }
 
     #[test]

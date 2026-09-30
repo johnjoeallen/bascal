@@ -211,9 +211,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;
-        // Only BASIC consumes the expanded primitives. C and JVM lower the
-        // record DSL through their own typed record helpers.
-        if matches!(options.target, Target::Basic | Target::Fbc) {
+        // BASIC and the JVM consume the expanded primitives. C lowers the
+        // record DSL through its own typed record helpers.
+        if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm) {
             record_transpile::transpile(&mut module);
         }
         module
@@ -1072,17 +1072,23 @@ mod semantic_driver_differential_tests {
         } = lower::lower(parsed).expect("lower typed record source");
         let module = semantic_ir::parse_and_adapt_named(filename, source)
             .expect("adapt typed record source");
+        // BASIC and JVM consume the transpiled module, C the plain one.
+        let mut transpiled = module.clone();
+        record_transpile::transpile(&mut transpiled);
+        let resolved_transpiled = resolver::resolve_with_semantic(program.clone(), Some(transpiled))
+            .expect("resolve transpiled typed record source");
         let resolved = resolver::resolve_with_semantic(program, Some(module))
             .expect("resolve typed record source");
         let expected = [
             crate::codegen::CodeGenerator::new()
                 .with_synthesized_buffer_names(synthesized_buffer_names)
-                .generate(&resolved)
+                .generate(&resolved_transpiled)
                 .expect("transpile typed record to BASIC"),
             crate::codegen_c::generate(&resolved, Target::C)
                 .expect("transpile typed record to C")
                 .app,
-            crate::codegen_jvm::generate(&resolved).expect("transpile typed record to JVM"),
+            crate::codegen_jvm::generate(&resolved_transpiled)
+                .expect("transpile typed record to JVM"),
         ];
 
         for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
@@ -1122,17 +1128,23 @@ mod semantic_driver_differential_tests {
         let mut module = semantic_ir::parse_and_adapt_named(source_name, source)
             .expect("adapt typed record-file source");
         module.lowered_record_files = lowered_record_files;
+        // BASIC and JVM consume the transpiled module, C the plain one.
+        let mut transpiled = module.clone();
+        record_transpile::transpile(&mut transpiled);
+        let resolved_transpiled = resolver::resolve_with_semantic(program.clone(), Some(transpiled))
+            .expect("resolve transpiled typed record-file source");
         let resolved = resolver::resolve_with_semantic(program, Some(module))
             .expect("resolve typed record-file source");
         let expected = [
             crate::codegen::CodeGenerator::new()
                 .with_synthesized_buffer_names(synthesized_buffer_names)
-                .generate(&resolved)
+                .generate(&resolved_transpiled)
                 .expect("transpile typed record file to BASIC"),
             crate::codegen_c::generate(&resolved, Target::C)
                 .expect("transpile typed record file to C")
                 .app,
-            crate::codegen_jvm::generate(&resolved).expect("transpile typed record file to JVM"),
+            crate::codegen_jvm::generate(&resolved_transpiled)
+                .expect("transpile typed record file to JVM"),
         ];
 
         for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
