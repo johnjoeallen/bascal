@@ -1124,8 +1124,10 @@ mod semantic_driver_differential_tests {
                 let without_ast = compile_file_impl(program, &options, true);
                 match (with_ast, without_ast) {
                     (Ok(with_ast), Ok(without_ast)) => with_ast != without_ast,
-                    (Err(_), Err(_)) => false,
-                    _ => true,
+                    // A program the target rejects has no output to depend on
+                    // the AST; emptying the AST only hides the rejection.
+                    (Err(_), _) => false,
+                    (Ok(_), Err(_)) => true,
                 }
             })
             .map(|program| {
@@ -1140,6 +1142,17 @@ mod semantic_driver_differential_tests {
 
     /// BASIC output must not depend on `ResolvedProgram::program`: emptying
     /// the AST leaves every corpus program's output unchanged.
+    /// The JVM equivalent: every corpus program the JVM target accepts emits
+    /// the same class with the AST emptied.
+    #[test]
+    fn jvm_output_is_independent_of_the_ast_for_the_corpus() {
+        let dependent = ast_dependent_programs(Target::Jvm);
+        assert!(
+            dependent.is_empty(),
+            "JVM output still depends on the AST for: {dependent:#?}"
+        );
+    }
+
     #[test]
     fn basic_output_is_independent_of_the_ast_for_the_corpus() {
         let dependent = ast_dependent_programs(Target::Basic);
@@ -1147,6 +1160,33 @@ mod semantic_driver_differential_tests {
             dependent.is_empty(),
             "BASIC output still depends on the AST for: {dependent:#?}"
         );
+    }
+
+    /// Debug aid: `DIFF_FILE=<path> DIFF_TARGET=basic|jvm|c cargo test --lib
+    /// show_ast_diff -- --ignored`, then diff `tmp/diff_a.txt` (with the AST)
+    /// against `tmp/diff_b.txt` (AST emptied).
+    #[test]
+    #[ignore]
+    fn show_ast_diff() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let target = match std::env::var("DIFF_TARGET").as_deref() {
+            Ok("basic") => Target::Basic,
+            Ok("jvm") => Target::Jvm,
+            _ => Target::C,
+        };
+        let options = CompileOptions {
+            target,
+            library_dirs: vec![root.to_path_buf()],
+            ..CompileOptions::new()
+        };
+        let program = root.join(std::env::var("DIFF_FILE").expect("DIFF_FILE"));
+        let render = |clear_ast| {
+            compile_file_impl(&program, &options, clear_ast)
+                .unwrap_or_else(|error| format!("ERR {error:?}"))
+        };
+        fs::create_dir_all(root.join("tmp")).unwrap();
+        fs::write(root.join("tmp/diff_a.txt"), render(false)).unwrap();
+        fs::write(root.join("tmp/diff_b.txt"), render(true)).unwrap();
     }
 
     #[test]
