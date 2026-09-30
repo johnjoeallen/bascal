@@ -3930,6 +3930,7 @@ fn collect_data_items_and_labels_into(
 /// for it. Empty/thrown away for a function/procedure body's own pass,
 /// since `try`/`catch` (like the rest of this error-handling family) is
 /// top-level-only.
+#[derive(Clone)]
 struct ErrorDataCtx<'a> {
     handler_ids: &'a HashMap<String, usize>,
     dispatch_labels: &'a [String],
@@ -7335,10 +7336,15 @@ fn emit_c_semantic_print(
     emitted
 }
 
-#[derive(Clone, Copy)]
-struct CSemanticGosubState {
+/// The mutable state one body's typed statements share: the GOSUB return
+/// numbering and the error-handling context (`raise_id`, `try_id`, the active
+/// `try`'s catch label, the `continue` targets). Compound emitters clone it to
+/// stage their work and commit it only when the whole statement is emitted.
+#[derive(Clone)]
+struct CSemanticGosubState<'a> {
     total: usize,
     next: usize,
+    ctx: ErrorDataCtx<'a>,
 }
 
 fn emit_c_semantic_do(
@@ -7354,7 +7360,6 @@ fn emit_c_semantic_do(
     functions: &FunctionMap,
     data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
-    loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
     gosub: &mut CSemanticGosubState,
@@ -7363,8 +7368,7 @@ fn emit_c_semantic_do(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
-    let mut staged_continue_stack = loop_continue_stack.clone();
-    let mut staged_gosub = *gosub;
+    let mut staged_gosub = gosub.clone();
     fn guard(
         condition: &crate::semantic_ir::LoopCondition,
         out: &mut String,
@@ -7408,7 +7412,7 @@ fn emit_c_semantic_do(
         staged_counter += 1;
         label
     });
-    staged_continue_stack.push(label.clone());
+    staged_gosub.ctx.loop_continue_stack.push(label.clone());
     if !emit_c_semantic_for_body(
         body,
         &mut staged_out,
@@ -7420,14 +7424,13 @@ fn emit_c_semantic_do(
         functions,
         data_labels,
         file_io,
-        &mut staged_continue_stack,
         declaration_scope,
         callable,
         &mut staged_gosub,
     ) {
         return false;
     }
-    staged_continue_stack.pop();
+    staged_gosub.ctx.loop_continue_stack.pop();
     if let Some(label) = label {
         staged_out.push_str(&format!("    {label}: ;\n"));
     }
@@ -7448,7 +7451,6 @@ fn emit_c_semantic_do(
     *needs_math = staged_math;
     *needs_string = staged_string;
     *temp_counter = staged_counter;
-    *loop_continue_stack = staged_continue_stack;
     *gosub = staged_gosub;
     true
 }
@@ -7558,7 +7560,6 @@ fn emit_c_semantic_for_body(
     functions: &FunctionMap,
     data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
-    loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
     gosub: &mut CSemanticGosubState,
@@ -7592,7 +7593,6 @@ fn emit_c_semantic_for_body(
                     functions,
                     data_labels,
                     file_io,
-                    loop_continue_stack,
                     declaration_scope,
                     callable,
                     gosub,
@@ -7627,7 +7627,6 @@ fn emit_c_semantic_for_body(
                     functions,
                     data_labels,
                     file_io,
-                    loop_continue_stack,
                     declaration_scope,
                     callable,
                     gosub,
@@ -7649,7 +7648,6 @@ fn emit_c_semantic_for_body(
                         functions,
                         data_labels,
                         file_io,
-                        loop_continue_stack,
                         declaration_scope,
                         callable,
                         gosub,
@@ -7670,7 +7668,7 @@ fn emit_c_semantic_for_body(
                     return false;
                 };
                 out.push_str(&format!("    while ({condition}) {{\n"));
-                loop_continue_stack.push(None);
+                gosub.ctx.loop_continue_stack.push(None);
                 if !emit_c_semantic_for_body(
                     body,
                     out,
@@ -7682,14 +7680,13 @@ fn emit_c_semantic_for_body(
                     functions,
                     data_labels,
                     file_io,
-                    loop_continue_stack,
                     declaration_scope,
                     callable,
                     gosub,
                 ) {
                     return false;
                 }
-                loop_continue_stack.pop();
+                gosub.ctx.loop_continue_stack.pop();
                 out.push_str("    }\n");
             }
             Kind::Do {
@@ -7710,7 +7707,6 @@ fn emit_c_semantic_for_body(
                     functions,
                     data_labels,
                     file_io,
-                    loop_continue_stack,
                     declaration_scope,
                     callable,
                     gosub,
@@ -7767,7 +7763,6 @@ fn emit_c_semantic_for_body(
                     data_labels,
                     file_io,
                     None,
-                    loop_continue_stack,
                     declaration_scope,
                     callable,
                     gosub,
@@ -8213,7 +8208,7 @@ fn emit_c_semantic_for_body(
             Kind::End => out.push_str("    return 0;\n"),
             Kind::Stop | Kind::System => out.push_str("    exit(0);\n"),
             Kind::Exit => out.push_str("    break;\n"),
-            Kind::Continue => match loop_continue_stack.last().and_then(Option::as_ref) {
+            Kind::Continue => match gosub.ctx.loop_continue_stack.last().and_then(Option::as_ref) {
                 Some(label) => out.push_str(&format!("    goto {label};\n")),
                 None => out.push_str("    continue;\n"),
             },
@@ -8237,7 +8232,6 @@ fn emit_c_semantic_select_case_in_loop(
     data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
-    loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
     gosub: &mut CSemanticGosubState,
@@ -8260,7 +8254,7 @@ fn emit_c_semantic_select_case_in_loop(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
-    let mut staged_gosub = *gosub;
+    let mut staged_gosub = gosub.clone();
     let selector_name = format!("bt_sel_{staged_counter}");
     staged_counter += 1;
     let matched = format!("bt_sel_match_{staged_counter}");
@@ -8392,7 +8386,6 @@ fn emit_c_semantic_select_case_in_loop(
             functions,
             data_labels,
             file_io,
-            loop_continue_stack,
             declaration_scope,
             callable,
             &mut staged_gosub,
@@ -8415,7 +8408,6 @@ fn emit_c_semantic_select_case_in_loop(
             functions,
             data_labels,
             file_io,
-            loop_continue_stack,
             declaration_scope,
             callable,
             &mut staged_gosub,
@@ -8447,7 +8439,6 @@ fn emit_c_semantic_if_block(
     data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
-    loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
     gosub: &mut CSemanticGosubState,
@@ -8455,8 +8446,7 @@ fn emit_c_semantic_if_block(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
-    let mut staged_gosub = *gosub;
-    let mut staged_loop_stack = loop_continue_stack.clone();
+    let mut staged_gosub = gosub.clone();
     let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
         condition,
         &mut staged_math,
@@ -8479,7 +8469,6 @@ fn emit_c_semantic_if_block(
         functions,
         data_labels,
         file_io,
-        &mut staged_loop_stack,
         declaration_scope,
         callable,
         &mut staged_gosub,
@@ -8501,7 +8490,6 @@ fn emit_c_semantic_if_block(
             functions,
             data_labels,
             file_io,
-            &mut staged_loop_stack,
             declaration_scope,
             callable,
             &mut staged_gosub,
@@ -8514,7 +8502,6 @@ fn emit_c_semantic_if_block(
     *needs_math = staged_math;
     *needs_string = staged_string;
     *temp_counter = staged_counter;
-    *loop_continue_stack = staged_loop_stack;
     *gosub = staged_gosub;
     true
 }
@@ -8532,7 +8519,6 @@ fn emit_c_semantic_while_block(
     data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
-    loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
     gosub: &mut CSemanticGosubState,
@@ -8540,8 +8526,7 @@ fn emit_c_semantic_while_block(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
-    let mut staged_gosub = *gosub;
-    let mut staged_loop_stack = loop_continue_stack.clone();
+    let mut staged_gosub = gosub.clone();
     let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
         condition,
         &mut staged_math,
@@ -8553,7 +8538,7 @@ fn emit_c_semantic_while_block(
         return false;
     };
     let mut staged_out = format!("    while ({condition}) {{\n");
-    staged_loop_stack.push(None);
+    staged_gosub.ctx.loop_continue_stack.push(None);
     if !emit_c_semantic_for_body(
         loop_body,
         &mut staged_out,
@@ -8565,20 +8550,18 @@ fn emit_c_semantic_while_block(
         functions,
         data_labels,
         file_io,
-        &mut staged_loop_stack,
         declaration_scope,
         callable,
         &mut staged_gosub,
     ) {
         return false;
     }
-    staged_loop_stack.pop();
+    staged_gosub.ctx.loop_continue_stack.pop();
     staged_out.push_str("    }\n");
     out.push_str(&staged_out);
     *needs_math = staged_math;
     *needs_string = staged_string;
     *temp_counter = staged_counter;
-    *loop_continue_stack = staged_loop_stack;
     *gosub = staged_gosub;
     true
 }
@@ -8618,7 +8601,7 @@ fn emit_c_semantic_for(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter + 1;
-    let mut staged_gosub = *gosub;
+    let mut staged_gosub = gosub.clone();
     let Some((start_text, start_is_float)) = render_c_semantic_numeric_expression_with_methods(
         start,
         &mut staged_math,
@@ -8684,7 +8667,7 @@ fn emit_c_semantic_for(
         }
     };
     let mut loop_body = String::new();
-    let mut loop_continue_stack = vec![None];
+    staged_gosub.ctx.loop_continue_stack.push(None);
     if !emit_c_semantic_for_body(
         body,
         &mut loop_body,
@@ -8696,13 +8679,13 @@ fn emit_c_semantic_for(
         functions,
         data_labels,
         file_io,
-        &mut loop_continue_stack,
         declaration_scope,
         callable,
         &mut staged_gosub,
     ) {
         return false;
     }
+    staged_gosub.ctx.loop_continue_stack.pop();
     let limit_var = format!("bt_lim_{}", *temp_counter);
     let step_var = format!("bt_step_{}", *temp_counter);
     let start_var = format!("bt_start_{}", *temp_counter);
@@ -11659,18 +11642,18 @@ pub(crate) fn generate(
     let mut gosub = CSemanticGosubState {
         total: gosub_count,
         next: 0,
-    };
-    let mut ctx = ErrorDataCtx {
-        handler_ids: &on_error_handler_ids,
-        dispatch_labels: &dispatch_labels,
-        raise_site_count,
-        raise_id: 0,
-        try_id: on_error_handler_ids.len(),
-        data_labels: &data_labels,
-        try_reachable: &try_reachable,
-        current_function_reachable: false,
-        current_try_catch: None,
-        loop_continue_stack: Vec::new(),
+        ctx: ErrorDataCtx {
+            handler_ids: &on_error_handler_ids,
+            dispatch_labels: &dispatch_labels,
+            raise_site_count,
+            raise_id: 0,
+            try_id: on_error_handler_ids.len(),
+            data_labels: &data_labels,
+            try_reachable: &try_reachable,
+            current_function_reachable: false,
+            current_try_catch: None,
+            loop_continue_stack: Vec::new(),
+        },
     };
     let mut body = String::new();
     let semantic_statements = resolved
@@ -11720,7 +11703,7 @@ pub(crate) fn generate(
             continue;
         }
         previous_blank = false;
-        let gosub_checkpoint = gosub;
+        let gosub_checkpoint = gosub.clone();
         let semantic_emitted = semantic_statement
             .is_some_and(|semantic| {
                 use crate::semantic_ir::SemanticStatementKind as Kind;
@@ -11769,7 +11752,7 @@ pub(crate) fn generate(
                         let Some(rendered) = render_c_semantic_callable_call_statement(
                             expression,
                             None,
-                            &ctx,
+                            &gosub.ctx,
                             &mut needs_math,
                             &mut temp_counter,
                             functions.dialect.supports_float,
@@ -11817,7 +11800,6 @@ pub(crate) fn generate(
                             &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
-                            &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
                             &mut gosub,
@@ -11840,7 +11822,6 @@ pub(crate) fn generate(
                             &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
-                            &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
                             &mut gosub,
@@ -11893,7 +11874,6 @@ pub(crate) fn generate(
                             &functions.funcs,
                             &data_labels,
                             &mut file_io,
-                            &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
                             &mut gosub,
@@ -11918,7 +11898,6 @@ pub(crate) fn generate(
                             &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
-                            &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
                             &mut gosub,
@@ -12042,7 +12021,7 @@ pub(crate) fn generate(
                             &functions.funcs,
                             &source_pos,
                             None,
-                            &mut ctx,
+                            &mut gosub.ctx,
                         );
                     }
                     Kind::Seek { channel, position } => {
@@ -12269,7 +12248,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
-                            &mut ctx,
+                            &mut gosub.ctx,
                         );
                     }
                     Kind::Read(targets) => {
@@ -12324,7 +12303,7 @@ pub(crate) fn generate(
                 &mut file_io,
                 gosub.total,
                 &mut gosub.next,
-                &mut ctx,
+                &mut gosub.ctx,
             )
             .map_err(|message| vec![unsupported(&message)])?;
         }
@@ -13362,18 +13341,21 @@ fn emit_function_def(
     // file-scope globals reachable from anywhere -- `RESTORE <label>`
     // there needs the real label table to resolve correctly.
     let mut unused_gosub_id: usize = 0;
-    let mut callable_gosub = CSemanticGosubState { total: 0, next: 0 };
-    let mut ctx = ErrorDataCtx {
-        handler_ids,
-        dispatch_labels: &[],
-        raise_site_count: 0,
-        raise_id: 0,
-        try_id: 0,
-        data_labels,
-        try_reachable,
-        current_function_reachable: is_try_reachable,
-        current_try_catch: None,
-        loop_continue_stack: Vec::new(),
+    let mut callable_gosub = CSemanticGosubState {
+        total: 0,
+        next: 0,
+        ctx: ErrorDataCtx {
+            handler_ids,
+            dispatch_labels: &[],
+            raise_site_count: 0,
+            raise_id: 0,
+            try_id: 0,
+            data_labels,
+            try_reachable,
+            current_function_reachable: is_try_reachable,
+            current_try_catch: None,
+            loop_continue_stack: Vec::new(),
+        },
     };
     let callable_entries: Vec<(
         Option<&Stmt>,
@@ -13453,7 +13435,7 @@ fn emit_function_def(
                         let Some(rendered) = render_c_semantic_callable_call_statement(
                             expression,
                             Some(sig),
-                            &ctx,
+                            &callable_gosub.ctx,
                             needs_math,
                             temp_counter,
                             functions.dialect.supports_float,
@@ -13493,7 +13475,6 @@ fn emit_function_def(
                         data_labels,
                         file_io,
                         Some(&functions.methods),
-                        &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
                         &mut callable_gosub,
@@ -13517,7 +13498,6 @@ fn emit_function_def(
                         data_labels,
                         file_io,
                         Some(&functions.methods),
-                        &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
                         &mut callable_gosub,
@@ -13538,7 +13518,6 @@ fn emit_function_def(
                         data_labels,
                         file_io,
                         Some(&functions.methods),
-                        &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
                         &mut callable_gosub,
@@ -13560,7 +13539,6 @@ fn emit_function_def(
                         &functions.funcs,
                         data_labels,
                         file_io,
-                        &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
                         &mut callable_gosub,
@@ -13700,7 +13678,7 @@ fn emit_function_def(
                                 &functions.funcs,
                                 &source_pos,
                                 Some(sig),
-                                &mut ctx,
+                                &mut callable_gosub.ctx,
                             )
                         }),
                     Kind::Seek { channel, position } => emit_c_semantic_seek(
@@ -13786,7 +13764,7 @@ fn emit_function_def(
                         &functions.funcs,
                         functions.dialect.supports_float,
                     ),
-                    Kind::Throw(value) if ctx.current_function_reachable => {
+                    Kind::Throw(value) if callable_gosub.ctx.current_function_reachable => {
                         semantic_module
                             .and_then(|module| {
                                 c_semantic_callable_source_position(module, func, semantic)
@@ -13806,7 +13784,7 @@ fn emit_function_def(
                     }
                     Kind::Return(crate::semantic_ir::ReturnValue::Default) if sig.is_void => {
                         emit_byref_scalar_copyback(sig, &mut body);
-                        if ctx.current_function_reachable {
+                        if callable_gosub.ctx.current_function_reachable {
                             body.push_str("    return (bcc_result_void){ .status = 0 };\n");
                         } else {
                             body.push_str("    return;\n");
@@ -13817,7 +13795,7 @@ fn emit_function_def(
                         emit_c_semantic_return(
                             expression,
                             sig,
-                            ctx.current_function_reachable,
+                            callable_gosub.ctx.current_function_reachable,
                             &mut body,
                             needs_math,
                             temp_counter,
@@ -13839,7 +13817,7 @@ fn emit_function_def(
                         let cursor = target
                             .as_ref()
                             .and_then(|target| {
-                                ctx.data_labels
+                                callable_gosub.ctx.data_labels
                                     .get(&target.name.to_ascii_lowercase())
                                     .copied()
                             })
@@ -13932,7 +13910,7 @@ fn emit_function_def(
                 file_io,
                 0,
                 &mut unused_gosub_id,
-                &mut ctx,
+                &mut callable_gosub.ctx,
             )?;
         }
     }
