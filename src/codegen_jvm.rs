@@ -231,6 +231,15 @@ pub(crate) fn generate(
             emitted_typed_stream = true;
         }
     }
+    if !emitted_typed_stream && program.statements.is_empty() {
+        // No AST statements to fall back to: name the first typed statement
+        // the JVM backend cannot emit rather than dropping it silently.
+        if let Some(module) = resolved.semantic_module.as_ref() {
+            if let Some(message) = first_unsupported_semantic_statement(&module.statements, &context) {
+                return Err(vec![unsupported(&message)]);
+            }
+        }
+    }
     if !emitted_typed_stream {
         let semantic_statements = resolved
             .semantic_module
@@ -2993,6 +3002,71 @@ fn emit_jvm_semantic_block(
     }
     out.push_str(&rendered);
     true
+}
+
+/// The diagnostic for the first top-level typed statement the typed JVM
+/// emitter declines, worded like the compatibility emitter's own.
+fn first_unsupported_semantic_statement(
+    statements: &[crate::semantic_ir::SemanticStatement],
+    context: &JvmContext,
+) -> Option<String> {
+    use crate::semantic_ir::{BranchKind, SemanticStatementKind as Kind};
+    let mut loop_exits = Vec::new();
+    let mut loop_continues = Vec::new();
+    let mut state = JvmSemanticState {
+        source_filename: String::new(),
+        next_label: 0,
+        exception_handlers: Vec::new(),
+    };
+    statements.iter().find_map(|statement| {
+        let mut scratch = String::new();
+        if emit_jvm_semantic_block(
+            std::slice::from_ref(statement),
+            context,
+            &mut loop_exits,
+            &mut loop_continues,
+            &mut state,
+            &mut scratch,
+        ) {
+            return None;
+        }
+        // Name the innermost declined statement of a declined compound.
+        let children: Vec<&crate::semantic_ir::SemanticStatement> = match &statement.kind {
+            Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                body.iter().collect()
+            }
+            Kind::If { then_body, else_body, .. } => then_body.iter().chain(else_body).collect(),
+            Kind::SelectCase { cases, else_body, .. } => cases
+                .iter()
+                .flat_map(|case| &case.body)
+                .chain(else_body)
+                .collect(),
+            Kind::Try { body, catch, finally_body } => body
+                .iter()
+                .chain(catch.iter().flat_map(|catch| &catch.body))
+                .chain(finally_body)
+                .collect(),
+            _ => Vec::new(),
+        };
+        if !children.is_empty() {
+            let owned: Vec<_> = children.into_iter().cloned().collect();
+            if let Some(message) = first_unsupported_semantic_statement(&owned, context) {
+                return Some(message);
+            }
+        }
+        Some(match &statement.kind {
+            Kind::Gosub(_)
+            | Kind::OnBranch {
+                branch: BranchKind::Gosub,
+                ..
+            } => "GOSUB is not supported by the JVM target; use a function/procedure instead"
+                .to_string(),
+            other => format!(
+                "{} is not supported by the minimal JVM backend yet",
+                format!("{other:?}").split([' ', '{', '(']).next().unwrap_or("statement")
+            ),
+        })
+    })
 }
 
 fn emit_jvm_semantic_module(
@@ -7169,6 +7243,13 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
                 .exception_handlers
                 .extend(semantic_state.exception_handlers);
             emitted_typed_body = true;
+        }
+    }
+    if !emitted_typed_body && function.body.is_empty() {
+        if let Some(callable) = semantic_callable {
+            if let Some(message) = first_unsupported_semantic_statement(&callable.body, &context) {
+                return Err(message);
+            }
         }
     }
     if !emitted_typed_body {

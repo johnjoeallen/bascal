@@ -1124,8 +1124,8 @@ mod semantic_driver_differential_tests {
                     (Ok(with_ast), Ok(without_ast)) => with_ast != without_ast,
                     // A program the target rejects has no output to depend on
                     // the AST; emptying the AST only hides the rejection.
-                    (Err(_), _) => false,
-                    (Ok(_), Err(_)) => true,
+                    (Err(_), Err(_)) => false,
+                    _ => true,
                 }
             })
             .map(|program| {
@@ -1140,6 +1140,24 @@ mod semantic_driver_differential_tests {
 
     /// BASIC output must not depend on `ResolvedProgram::program`: emptying
     /// the AST leaves every corpus program's output unchanged.
+    /// A construct the JVM backend cannot emit is reported from the typed IR
+    /// as well, not silently dropped when there is no AST to fall back to.
+    #[test]
+    fn jvm_reports_unsupported_typed_statements_without_the_ast() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let options = CompileOptions {
+            target: Target::Jvm,
+            ..CompileOptions::new()
+        };
+        let program = root.join("tests/fixtures/conformance/nested_on_gosub.bcl");
+        let diagnostics = compile_file_impl(&program, &options, true)
+            .expect_err("gosub is rejected without the AST too");
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("GOSUB is not supported")),
+            "{diagnostics:?}"
+        );
+    }
+
     /// The JVM equivalent: every corpus program the JVM target accepts emits
     /// the same class with the AST emptied.
     #[test]
