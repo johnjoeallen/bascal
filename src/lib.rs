@@ -2066,6 +2066,15 @@ end
     }
 
     #[test]
+    fn c_target_does_not_declare_a_goto_label_as_a_variable() {
+        let source = "print \"a\"\ngoto done\nprint \"b\"\ndone:\nprint \"c\"\nrestore later\nend\nlater:\ndata 1\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("bcc_lbl_done:;"), "{output}");
+        assert!(!output.contains("bv_f_done"), "a label is not storage:\n{output}");
+        assert!(!output.contains("bv_f_later"), "a data label is not storage:\n{output}");
+    }
+
+    #[test]
     fn c_target_without_timer_carries_no_timer_helper() {
         let output = compile_source_via_c_target("print 1\nend\n");
         assert!(!output.contains("bcc_timer"), "{output}");

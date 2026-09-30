@@ -11961,7 +11961,12 @@ pub(crate) fn generate(
             })
             .collect();
         let semantic_name_scopes = module.name_scopes();
+        // A `goto`/`gosub` target is a label, not storage.
+        let label_names = crate::semantic_ir::SemanticModule::label_names_in(&module.statements);
         for name in semantic_name_scopes.global_names {
+            if label_names.contains(&name.to_ascii_lowercase()) {
+                continue;
+            }
             if let Some((base, field)) = name.split_once('.') {
                 if let Some(suffix) = record_field_suffixes.get(&field.to_ascii_lowercase()) {
                     let base = base.trim_end_matches(['$', '%', '&', '!', '#']);

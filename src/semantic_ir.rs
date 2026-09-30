@@ -331,6 +331,55 @@ impl SemanticModule {
         calls.calls
     }
 
+    /// Lowercase names of every label declared in a statement list, including
+    /// labels nested in structured statements.
+    pub fn label_names_in(statements: &[SemanticStatement]) -> BTreeSet<String> {
+        fn visit(list: &[SemanticStatement], names: &mut BTreeSet<String>) {
+            for statement in list {
+                match &statement.kind {
+                    SemanticStatementKind::Label(name) => {
+                        names.insert(name.name.to_ascii_lowercase());
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, names),
+                    SemanticStatementKind::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        visit(then_body, names);
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::SelectCase {
+                        cases, else_body, ..
+                    } => {
+                        for case in cases {
+                            visit(&case.body, names);
+                        }
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::Try {
+                        body,
+                        catch,
+                        finally_body,
+                    } => {
+                        visit(body, names);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, names);
+                        }
+                        visit(finally_body, names);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut names = BTreeSet::new();
+        visit(statements, &mut names);
+        names
+    }
+
     pub fn global_declarations_in(statements: &[SemanticStatement]) -> BTreeSet<String> {
         let mut names = BTreeSet::new();
         collect_semantic_global_declarations(statements, &mut names, &mut BTreeMap::new());
