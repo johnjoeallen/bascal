@@ -17607,3 +17607,9 @@ Iteration 5863 added `eof(#ch)` on a literal channel and `CVI`/`CVL`/`CVS`/`CVD`
 Iteration 5864 fixed the C one-argument call arm, which rendered its argument as a number before checking whether the name was a builtin, so a user function with a single string argument always declined; it now applies only to the builtin names. String-parameter calls with prelude-free string arguments render inside expressions.
 
 Iteration 5865 added regression tests for both.
+
+Iteration 5866 added `compile_file_impl(..., clear_ast)` to the driver so a test can measure AST dependence by emptying `ResolvedProgram::program.statements`. It found four BASIC corpus programs whose output changed: two `try` programs, `inventory` and `portable_error_handling`. The typed `try` gate no longer consults AST statements.
+
+Iteration 5867 removed the typed `try` gate's rejection of `catch` source bindings, which the emitter already rendered. The whole-module typed stream now emits source-file markers between top-level statements when the `source$` lookup is needed, so the `ERL` boundary chain is built without the AST. A test that pinned the old AST fallback now asserts the typed stream is used.
+
+Iteration 5868 added `basic_output_is_independent_of_the_ast_for_the_corpus`, which requires every corpus program to transpile to identical BASIC with the AST emptied. Remaining AST dependence: JVM has 14 corpus programs and C is structural (emission loops iterate AST statements).

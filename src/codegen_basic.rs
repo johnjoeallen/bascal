@@ -1474,7 +1474,7 @@ mod tests {
 
         let module = resolved.semantic_module.as_ref().unwrap();
         assert!(
-            super::basic_semantic_try_stream_is_typed(module, &resolved.program.statements),
+            super::basic_semantic_try_stream_is_typed(module),
             "source-aligned TRY without catch-source mapping should use typed dispatch"
         );
         assert!(
@@ -3335,7 +3335,7 @@ mod tests {
     }
 
     #[test]
-    fn basic_generation_keeps_whole_stream_fallback_when_source_alignment_fails() {
+    fn basic_generation_uses_typed_try_stream_when_source_alignment_fails() {
         let ast_source = "beep\n";
         let semantic_source = "stop\ntry\nthrow 6\ncatch e%, l%\nprint \"sem\"\nend try\nend\n";
         let parsed = crate::parse_source("ast_origin.bcl".to_string(), ast_source).unwrap();
@@ -3359,12 +3359,12 @@ mod tests {
         );
         let output = super::CodeGenerator::new().generate(&resolved).unwrap();
         assert!(
-            output.contains("BEEP"),
-            "AST compatibility path was not used: {output}"
+            output.contains("STOP") && output.contains("PRINT \"sem\""),
+            "typed try stream was not emitted: {output}"
         );
         assert!(
-            !output.contains("STOP"),
-            "partial semantic output escaped before fallback: {output}"
+            !output.contains("BEEP"),
+            "AST statements leaked into the typed stream: {output}"
         );
     }
 
@@ -5049,10 +5049,7 @@ fn basic_semantic_dim(
     Some(output)
 }
 
-fn basic_semantic_try_stream_is_typed(
-    module: &crate::semantic_ir::SemanticModule,
-    ast_statements: &[Stmt],
-) -> bool {
+fn basic_semantic_try_stream_is_typed(module: &crate::semantic_ir::SemanticModule) -> bool {
     use crate::semantic_ir::SemanticStatementKind as Kind;
     fn try_support(statements: &[crate::semantic_ir::SemanticStatement]) -> (bool, bool) {
         let mut has_try = false;
@@ -5065,9 +5062,6 @@ fn basic_semantic_try_stream_is_typed(
                     finally_body,
                 } => {
                     has_try = true;
-                    if catch.as_ref().is_some_and(|catch| catch.source.is_some()) {
-                        supported = false;
-                    }
                     let mut bodies = vec![body.as_slice(), finally_body.as_slice()];
                     if let Some(catch) = catch {
                         bodies.push(catch.body.as_slice());
@@ -5106,12 +5100,7 @@ fn basic_semantic_try_stream_is_typed(
         .zip(&module.statement_sources)
         .all(|(statement, source_index)| {
             let (has_try, supported) = try_support(std::slice::from_ref(statement));
-            !has_try
-                || (supported && module.sources.get(*source_index).is_some_and(|source| {
-                ast_statements
-                    .iter()
-                    .any(|statement| statement.pos.filename == source.filename)
-                }))
+            !has_try || (supported && module.sources.get(*source_index).is_some())
         })
 }
 
@@ -6473,17 +6462,47 @@ fn basic_semantic_intrinsics(
     let initial_taken_names = generator.taken_names.borrow().clone();
     let initial_top_level_array_bounds = generator.top_level_array_bounds.clone();
     let initial_diagnostic_count = generator.diagnostics.len();
-    if !statements.is_empty()
-        && visit(
+    let initial_marker_file = generator.current_marker_file.clone();
+    // The catch `source$` lookup maps `ERL` back to a file through markers
+    // between top-level statements, so a whole-module stream is visited one
+    // statement at a time in that case.
+    let mark_sources = generator.needs_source_lookup
+        && std::ptr::eq(statements, module.statements.as_slice())
+        && module.statement_sources.len() == statements.len();
+    let visited = if mark_sources {
+        statements
+            .iter()
+            .zip(&module.statement_sources)
+            .all(|(statement, source_index)| {
+                if let Some(source) = module.sources.get(*source_index) {
+                    if generator.current_marker_file.as_deref() != Some(source.filename.as_str()) {
+                        generator.current_marker_file = Some(source.filename.clone());
+                        output.push(source_file_marker(
+                            &crate::diagnostics::display_source_filename(&source.filename),
+                        ));
+                    }
+                }
+                visit(
+                    generator,
+                    module,
+                    std::slice::from_ref(statement),
+                    &mut output,
+                    allow_structured_try,
+                )
+            })
+    } else {
+        visit(
             generator,
             module,
             statements,
             &mut output,
             allow_structured_try,
         )
-    {
+    };
+    if !statements.is_empty() && visited {
         Some(output)
     } else {
+        generator.current_marker_file = initial_marker_file;
         // A declined semantic stream must not perturb labels generated by the
         // compatibility emitter that will handle it instead, or leave loop
         // context behind for later statements/callables.
@@ -8876,7 +8895,7 @@ impl CodeGenerator {
         let semantic_try_stream_is_typed = resolved
             .semantic_module
             .as_ref()
-            .is_some_and(|module| basic_semantic_try_stream_is_typed(module, &program.statements));
+            .is_some_and(|module| basic_semantic_try_stream_is_typed(module));
         let semantic_intrinsics = if record_stream_is_typed {
             resolved.semantic_module.as_ref().and_then(|module| {
                 basic_semantic_intrinsics(

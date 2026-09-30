@@ -112,6 +112,18 @@ pub fn compile_source(
 /// `Target::C` -- see `codegen_c::GeneratedC`'s own doc comment for why
 /// that `.c` needs no paired file alongside it).
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
+    compile_file_impl(input, options, false)
+}
+
+/// `compile_file`, optionally emptying the resolved AST's statement and
+/// function bodies before code generation. With `clear_ast` set, anything a
+/// backend still reads from the AST is missing from the output, which the
+/// tests use to measure how independent generation is of the legacy AST.
+fn compile_file_impl(
+    input: &Path,
+    options: &CompileOptions,
+    clear_ast: bool,
+) -> Result<String, Vec<Diagnostic>> {
     let mut options = options.clone();
     if let Some(parent) = input.parent() {
         let parent = parent.to_path_buf();
@@ -221,7 +233,13 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         }
         module
     });
-    let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
+    let mut resolved = resolver::resolve_with_semantic(program, semantic_module)?;
+    if clear_ast {
+        resolved.program.statements.clear();
+        for function in &mut resolved.program.functions {
+            function.body.clear();
+        }
+    }
     for finding in semantic_warnings {
         eprintln!("{finding}");
     }
@@ -1057,6 +1075,78 @@ mod semantic_driver_differential_tests {
                 "file driver output differs from direct typed {target:?} codegen"
             );
         }
+    }
+
+    /// Every corpus program (tutorials, examples, fixtures), skipping the
+    /// early `adventure3000` stages that are deliberately raw classic BASIC.
+    fn corpus_programs() -> Vec<PathBuf> {
+        fn visit(directory: &Path, out: &mut Vec<PathBuf>) {
+            let Ok(entries) = fs::read_dir(directory) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    visit(&path, out);
+                } else if path.extension().is_some_and(|extension| extension == "bcl") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut programs = Vec::new();
+        for directory in ["tutorial", "examples", "tests/fixtures"] {
+            visit(&root.join(directory), &mut programs);
+        }
+        programs.retain(|path| {
+            let text = path.display().to_string();
+            !(text.contains("adventure3000")
+                && ["stage2-", "stage3-", "stage4-", "stage5-", "stage6-", "stage7-", "stage8-", "stage9-", "stage10-", "stage11-"]
+                    .iter()
+                    .any(|stage| text.contains(stage)))
+        });
+        programs.sort();
+        programs
+    }
+
+    /// Programs whose output changes when the AST is emptied, per target.
+    fn ast_dependent_programs(target: Target) -> Vec<String> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let options = CompileOptions {
+            target,
+            library_dirs: vec![root.to_path_buf()],
+            ..CompileOptions::new()
+        };
+        corpus_programs()
+            .into_iter()
+            .filter(|program| {
+                let with_ast = compile_file_impl(program, &options, false);
+                let without_ast = compile_file_impl(program, &options, true);
+                match (with_ast, without_ast) {
+                    (Ok(with_ast), Ok(without_ast)) => with_ast != without_ast,
+                    (Err(_), Err(_)) => false,
+                    _ => true,
+                }
+            })
+            .map(|program| {
+                program
+                    .strip_prefix(root)
+                    .unwrap_or(&program)
+                    .display()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// BASIC output must not depend on `ResolvedProgram::program`: emptying
+    /// the AST leaves every corpus program's output unchanged.
+    #[test]
+    fn basic_output_is_independent_of_the_ast_for_the_corpus() {
+        let dependent = ast_dependent_programs(Target::Basic);
+        assert!(
+            dependent.is_empty(),
+            "BASIC output still depends on the AST for: {dependent:#?}"
+        );
     }
 
     #[test]
