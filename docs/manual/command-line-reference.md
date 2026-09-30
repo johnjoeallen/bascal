@@ -11,7 +11,7 @@ bcc input.bcl [-o dir/] [-L dir] [-l library]
               [--format-check | --format]
               [--binary | -b] [--run | -r] [--target | -t basic|bascom|fbc|C|jvm]
               [--strict-vars | --strict-vars-warn]
-              [--lint]
+              [--lint] [--verbose | -v]
 ```
 
 | Flag                    | Short | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -31,6 +31,7 @@ bcc input.bcl [-o dir/] [-L dir] [-l library]
 | `--strict-vars`         |       | Opt-in, Pascal-style mandatory variable declaration — see [DIM](variables-and-constants.md#dim). Rejects the compile if any scalar/array variable is used without a prior `DIM`/`DECLARE`, a `CONST`, a `FOR` loop's own counter, or a function/procedure parameter. Checked only against this program's own source, never a `require`d library's. Turning this on means the program is no longer a strict superset of BASIC. |
 | `--strict-vars-warn`    |       | Same check as `--strict-vars`, but every finding is printed to stderr as a warning instead of failing the compile. Ignored if `--strict-vars` is also given.                                                                                                                                                                                                                                                                    |
 | `--lint`                |       | Opt-in, warning-only style/correctness checks (stderr, never fails the compile), off by default since a program ported from real BASIC is more likely to trip one than working code written fresh. See [Lints](#lints) below for exactly what it checks. Checked only against this program's own source, never a `require`d library's.                                                                                       |
+| `--verbose`             | `-v`  | Show each step the compiler takes on stderr, prefixed `bcc:` -- the resolved target and output path, transpiling the `.bcl`, writing the generated `.bas`/`.c`/`.j`, and every external tool it then runs (`fbc`, `gcc`, real BASCOM under `dosbox-x`, the Krakatau assembler that turns `.j` into a `.class`, `java`, or the compiled program itself) with its full command line and exit status. `binary:` lines and the program's own output stay on stdout. |
 
 ### Source Formatting
 

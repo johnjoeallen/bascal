@@ -1,12 +1,49 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, ExitStatus};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use bcc::{check_file, compile_file, default_output_path, format, CompileOptions, Target};
 use clap::Parser;
 
 mod jvm_classfile;
+
+/// Set once from `--verbose`; every `verbose!` call checks it.
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+/// Prints one step of what `bcc` is doing to stderr (stdout stays reserved
+/// for `binary: ...` and program output), but only under `--verbose`.
+macro_rules! verbose {
+    ($($arg:tt)*) => {
+        if VERBOSE.load(Ordering::Relaxed) {
+            eprintln!("bcc: {}", format_args!($($arg)*));
+        }
+    };
+}
+
+/// A command line as a shell would show it, for `--verbose`.
+fn command_line(command: &Command) -> String {
+    let mut parts = vec![command.get_program().to_string_lossy().into_owned()];
+    parts.extend(command.get_args().map(|arg| {
+        let arg = arg.to_string_lossy();
+        if arg.contains(' ') {
+            format!("'{arg}'")
+        } else {
+            arg.into_owned()
+        }
+    }));
+    parts.join(" ")
+}
+
+/// Runs `command` to completion with inherited stdio, logging the command
+/// line and its exit status under `--verbose`.
+fn run_logged(command: &mut Command) -> std::io::Result<ExitStatus> {
+    verbose!("running: {}", command_line(command));
+    let status = command.status()?;
+    verbose!("{} exited with {status}", command.get_program().to_string_lossy());
+    Ok(status)
+}
 
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
 /// (the `basic`/`bascom` target, complete, verified against real BASCOM;
@@ -105,6 +142,10 @@ struct Cli {
     /// --target jvm only: stack size for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Plain bytes, or suffixed with k/kb, m/mb, g/gb (case-insensitive, powers of 1024 -- e.g. `64mb`, `256M`, `1gb`). Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
     #[arg(long, value_name = "SIZE", value_parser = parse_byte_count_value)]
     krak_stack_size: Option<usize>,
+
+    /// Show each step the compiler takes on stderr: the resolved target and output paths, transpiling the .bcl, writing the generated .bas/.c/.j, and every external tool it then runs (fbc, gcc, BASCOM under dosbox-x, the .j to .class assembler, java) with its full command line and exit status
+    #[arg(short = 'v', long)]
+    verbose: bool,
 }
 
 const DEFAULT_TARGET_HELP: &str = "\
@@ -156,6 +197,17 @@ fn main() -> ExitCode {
 /// flag's `clap` value parser, `BASCAL_TARGET`, and both config files so
 /// all four accept exactly the same spellings (`basic`/`BASIC`/`Basic`/...,
 /// `c`/`C`).
+/// The `--target` spelling for `target`, for `--verbose` messages.
+fn target_name(target: Target) -> &'static str {
+    match target {
+        Target::Basic => "basic",
+        Target::Fbc => "fbc",
+        Target::C => "C",
+        Target::Jvm => "jvm",
+        Target::C64 => "c64",
+    }
+}
+
 fn parse_target_str(value: &str) -> Option<Target> {
     match value.to_ascii_lowercase().as_str() {
         "basic" | "bascom" => Some(Target::Basic),
@@ -395,16 +447,31 @@ fn run_format(cli: &Cli) -> Result<(), String> {
 }
 
 fn run(cli: Cli) -> Result<(), String> {
+    VERBOSE.store(cli.verbose, Ordering::Relaxed);
+    verbose!("bcc {}", env!("CARGO_PKG_VERSION"));
+
     if cli.format_check || cli.format {
+        verbose!(
+            "{} {}",
+            if cli.format_check { "checking formatting of" } else { "formatting" },
+            cli.input.display()
+        );
         return run_format(&cli);
     }
 
     let target = cli.target.unwrap_or_else(resolve_default_target);
+    verbose!(
+        "input {}, target {}{}",
+        cli.input.display(),
+        target_name(target),
+        if cli.target.is_some() { "" } else { " (default)" }
+    );
     let krak_stack_size = cli
         .krak_stack_size
         .unwrap_or_else(resolve_default_krak_stack_size);
 
     if cli.check {
+        verbose!("--check: parsing and validating only, no output is written");
         if cli.binary || cli.run {
             return Err("error: --check cannot be combined with --binary or --run".to_string());
         }
@@ -434,6 +501,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let want_binary = cli.binary || cli.run;
 
     let output_path = resolve_output_path(&cli, target)?;
+    verbose!("generated output will be {}", output_path.display());
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -445,6 +513,11 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
+        verbose!(
+            "{} is newer than {}, skipping transpile (--clean forces it)",
+            output_path.display(),
+            cli.input.display()
+        );
         let binary_path = expected_binary_path(target, &output_path)?;
         if want_binary && !is_up_to_date(&cli.input, &binary_path) {
             let built = invoke_binary(target, &output_path, krak_stack_size)?;
@@ -467,6 +540,17 @@ fn run(cli: Cli) -> Result<(), String> {
         strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
         lint: cli.lint,
     };
+    verbose!(
+        "transpiling {} (lexer, parser, resolver, {} code generator)",
+        cli.input.display(),
+        target_name(target)
+    );
+    if !options.library_dirs.is_empty() {
+        verbose!("library search paths: {}", {
+            let dirs: Vec<String> = options.library_dirs.iter().map(|d| d.display().to_string()).collect();
+            dirs.join(", ")
+        });
+    }
     let generated = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
             .into_iter()
@@ -475,8 +559,14 @@ fn run(cli: Cli) -> Result<(), String> {
             .join("\n")
     })?;
 
+    verbose!(
+        "generated {} lines, {} bytes",
+        generated.lines().count(),
+        generated.len()
+    );
     fs::write(&output_path, &generated)
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
+    verbose!("wrote {}", output_path.display());
 
     if want_binary {
         let built = invoke_binary(target, &output_path, krak_stack_size)?;
@@ -518,8 +608,7 @@ fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("prg") {
         return run_c64_prg(binary_path);
     }
-    let status = Command::new(binary_path)
-        .status()
+    let status = run_logged(&mut Command::new(binary_path))
         .map_err(|err| format!("error: failed to run {}: {err}", binary_path.display()))?;
     if !status.success() {
         return Err(format!(
@@ -538,12 +627,13 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
     let class_dir = class_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
-    let status = Command::new("java")
-        .arg("-cp")
-        .arg(class_dir)
-        .arg(class_name)
-        .status()
-        .map_err(|err| format!("error: failed to invoke java: {err}"))?;
+    let status = run_logged(
+        Command::new("java")
+            .arg("-cp")
+            .arg(class_dir)
+            .arg(class_name),
+    )
+    .map_err(|err| format!("error: failed to invoke java: {err}"))?;
     if !status.success() {
         return Err(format!("error: {class_name} exited with {status}"));
     }
@@ -581,6 +671,17 @@ fn invoke_binary(
     output_path: &PathBuf,
     krak_stack_size: usize,
 ) -> Result<PathBuf, String> {
+    verbose!(
+        "building a binary from {} with {}",
+        output_path.display(),
+        match target {
+            Target::Basic => "real BASCOM under dosbox-x",
+            Target::Fbc => "fbc (FreeBASIC)",
+            Target::C => "gcc",
+            Target::Jvm => "the Krakatau assembler (.j to .class)",
+            Target::C64 => "cl65 (cc65)",
+        }
+    );
     match target {
         Target::Basic => invoke_bascom(output_path),
         Target::Fbc => invoke_fbc(output_path),
@@ -598,14 +699,15 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
-    let status = Command::new("fbc")
-        .arg("-lang")
-        .arg("qb")
-        .arg(bas_path)
-        .arg("-x")
-        .arg(&binary_path)
-        .status()
-        .map_err(|err| format!("error: failed to invoke fbc: {err}"))?;
+    let status = run_logged(
+        Command::new("fbc")
+            .arg("-lang")
+            .arg("qb")
+            .arg(bas_path)
+            .arg("-x")
+            .arg(&binary_path),
+    )
+    .map_err(|err| format!("error: failed to invoke fbc: {err}"))?;
     if !status.success() {
         return Err(format!(
             "error: fbc failed compiling {}",
@@ -677,19 +779,20 @@ fn bascom_work_dir(stem: &std::ffi::OsStr) -> PathBuf {
 /// just invoked from `bcc` itself instead of a test.
 fn run_dosbox_batch_headless(work_dir: &Path, batch_file: &str) -> Result<(), String> {
     let mount_arg = format!("MOUNT C: {}", work_dir.display());
-    let status = Command::new("dosbox-x")
-        .env("SDL_AUDIODRIVER", "dummy")
-        .arg("-nogui")
-        .arg("-c")
-        .arg(&mount_arg)
-        .arg("-c")
-        .arg("C:")
-        .arg("-c")
-        .arg(batch_file)
-        .arg("-fastlaunch")
-        .arg("-exit")
-        .status()
-        .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    let status = run_logged(
+        Command::new("dosbox-x")
+            .env("SDL_AUDIODRIVER", "dummy")
+            .arg("-nogui")
+            .arg("-c")
+            .arg(&mount_arg)
+            .arg("-c")
+            .arg("C:")
+            .arg("-c")
+            .arg(batch_file)
+            .arg("-fastlaunch")
+            .arg("-exit"),
+    )
+    .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
     if !status.success() {
         return Err(format!("error: dosbox-x exited with {status}"));
     }
@@ -730,6 +833,11 @@ fn invoke_bascom(bas_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&work_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", work_dir.display()))?;
 
+    verbose!(
+        "staging the BASCOM fixture into {} and converting {} to DOS text as PROG.BAS",
+        work_dir.display(),
+        bas_path.display()
+    );
     let fixture_dir = bascom_fixture_dir();
     for entry in fs::read_dir(&fixture_dir)
         .map_err(|err| format!("error: failed to read {}: {err}", fixture_dir.display()))?
@@ -749,8 +857,10 @@ fn invoke_bascom(bas_path: &PathBuf) -> Result<PathBuf, String> {
         "BASCOM PROG.BAS,,;/E\nLINK PROG.OBJ;\nEXIT\n",
     )?;
 
+    verbose!("RUNIT.BAT: BASCOM PROG.BAS,,;/E then LINK PROG.OBJ;");
     run_dosbox_batch_headless(&work_dir, "RUNIT.BAT")?;
 
+    verbose!("checking BASCOM's listing for severe errors");
     let lst_path = work_dir.join("PROG.LST");
     let lst = fs::read_to_string(&lst_path).map_err(|err| {
         format!(
@@ -796,16 +906,17 @@ fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
         .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
     write_dos_file(&work_dir.join("RUN.BAT"), &format!("{exe_name}\nEXIT\n"))?;
     let mount_arg = format!("MOUNT C: {}", work_dir.display());
-    let status = Command::new("dosbox-x")
-        .arg("-c")
-        .arg(&mount_arg)
-        .arg("-c")
-        .arg("C:")
-        .arg("-c")
-        .arg("RUN.BAT")
-        .arg("-fastlaunch")
-        .status()
-        .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    let status = run_logged(
+        Command::new("dosbox-x")
+            .arg("-c")
+            .arg(&mount_arg)
+            .arg("-c")
+            .arg("C:")
+            .arg("-c")
+            .arg("RUN.BAT")
+            .arg("-fastlaunch"),
+    )
+    .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
     if !status.success() {
         return Err(format!("error: dosbox-x exited with {status}"));
     }
@@ -827,10 +938,7 @@ fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
 /// --enable-sdl2ui --with-sdlsound --without-png && make && make install`
 /// steps this project's own README doesn't duplicate.
 fn run_c64_prg(prg_path: &Path) -> Result<(), String> {
-    let status = Command::new("x64sc")
-        .arg("-autostart")
-        .arg(prg_path)
-        .status()
+    let status = run_logged(Command::new("x64sc").arg("-autostart").arg(prg_path))
         .map_err(|err| {
             format!(
                 "error: failed to invoke x64sc: {err} -- install VICE to run --target c64 \
@@ -905,16 +1013,17 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
-    let status = Command::new("gcc")
-        .arg(c_path)
-        .arg("-o")
-        .arg(&binary_path)
-        // Always linked, even for programs that don't need it (e.g. `\`'s
-        // round()) -- harmless when unused, and simpler than detecting
-        // per-file whether <math.h> was pulled in.
-        .arg("-lm")
-        .status()
-        .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
+    let status = run_logged(
+        Command::new("gcc")
+            .arg(c_path)
+            .arg("-o")
+            .arg(&binary_path)
+            // Always linked, even for programs that don't need it (e.g. `\`'s
+            // round()) -- harmless when unused, and simpler than detecting
+            // per-file whether <math.h> was pulled in.
+            .arg("-lm"),
+    )
+    .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
     if !status.success() {
         return Err(format!("error: gcc failed compiling {}", c_path.display()));
     }
@@ -958,15 +1067,16 @@ fn invoke_cl65(c_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let binary_path = c64_prg_path_from_stem(&binary_dir, binary_name);
-    let status = Command::new("cl65")
-        .arg("-t")
-        .arg("c64")
-        .arg("--static-locals")
-        .arg(c_path)
-        .arg("-o")
-        .arg(&binary_path)
-        .status()
-        .map_err(|err| {
+    let status = run_logged(
+        Command::new("cl65")
+            .arg("-t")
+            .arg("c64")
+            .arg("--static-locals")
+            .arg(c_path)
+            .arg("-o")
+            .arg(&binary_path),
+    )
+    .map_err(|err| {
             format!(
                 "error: failed to invoke cl65: {err} -- install cc65 (e.g. `apt install cc65`) \
                  to build/run --target c64 output"
@@ -1017,8 +1127,14 @@ fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, Str
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let class_path = binary_dir.join(format!("{class_name}.class"));
+    verbose!(
+        "assembling {} into class {class_name} at {}",
+        j_path.display(),
+        class_path.display()
+    );
 
     if let Some(bytes) = jvm_classfile::generate_return_only(&source) {
+        verbose!("program is trivial, writing the class file directly (no assembler)");
         fs::write(&class_path, bytes)
             .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
         println!("binary: {} (generated internally)", class_path.display());
@@ -1042,6 +1158,7 @@ fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, Str
     // thread adequately up front, not catching the overflow, is the
     // actual fix; `spawn`'s own `io::Result` and `join`'s own panic
     // result are still handled below for whatever else might go wrong.
+    verbose!("running the Krakatau assembler on a {krak_stack_size}-byte stack");
     let classes = std::thread::scope(|scope| -> Result<_, String> {
         let handle = std::thread::Builder::new()
             .stack_size(krak_stack_size)
@@ -1242,6 +1359,7 @@ mod tests {
             strict_vars_warn: false,
             lint: false,
             krak_stack_size: None,
+            verbose: false,
         }
     }
 
