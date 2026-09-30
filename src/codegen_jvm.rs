@@ -16759,7 +16759,7 @@ mod tests {
 
     #[test]
     fn jvm_rejects_semantic_long_for_variable_with_capability_diagnostic() {
-        let source = "dim index as long\nfor index = 1 to 2\nprint index\nnext\nend\n";
+        let source = "dim index as long\nfor index = 1 to 2\nprint index\nend for\nend\n";
         let parsed = crate::parse_source("semantic_long_for.bcl".to_string(), source).unwrap();
         let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
         let resolved = crate::resolver::resolve_with_semantic(

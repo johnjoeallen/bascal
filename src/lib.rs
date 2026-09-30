@@ -2029,6 +2029,42 @@ end
         );
     }
 
+    /// Every intrinsic function documented for MBASIC/BASCOM 2.00, written out
+    /// independently of `BASIC_BUILTINS`. A call to any of them must get past
+    /// the "unknown function" rule; whether a particular target can emit it is
+    /// a separate question.
+    #[test]
+    fn documented_basic_intrinsics_are_not_reported_as_unknown_functions() {
+        let calls = [
+            "abs(1)", "asc(\"a\")", "atn(1)", "cdbl(1)", "chr$(65)", "cint(1.5)", "clng(1)",
+            "cos(1)", "csng(1)", "cvd(\"12345678\")", "cvi(\"ab\")", "cvl(\"abcd\")",
+            "cvs(\"abcd\")", "environ$(\"PATH\")", "eof(1)", "exp(1)", "fix(1.5)", "fre(0)",
+            "hex$(255)", "inp(1)", "input$(1)", "instr(\"a\", \"b\")", "int(1.5)",
+            "left$(\"a\", 1)", "len(\"a\")", "loc(1)", "lof(1)", "log(1)", "lpos(0)",
+            "mid$(\"abc\", 1, 1)", "mkd$(1)", "mki$(1)", "mkl$(1)", "mks$(1)", "oct$(8)",
+            "peek(1)", "pos(0)", "point(1, 1)", "right$(\"a\", 1)", "rnd(1)", "screen(1, 1)",
+            "sgn(1)", "sin(1)", "space$(3)", "sqr(4)", "str$(1)", "string$(3, \"a\")",
+            "tan(1)", "usr(1)", "val(\"1\")", "varptr(x%)", "pen(0)", "stick(0)", "strig(0)",
+            "play(0)", "ioctl$(1)",
+        ];
+        let mut unknown = Vec::new();
+        for call in calls {
+            let source = format!("x = {call}\nend\n");
+            if let Err(diagnostics) = compile_source("intrinsic.bcl", &source) {
+                if diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("unknown function or array"))
+                {
+                    unknown.push(call);
+                }
+            }
+        }
+        assert!(
+            unknown.is_empty(),
+            "documented intrinsics reported as unknown functions: {unknown:?}"
+        );
+    }
+
     #[test]
     fn c_target_without_timer_carries_no_timer_helper() {
         let output = compile_source_via_c_target("print 1\nend\n");

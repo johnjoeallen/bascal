@@ -19,6 +19,8 @@ pub(crate) const BASIC_BUILTINS: &[&str] = &[
     "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof", "sin", "cos", "tan",
     "atn", "log", "exp", "cint", "clng", "csng", "cdbl", "peek", "inp", "lof", "loc", "pos",
     "csrlin", "freefile", "fre", "lpos", "varptr", "date", "time", "timer", "inkey", "err", "erl",
+    // Machine, screen and device functions of MBASIC/BASCOM 2.00
+    "usr", "point", "screen", "pen", "stick", "strig", "play", "ioctl", "erdev",
     // Print-position helpers (used inside PRINT)
     "tab", "spc", // Multi-arg numeric
     "ubound", "lbound", "iif", // Random-access record packing/unpacking

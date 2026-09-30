@@ -441,11 +441,33 @@ fn reject_invalid_typed_semantics(
         list: &[SemanticStatement],
         depth: usize,
         consts: &HashSet<String>,
+        callable_names: &HashSet<String>,
         position: &dyn Fn(crate::rdgen_frontend::SourceSpan) -> SourcePos,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         for statement in list {
             match &statement.kind {
+                Kind::Expression(expression) if matches!(expression.kind, ExpressionKind::Name(_)) => {
+                    let ExpressionKind::Name(name) = &expression.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("`{name}` is not a statement"),
+                    ));
+                }
+                Kind::Assignment { target, .. }
+                    if matches!(&target.kind, ExpressionKind::Call { name, .. }
+                        if callable_names.contains(&name.to_ascii_lowercase())) =>
+                {
+                    let ExpressionKind::Call { name, .. } = &target.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("cannot assign to the result of a call to `{name}`"),
+                    ));
+                }
                 Kind::Assignment { target, .. }
                     if matches!(&target.kind, ExpressionKind::Name(name)
                         if consts.contains(name.trim_end_matches(['%', '&', '!', '#', '$']).to_ascii_lowercase().as_str())) =>
@@ -550,7 +572,7 @@ fn reject_invalid_typed_semantics(
                 _ => {}
             }
             let inner = |body: &[SemanticStatement], depth, diagnostics: &mut Vec<Diagnostic>| {
-                statements(body, depth, consts, position, diagnostics)
+                statements(body, depth, consts, callable_names, position, diagnostics)
             };
             match &statement.kind {
                 Kind::Line(body) => inner(body, depth, diagnostics),
@@ -624,6 +646,33 @@ fn reject_invalid_typed_semantics(
                         ));
                     }
                 }
+                ExpressionKind::Call { name, arguments } if !arguments.is_empty() => {
+                    let base = name
+                        .trim_end_matches(['$', '%', '&', '!', '#'])
+                        .to_ascii_lowercase();
+                    let wants_numeric = matches!(
+                        base.as_str(),
+                        "chr" | "str" | "hex" | "oct" | "space" | "sqr" | "sin" | "cos" | "tan"
+                            | "atn" | "log" | "exp" | "abs" | "int" | "fix" | "sgn" | "cint"
+                            | "clng" | "csng" | "cdbl"
+                    );
+                    let wants_string = matches!(
+                        base.as_str(),
+                        "len" | "asc" | "val" | "left" | "right" | "mid" | "cvi" | "cvl" | "cvs"
+                            | "cvd"
+                    );
+                    let first = is_string(arguments[0].value_type);
+                    if (wants_numeric && first == Some(true)) || (wants_string && first == Some(false)) {
+                        diagnostics.push(Diagnostic::error(
+                            position(expression.span),
+                            format!(
+                                "type mismatch: `{}` needs a {} argument",
+                                name,
+                                if wants_numeric { "numeric" } else { "string" }
+                            ),
+                        ));
+                    }
+                }
                 ExpressionKind::Index { index, .. } if index.value_type == Type::String => {
                     diagnostics.push(Diagnostic::error(
                         position(index.span),
@@ -643,6 +692,12 @@ fn reject_invalid_typed_semantics(
         }
     }
 
+    let callable_names: HashSet<String> = module
+        .callables
+        .iter()
+        .filter(|callable| callable.receiver.is_none())
+        .map(|callable| callable.name.to_ascii_lowercase())
+        .collect();
     let top_level_consts: HashSet<String> = module
         .top_level_const_names()
         .into_iter()
@@ -663,6 +718,7 @@ fn reject_invalid_typed_semantics(
             std::slice::from_ref(statement),
             0,
             &top_level_consts,
+            &callable_names,
             &position,
             diagnostics,
         );
@@ -672,7 +728,7 @@ fn reject_invalid_typed_semantics(
         let position = position_in(callable.source_index);
         let mut consts = top_level_consts.clone();
         consts.extend(callable.const_initializers().into_keys());
-        statements(&callable.body, 0, &consts, &position, diagnostics);
+        statements(&callable.body, 0, &consts, &callable_names, &position, diagnostics);
         expressions(&callable.body, &position, diagnostics);
     }
 }
@@ -1051,6 +1107,30 @@ fn reject_invalid_typed_calls(
                 .iter()
                 .find(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
             else {
+                // Array parameters have their own, more specific rank diagnostics
+                // in the backends; this covers arrays declared with `dim`.
+                let is_parameter = scope.is_some_and(|callable| {
+                    let base = name.trim_end_matches(['$', '%', '&', '!', '#']).to_ascii_lowercase();
+                    callable.parameters.iter().any(|parameter| {
+                        parameter
+                            .name
+                            .trim_end_matches(['$', '%', '&', '!', '#'])
+                            .eq_ignore_ascii_case(&base)
+                    })
+                });
+                if let Some(rank) = array_rank(scope, name).filter(|_| !is_parameter) {
+                    // `arr%()` is the whole-array reference, not an element access.
+                    if !arguments.is_empty() && rank != arguments.len() {
+                        diagnostics.push(Diagnostic::error(
+                            position,
+                            format!(
+                                "`{name}` has {rank} dimension{} but is indexed with {}",
+                                if rank == 1 { "" } else { "s" },
+                                arguments.len()
+                            ),
+                        ));
+                    }
+                }
                 continue;
             };
             if callable.kind == crate::semantic_ir::CallableKind::Procedure
