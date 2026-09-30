@@ -20,6 +20,8 @@
 | adventure_port_method_declarations_still_parse | PASS | PASS | PASS |
 | assigning_between_unrelated_record_types_is_rejected | PASS | PASS | PASS |
 | builtin_scalar_method_syntax_is_unaffected | PASS | PASS | PASS |
+| c_semantic_byref_calls_flatten_record_member_arguments | PASS | PASS | PASS |
+| c_semantic_string_byref_calls_flatten_record_member_arguments | PASS | PASS | PASS |
 | colon_string_and_colon_dollar_are_equivalent | PASS | PASS | PASS |
 | combines_cycle_is_rejected | PASS | PASS | PASS |
 | combines_does_not_combine_methods | PASS | PASS | PASS |
