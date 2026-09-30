@@ -211,9 +211,12 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;
-        // BASIC and the JVM consume the expanded primitives. C lowers the
-        // record DSL through its own typed record helpers.
-        if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm) {
+        // BASIC and the JVM consume the expanded primitives. C lowers record
+        // types through its own typed record helpers, so it only takes the
+        // expansion for programs with none (sequential file handles).
+        if matches!(options.target, Target::Basic | Target::Fbc | Target::Jvm)
+            || (options.target == Target::C && module.records.is_empty())
+        {
             record_transpile::transpile(&mut module);
         }
         module
@@ -1054,6 +1057,32 @@ mod semantic_driver_differential_tests {
                 "file driver output differs from direct typed {target:?} codegen"
             );
         }
+    }
+
+    #[test]
+    fn c_sequential_file_program_is_transpiled_over_the_typed_ir() {
+        let directory = tempfile::tempdir().expect("temporary sequential-file project");
+        let input = directory.path().join("sequential.bcl");
+        fs::write(
+            &input,
+            "program s\nfile log = open(\"log.txt\") for output\nlog.write(\"a\", 1)\nlog.close()\nend\n",
+        )
+        .expect("write sequential-file source");
+        let output = compile_file(
+            &input,
+            &CompileOptions {
+                target: Target::C,
+                ..CompileOptions::new()
+            },
+        )
+        .expect("sequential-file program compiles for C");
+        // The expansion's comments and file operations come from the typed
+        // module, in source order.
+        let open = output.find("bcc_files[0] = fopen(\"log.txt\", \"w\")").expect("open");
+        let write = output.find("fprintf(bcc_files[0]").expect("write");
+        let close = output.find("fclose(bcc_files[0])").expect("close");
+        assert!(open < write && write < close, "{output}");
+        assert!(output.contains("// log.write(...)"), "{output}");
     }
 
     #[test]

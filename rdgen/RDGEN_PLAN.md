@@ -17599,3 +17599,5 @@ Iteration 5860 let the C typed numeric call renderer pass array arguments, shari
 Iteration 5861 added regression tests for both.
 
 Design note: with the record transpile pass enabled for C, the typed stream aligns one-to-one with the AST siblings and C emits valid code, but through the generic `FIELD` buffer route rather than its record-aware typed helpers, which four C tests pin. That is a decision about C output, not a migration bug, so the pass stays off for C.
+
+Iteration 5862 ran the record transpile pass for the C target when a program declares no record types, so sequential `file` handles (`open ... for output`, `write`, `read`, `eof`, `close`) come from the typed IR. The typed expansion aligns one-to-one with the AST siblings and produces the same C. Record types still take C's own typed record helpers.
