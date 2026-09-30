@@ -332,15 +332,25 @@ Unlike `AND`/`OR` (bitwise, always evaluate both sides — see [Logical Operator
 
 From `tutorial/short_circuit.bcl`, an `&&` guard transpiles to one guarded `IF` per operand — no bitwise `AND`, no wasted call:
 
+<!-- setup
+function isPositive%(n%)
+    return n%
+end function
+dim scores%(5)
+-->
 ```bascal
 if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
     print "safe to read"
 end if
+```
 
+<!-- generated-basic -->
+```basic
 IF (ptr% >= 0) = 0 THEN GOTO 10
 ispositiveN0% = scores%(ptr%)
 GOSUB 20
-IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
+BCCT1% = ispositiveResult0%
+IF (BCCT1% > 0) = 0 THEN GOTO 10
     PRINT "safe to read"
 10 REM END IF
 ```
@@ -351,11 +361,14 @@ IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
 if a% = 1 || a% = 2 then
     print "one or two"
 end if
+```
 
+<!-- generated-basic -->
+```basic
 IF (a% = 1) <> 0 THEN GOTO 10
 IF (a% = 2) <> 0 THEN GOTO 10
 GOTO 20
-10     PRINT "one or two"
+10 PRINT "one or two"
 20 REM END IF
 ```
 

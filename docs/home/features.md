@@ -206,14 +206,15 @@ See [Built-in linting](linting.md) for a real, verified example of every check.
 Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number, so a simple construct like this `if` stays plain, recognizable BASIC. That's not a guarantee, though: some constructs (functions/procedures compiled to the `basic` target, in particular — see [Generated BASIC Shape](../manual/generated-basic-shape.md)) transpile by their very nature into something far more `GOTO`/label-heavy and assembly-like than the source that produced them.
 
 ```bascal
-' BASCAL source
 ' Track the high score for the level
 if score% > highScore% then highScore% = score%
+```
 
-' generated .bas
+<!-- generated-basic -->
+```basic
 ' Track the high score for the level
-IF (score% > highScore%) = 0 THEN GOTO 10
-    highScore% = score%
+IF (score% > highscore%) = 0 THEN GOTO 10
+    highscore% = score%
 10 REM END IF
 ```
 

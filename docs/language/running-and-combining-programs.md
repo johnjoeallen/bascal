@@ -52,6 +52,7 @@ beep
 
 Classic BASIC has a way for one program to hand off to another without either one going through disk I/O to pass data along: a `COMMON` block of variables, shared by name between programs that agree to declare it the same way, combined with `CHAIN` to actually transfer control. BASCAL structures the shared declaration itself, in its own small file.
 
+<!-- no-compile -->
 ```bascal
 ' state.bcl
 shared state
