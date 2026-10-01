@@ -4,7 +4,7 @@ BASCAL recognises the standard functions supplied by classic BASIC. They need no
 
 ### Text and conversion
 
-`len`, `asc`, `chr$`, `left$`, `right$`, `mid$`, `instr`, `str$`, `val`, `string$`, `space$`, `hex$`, `oct$`, `format$`, and `trim$` work with text and values. `cint`, `clng`, `csng`, and `cdbl` explicitly convert numeric values.
+`len`, `asc`, `chr$`, `left$`, `right$`, `mid$`, `instr`, `str$`, `val`, `string$`, `space$`, `hex$`, `oct$`, and `format$` work with text and values. `ltrim$`, `rtrim$`, and `trim$` are not BASIC builtins; `require com.bascal.stdlib.strings` for them. `cint`, `clng`, `csng`, and `cdbl` explicitly convert numeric values.
 
 ### Math and random numbers
 

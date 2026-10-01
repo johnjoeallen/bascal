@@ -1,7 +1,8 @@
-## One source language, three targets
+## One source language, several targets
 
 BASCAL is a compiler with a complete `basic` backend, a mostly-complete `c`
-backend, and an early-stage `jvm` backend. The BASIC backend transpiles to
+backend, an early-stage `jvm` backend, and a `c64` backend that reuses the C
+backend for `cc65`. The BASIC backend transpiles to
 classic line-numbered Microsoft BASIC. The C backend transpiles to C source
 for a native compiler; use `--target c` to select it. The JVM backend,
 `--target jvm`, emits low-level [Krakatau](https://github.com/Storyyeller/Krakatau)

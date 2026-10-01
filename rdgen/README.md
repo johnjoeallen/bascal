@@ -82,6 +82,12 @@ Use `--emit-rust` to write generated AST and parser Rust to stdout:
 cargo run -p rdgen -- path/to/grammar.rdg --emit-rust
 ```
 
+Every generated AST enum derives `Clone` and `Debug` and implements
+`PartialEq` by hand, field by field, marked `#[inline(never)]`. A derived
+`PartialEq::eq` makes rustc's MIR inliner report a query cycle ("cycle detected
+when optimizing MIR for ...::eq") on mutually recursive rules in release
+builds; the manual impl breaks that cycle.
+
 Use `--emit-c` to write the current C AST ABI to stdout:
 
 ```text
