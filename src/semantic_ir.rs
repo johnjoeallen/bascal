@@ -8189,15 +8189,3 @@ mod tests {
         assert_eq!(finally_body.len(), 1);
     }
 }
-
-#[cfg(test)]
-mod tmp_dump {
-    #[test]
-    fn dump_record_program() {
-        let src = std::fs::read_to_string("tmp/rec1.bcl").unwrap();
-        let m = super::parse_and_adapt(&src).unwrap();
-        println!("RECORDS {:#?}", m.records);
-        for s in &m.statements { println!("STMT {:?}", s.kind); }
-        for c in &m.callables { println!("CALLABLE {} {:?}", c.name, c.kind); for s in &c.body { println!("  BODY {:?}", s.kind); } }
-    }
-}
