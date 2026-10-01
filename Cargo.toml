@@ -5,6 +5,16 @@ edition = "2021"
 license = "GPL-3.0-only"
 description = "Compiles structured .bcl source to BASIC, C, or JVM assembly"
 
+[workspace]
+members = [
+    "rdgen/rdgen-ir",
+    "rdgen/rdgen-grammar",
+    "rdgen/rdgen-codegen-rust",
+    "rdgen/rdgen-codegen-c",
+    "rdgen/rdgen-cli",
+]
+resolver = "2"
+
 [package.metadata.deb]
 name = "bascal"
 maintainer = "BASCAL contributors"
@@ -54,3 +64,7 @@ krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9
 
 [dev-dependencies]
 tempfile = "3"
+
+[build-dependencies]
+rdgen-grammar = { path = "rdgen/rdgen-grammar" }
+rdgen-codegen-rust = { path = "rdgen/rdgen-codegen-rust" }

@@ -1,0 +1,1 @@
+all: `goto nowhere` doesn't name a label in the top-level program body -- a `goto`/`on ... goto`/`resume`

@@ -13,7 +13,7 @@
 
 pub use crate::codegen_basic::CodeGenerator;
 pub(crate) use crate::codegen_basic::{
-    camel_join, check_generated_name_conflicts, MID_ASSIGN_HELPER_NAME,
+    camel_join, check_generated_name_conflicts, check_generated_name_conflicts_semantic,
 };
 
 /// Which backend to generate code for. `Basic` (the default, also spelled
@@ -48,4 +48,22 @@ pub enum Target {
     Fbc,
     C,
     Jvm,
+    /// First of a planned family of native 1980s/1990s home-computer
+    /// targets (see `RETRO_BASIC_SUPPORT_PROMPT.md`): reuses `codegen_c`,
+    /// parameterized for `cc65`'s C dialect (see `c_dialect.rs`'s
+    /// `CDialectProfile::c64_cc65`), the same "emit C, shell out to a real
+    /// cross-compiler" pattern `Fbc` and `C` already use. A construct the
+    /// C64/`cc65` dialect can't express (`/`, `^`, `single`/`double`
+    /// variables, `byval` array parameters -- `cc65` has no
+    /// floating-point support and no C99 VLAs) is rejected with a clear
+    /// diagnostic naming the target, before any C is emitted (Phase 3's
+    /// `codegen_c::validate_capabilities`); everything else transpiles
+    /// like `Target::C`. `main.rs`'s `--binary`/`-b` shells out to `cl65`
+    /// to produce a loadable Commodore 64 `PRG` image (needs `cc65` on
+    /// `PATH`); `--run`/`-r` launches it under VICE's `x64sc` (needs a
+    /// display, and `x64sc` on `PATH` -- VICE isn't packaged for
+    /// Debian/Ubuntu, see `main.rs`'s `run_c64_prg` for the from-source
+    /// build steps), since a `PRG`'s 6502 machine code isn't something
+    /// this process can exec directly.
+    C64,
 }

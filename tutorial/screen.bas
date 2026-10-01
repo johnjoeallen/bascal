@@ -17,46 +17,43 @@
 160 ' 
 170 ' stop   — halt execution (may invoke debugger)
 180 ' system — exit to the operating system immediately
-
 190 ' Clear screen and draw a simple title banner
 200 CLS
-
 210 COLOR 14, 1
-220 LOCATE 1, 30
-230 PRINT "  BASCAL DEMO  "
-
-240 COLOR 7, 0
-250 LOCATE 3, 1
-260 PRINT "Screen I/O tutorial"
-
-270 ' Move to specific positions
-280 LOCATE 5, 1
-290 COLOR 10
-300 PRINT "Green text"
-310 LOCATE 6, 1
-320 COLOR 12
-330 PRINT "Red text"
-340 LOCATE 7, 1
-350 COLOR 11
-360 PRINT "Cyan text"
-370 LOCATE 8, 1
-380 COLOR 7
-390 PRINT "Normal text"
-
-400 ' Sound the bell
-410 BEEP
-
-420 ' Printer output — comment out if no printer is attached
-430 ' lprint "BASCAL screen demo printed at: " + DATE$
-
-440 ' stop and system are for controlled termination:
-450 ' stop   — pause (useful during debugging)
-460 ' system — exit to OS immediately
-470 ' Uncomment to test:
-480 ' stop
-490 ' system
-
-500 COLOR 7, 0
-510 LOCATE 25, 1
-520 PRINT "Demo complete."
-530 END
+220 ' bright yellow text on blue background
+230 LOCATE 1, 30
+240 PRINT "  BASCAL DEMO  "
+250 COLOR 7, 0
+260 ' restore white on black
+270 LOCATE 3, 1
+280 PRINT "Screen I/O tutorial"
+290 ' Move to specific positions
+300 LOCATE 5, 1
+310 COLOR 10
+320 PRINT "Green text"
+330 ' bright green
+340 LOCATE 6, 1
+350 COLOR 12
+360 PRINT "Red text"
+370 ' bright red
+380 LOCATE 7, 1
+390 COLOR 11
+400 PRINT "Cyan text"
+410 ' bright cyan
+420 LOCATE 8, 1
+430 COLOR 7
+440 PRINT "Normal text"
+450 ' Sound the bell
+460 BEEP
+470 ' Printer output — comment out if no printer is attached
+480 ' lprint "BASCAL screen demo printed at: " + DATE$
+490 ' stop and system are for controlled termination:
+500 ' stop   — pause (useful during debugging)
+510 ' system — exit to OS immediately
+520 ' Uncomment to test:
+530 ' stop
+540 ' system
+550 COLOR 7, 0
+560 LOCATE 25, 1
+570 PRINT "Demo complete."
+580 END

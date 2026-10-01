@@ -1,0 +1,3 @@
+program p
+require no.such.library
+end

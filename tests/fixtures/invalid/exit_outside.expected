@@ -1,0 +1,4 @@
+# BASIC only warns about `exit` outside a loop; C and the JVM reject it.
+basic: ok
+c: `exit` outside of a loop isn't supported with --target c
+jvm: `exit` outside of a loop isn't supported with --target jvm

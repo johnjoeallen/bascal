@@ -1,0 +1,6 @@
+program p
+function f%(a%)
+return a%
+end function
+print f%(1, 2, 3)
+end

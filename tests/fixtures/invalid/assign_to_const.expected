@@ -1,0 +1,1 @@
+all: cannot assign to `A`: it is a const

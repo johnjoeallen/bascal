@@ -1,0 +1,3 @@
+basic: ok
+c: ok
+jvm: GOSUB is not supported by the JVM target; use a function/procedure instead

@@ -29,6 +29,10 @@ id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
 observed = "PASS"
 
 [[result]]
+id = "test.dosbox_conformance.nested_typed_on_gosub_matches_c_target"
+observed = "PASS"
+
+[[result]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_target"
 observed = "PASS"
 
@@ -49,7 +53,131 @@ id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
 observed = "PASS"
 
 [[result]]
+id = "test.examples.c_callable_end_exits_the_process"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_driver_runs_callable_nested_typed_output_open"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_driver_runs_nested_semantic_input_through_typed_ir"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_driver_runs_nested_typed_data_read"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_driver_runs_nested_typed_file_write_after_output_open"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_driver_transpiles_callable_array_indices_from_typed_ir"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_numeric_user_function_calls_compile_and_run"
+observed = "PASS"
+
+[[result]]
 id = "test.examples.c_print_without_trailing_newline_flushes_stdout"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_record_dsl_open_registers_synthesized_error_runtime"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_record_dsl_partial_update_preserves_omitted_field_runtime"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_record_variable_write_roundtrips_all_typed_fields"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_callable_dynamic_array_evaluates_typed_bound_function_once"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_callable_dynamic_array_uses_typed_parameter"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_array_allocates_inside_typed_branch"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_array_evaluates_typed_bound_function_once"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_array_preserves_fixed_octal_axis_at_runtime"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_array_preserves_fixed_radix_axis_at_runtime"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_array_preserves_zero_upper_bound"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_dim_evaluates_typed_arithmetic_bound"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_long_array_uses_suffix_inferred_element_type"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_dynamic_multi_index_arrays_compile_and_run"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_file_input_stores_indexed_array_values"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_lset_packed_numeric_record_dsl_roundtrip"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_lset_packed_numeric_runtime_roundtrip"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_multi_index_arrays_compile_and_run"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_multidimensional_bounds_each_evaluate_once"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_print_channel_writes_formatted_tokens"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_seek_positions_random_record_channel"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_skipped_dynamic_dim_does_not_evaluate_typed_bound"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_semantic_throw_propagates_through_try_reachable_procedure"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_string_intrinsics_compile_and_run_through_semantic_ir"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.c_string_user_function_calls_compile_and_run"
 observed = "PASS"
 
 [[result]]
@@ -82,6 +210,18 @@ observed = "PASS"
 
 [[result]]
 id = "test.examples.freebasic_runs_self_referential_string_concatenation_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_array_argument_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_byref_operand_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_dynamic_target_when_available"
 observed = "PASS"
 
 [[result]]
@@ -129,7 +269,39 @@ id = "test.jvm_conformance.jvm_byref_scalar_parameters_write_back_to_the_caller_
 observed = "PASS"
 
 [[result]]
-id = "test.jvm_conformance.jvm_byval_arrays_expected_failure_is_non_blocking"
+id = "test.jvm_conformance.jvm_byval_array_procedure_receives_a_copy"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_array_preserves_fixed_radix_axis_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_allocates_inside_typed_branch_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_evaluates_typed_bound_function_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_uses_callable_typed_parameter_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_multidimensional_array_uses_typed_local_slot_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_dynamic_string_array_uses_local_typed_slot_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_end_exits_the_process_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_callable_typed_restore_updates_shared_data_cursor_when_available"
 observed = "PASS"
 
 [[result]]
@@ -141,6 +313,10 @@ id = "test.jvm_conformance.jvm_color_uses_the_correct_cga_to_ansi_mapping_when_a
 observed = "PASS"
 
 [[result]]
+id = "test.jvm_conformance.jvm_conditional_typed_read_does_not_advance_when_branch_is_skipped"
+observed = "PASS"
+
+[[result]]
 id = "test.jvm_conformance.jvm_date_dollar_matches_mm_dd_yyyy_format_when_available"
 observed = "PASS"
 
@@ -149,11 +325,55 @@ id = "test.jvm_conformance.jvm_double_to_string_rounds_to_six_significant_digits
 observed = "PASS"
 
 [[result]]
-id = "test.jvm_conformance.jvm_expected_failure_mid_assignment_is_non_blocking"
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_fixed_octal_axis_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_fixed_radix_axis_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_zero_upper_bound_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_color_expressions_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_dim_evaluates_side_effecting_typed_bound_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_dim_evaluates_typed_bound_at_statement_position_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_dim_transpiles_typed_arithmetic_bound_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_long_array_uses_typed_capacity_and_element_type_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_multidimensional_array_uses_typed_axes_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_multidimensional_bounds_each_evaluate_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_dynamic_string_array_uses_typed_capacity_when_available"
 observed = "PASS"
 
 [[result]]
 id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_expected_failure_read_without_data_has_specific_diagnostic"
 observed = "PASS"
 
 [[result]]
@@ -162,6 +382,22 @@ observed = "PASS"
 
 [[result]]
 id = "test.jvm_conformance.jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_for_limit_is_captured_before_body_mutation_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_for_limit_is_captured_before_mutating_method_step_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_for_start_is_captured_before_mutating_method_bound_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_function_and_scalar_method_default_arguments_run_when_available"
 observed = "PASS"
 
 [[result]]
@@ -193,6 +429,30 @@ id = "test.jvm_conformance.jvm_inventory_list_all_without_a_garbled_press_any_ke
 observed = "PASS"
 
 [[result]]
+id = "test.jvm_conformance.jvm_multi_index_arrays_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_nested_dynamic_dim_allocates_only_in_typed_branch_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_nested_typed_output_open_truncates_and_writes_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_nested_typed_read_consumes_data_items_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_nested_typed_read_stores_into_array_elements_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_nested_typed_write_emits_csv_file_bytes_when_available"
+observed = "PASS"
+
+[[result]]
 id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 observed = "PASS"
 
@@ -209,7 +469,139 @@ id = "test.jvm_conformance.jvm_random_and_record_files_tutorial_runs_when_availa
 observed = "PASS"
 
 [[result]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_copy_byval_array_arguments_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_pass_byref_array_arguments_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_write_back_byref_string_arguments_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_scalar_method_double_receiver_widens_integer_argument_when_available"
+observed = "PASS"
+
+[[result]]
 id = "test.jvm_conformance.jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_block_if_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_channel_print_writes_typed_file_bytes_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_do_transfers_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_double_comparisons_follow_ieee_ordering_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_for_method_step_is_evaluated_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_for_transfers_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_function_calls_copy_typed_byval_arrays_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_function_calls_pass_typed_byref_arrays_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_method_loop_conditions_run_each_iteration_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_mid_assignment_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_field_layout_round_trips_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_field_sets_round_trip_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_file_line_input_reads_a_typed_string_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_get_put_round_trip_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_input_reads_value_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_locate_color_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_random_file_lifecycle_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_rename_moves_file_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_return_writes_back_byref_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_nested_swap_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_random_open_evaluates_channel_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_seek_runs_at_module_and_nested_scope_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_select_case_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_single_arithmetic_preserves_float32_precision_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_while_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_semantic_while_transfers_run_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_skipped_callable_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_skipped_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_string_and_constant_default_arguments_run_when_available"
 observed = "PASS"
 
 [[result]]
@@ -218,6 +610,66 @@ observed = "PASS"
 
 [[result]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_data_in_callable_body_is_added_to_shared_pool_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_data_in_conditional_block_is_included_in_pool"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_assigns_unique_labels_for_multiple_statements_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_converts_long_selector_for_later_target_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_falls_through_outside_target_range_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_selector_above_target_count_falls_through_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_selector_one_selects_first_label_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_on_goto_uses_one_based_label_dispatch_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_read_array_index_expression_is_evaluated_once_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_read_converts_long_double_and_string_data_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_read_reports_out_of_data_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_read_stores_string_data_into_array_elements_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_restore_resets_data_cursor_to_start_and_label_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_restore_resolves_labels_in_nested_blocks_when_available"
+observed = "PASS"
+
+[[result]]
+id = "test.jvm_conformance.jvm_typed_single_read_preserves_binary32_rounding_when_available"
 observed = "PASS"
 
 [[result]]
@@ -302,6 +754,14 @@ observed = "PASS"
 
 [[result]]
 id = "test.record_methods.builtin_scalar_method_syntax_is_unaffected"
+observed = "PASS"
+
+[[result]]
+id = "test.record_methods.c_semantic_byref_calls_flatten_record_member_arguments"
+observed = "PASS"
+
+[[result]]
+id = "test.record_methods.c_semantic_string_byref_calls_flatten_record_member_arguments"
 observed = "PASS"
 
 [[result]]
@@ -442,4 +902,12 @@ observed = "PASS"
 
 [[result]]
 id = "test.record_methods.zero_argument_record_method_compiles_and_runs"
+observed = "PASS"
+
+[[result]]
+id = "test.verbose.verbose_reports_each_step_to_stderr"
+observed = "PASS"
+
+[[result]]
+id = "test.verbose.without_verbose_bcc_stays_quiet"
 observed = "PASS"

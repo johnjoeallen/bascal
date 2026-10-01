@@ -119,6 +119,15 @@ groups = ["basic"]
 expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.dosbox_conformance.nested_typed_on_gosub_matches_c_target"
+kind = "test"
+source = "dosbox_conformance"
+name = "nested_typed_on_gosub_matches_c_target"
+description = "nested_typed_on_gosub_matches_c_target"
+groups = ["basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_target"
 kind = "test"
 source = "dosbox_conformance"
@@ -164,11 +173,290 @@ groups = ["basic"]
 expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.examples.c_callable_end_exits_the_process"
+kind = "test"
+source = "examples"
+name = "c_callable_end_exits_the_process"
+description = "c_callable_end_exits_the_process"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_driver_runs_callable_nested_typed_output_open"
+kind = "test"
+source = "examples"
+name = "c_driver_runs_callable_nested_typed_output_open"
+description = "c_driver_runs_callable_nested_typed_output_open"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_driver_runs_nested_semantic_input_through_typed_ir"
+kind = "test"
+source = "examples"
+name = "c_driver_runs_nested_semantic_input_through_typed_ir"
+description = "c_driver_runs_nested_semantic_input_through_typed_ir"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_driver_runs_nested_typed_data_read"
+kind = "test"
+source = "examples"
+name = "c_driver_runs_nested_typed_data_read"
+description = "c_driver_runs_nested_typed_data_read"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_driver_runs_nested_typed_file_write_after_output_open"
+kind = "test"
+source = "examples"
+name = "c_driver_runs_nested_typed_file_write_after_output_open"
+description = "c_driver_runs_nested_typed_file_write_after_output_open"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_driver_transpiles_callable_array_indices_from_typed_ir"
+kind = "test"
+source = "examples"
+name = "c_driver_transpiles_callable_array_indices_from_typed_ir"
+description = "c_driver_transpiles_callable_array_indices_from_typed_ir"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_numeric_user_function_calls_compile_and_run"
+kind = "test"
+source = "examples"
+name = "c_numeric_user_function_calls_compile_and_run"
+description = "c_numeric_user_function_calls_compile_and_run"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
 id = "test.examples.c_print_without_trailing_newline_flushes_stdout"
 kind = "test"
 source = "examples"
 name = "c_print_without_trailing_newline_flushes_stdout"
 description = "c_print_without_trailing_newline_flushes_stdout"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_record_dsl_open_registers_synthesized_error_runtime"
+kind = "test"
+source = "examples"
+name = "c_record_dsl_open_registers_synthesized_error_runtime"
+description = "c_record_dsl_open_registers_synthesized_error_runtime"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_record_dsl_partial_update_preserves_omitted_field_runtime"
+kind = "test"
+source = "examples"
+name = "c_record_dsl_partial_update_preserves_omitted_field_runtime"
+description = "c_record_dsl_partial_update_preserves_omitted_field_runtime"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_record_variable_write_roundtrips_all_typed_fields"
+kind = "test"
+source = "examples"
+name = "c_record_variable_write_roundtrips_all_typed_fields"
+description = "c_record_variable_write_roundtrips_all_typed_fields"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_callable_dynamic_array_evaluates_typed_bound_function_once"
+kind = "test"
+source = "examples"
+name = "c_semantic_callable_dynamic_array_evaluates_typed_bound_function_once"
+description = "c_semantic_callable_dynamic_array_evaluates_typed_bound_function_once"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_callable_dynamic_array_uses_typed_parameter"
+kind = "test"
+source = "examples"
+name = "c_semantic_callable_dynamic_array_uses_typed_parameter"
+description = "c_semantic_callable_dynamic_array_uses_typed_parameter"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_array_allocates_inside_typed_branch"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_array_allocates_inside_typed_branch"
+description = "c_semantic_dynamic_array_allocates_inside_typed_branch"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_array_evaluates_typed_bound_function_once"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_array_evaluates_typed_bound_function_once"
+description = "c_semantic_dynamic_array_evaluates_typed_bound_function_once"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_array_preserves_fixed_octal_axis_at_runtime"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_array_preserves_fixed_octal_axis_at_runtime"
+description = "c_semantic_dynamic_array_preserves_fixed_octal_axis_at_runtime"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_array_preserves_fixed_radix_axis_at_runtime"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_array_preserves_fixed_radix_axis_at_runtime"
+description = "c_semantic_dynamic_array_preserves_fixed_radix_axis_at_runtime"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_array_preserves_zero_upper_bound"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_array_preserves_zero_upper_bound"
+description = "c_semantic_dynamic_array_preserves_zero_upper_bound"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_dim_evaluates_typed_arithmetic_bound"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_dim_evaluates_typed_arithmetic_bound"
+description = "c_semantic_dynamic_dim_evaluates_typed_arithmetic_bound"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_long_array_uses_suffix_inferred_element_type"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_long_array_uses_suffix_inferred_element_type"
+description = "c_semantic_dynamic_long_array_uses_suffix_inferred_element_type"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_dynamic_multi_index_arrays_compile_and_run"
+kind = "test"
+source = "examples"
+name = "c_semantic_dynamic_multi_index_arrays_compile_and_run"
+description = "c_semantic_dynamic_multi_index_arrays_compile_and_run"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_file_input_stores_indexed_array_values"
+kind = "test"
+source = "examples"
+name = "c_semantic_file_input_stores_indexed_array_values"
+description = "c_semantic_file_input_stores_indexed_array_values"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_lset_packed_numeric_record_dsl_roundtrip"
+kind = "test"
+source = "examples"
+name = "c_semantic_lset_packed_numeric_record_dsl_roundtrip"
+description = "c_semantic_lset_packed_numeric_record_dsl_roundtrip"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_lset_packed_numeric_runtime_roundtrip"
+kind = "test"
+source = "examples"
+name = "c_semantic_lset_packed_numeric_runtime_roundtrip"
+description = "c_semantic_lset_packed_numeric_runtime_roundtrip"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_multi_index_arrays_compile_and_run"
+kind = "test"
+source = "examples"
+name = "c_semantic_multi_index_arrays_compile_and_run"
+description = "c_semantic_multi_index_arrays_compile_and_run"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_multidimensional_bounds_each_evaluate_once"
+kind = "test"
+source = "examples"
+name = "c_semantic_multidimensional_bounds_each_evaluate_once"
+description = "c_semantic_multidimensional_bounds_each_evaluate_once"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_print_channel_writes_formatted_tokens"
+kind = "test"
+source = "examples"
+name = "c_semantic_print_channel_writes_formatted_tokens"
+description = "c_semantic_print_channel_writes_formatted_tokens"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_seek_positions_random_record_channel"
+kind = "test"
+source = "examples"
+name = "c_semantic_seek_positions_random_record_channel"
+description = "c_semantic_seek_positions_random_record_channel"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_skipped_dynamic_dim_does_not_evaluate_typed_bound"
+kind = "test"
+source = "examples"
+name = "c_semantic_skipped_dynamic_dim_does_not_evaluate_typed_bound"
+description = "c_semantic_skipped_dynamic_dim_does_not_evaluate_typed_bound"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_semantic_throw_propagates_through_try_reachable_procedure"
+kind = "test"
+source = "examples"
+name = "c_semantic_throw_propagates_through_try_reachable_procedure"
+description = "c_semantic_throw_propagates_through_try_reachable_procedure"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_string_intrinsics_compile_and_run_through_semantic_ir"
+kind = "test"
+source = "examples"
+name = "c_string_intrinsics_compile_and_run_through_semantic_ir"
+description = "c_string_intrinsics_compile_and_run_through_semantic_ir"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.c_string_user_function_calls_compile_and_run"
+kind = "test"
+source = "examples"
+name = "c_string_user_function_calls_compile_and_run"
+description = "c_string_user_function_calls_compile_and_run"
 groups = ["tutorials", "basic", "c"]
 expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
 
@@ -241,6 +529,33 @@ kind = "test"
 source = "examples"
 name = "freebasic_runs_self_referential_string_concatenation_when_available"
 description = "Self-referential string concatenation under FreeBASIC"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_array_argument_when_available"
+kind = "test"
+source = "examples"
+name = "freebasic_runs_semantic_mid_assign_array_argument_when_available"
+description = "freebasic_runs_semantic_mid_assign_array_argument_when_available"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_byref_operand_when_available"
+kind = "test"
+source = "examples"
+name = "freebasic_runs_semantic_mid_assign_byref_operand_when_available"
+description = "freebasic_runs_semantic_mid_assign_byref_operand_when_available"
+groups = ["tutorials", "basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
+id = "test.examples.freebasic_runs_semantic_mid_assign_dynamic_target_when_available"
+kind = "test"
+source = "examples"
+name = "freebasic_runs_semantic_mid_assign_dynamic_target_when_available"
+description = "freebasic_runs_semantic_mid_assign_dynamic_target_when_available"
 groups = ["tutorials", "basic", "c"]
 expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
 
@@ -344,13 +659,85 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_byval_arrays_expected_failure_is_non_blocking"
+id = "test.jvm_conformance.jvm_byval_array_procedure_receives_a_copy"
 kind = "test"
 source = "jvm_conformance"
-name = "jvm_byval_arrays_expected_failure_is_non_blocking"
-description = "Expected failure for array byval clone assembly"
+name = "jvm_byval_array_procedure_receives_a_copy"
+description = "jvm_byval_array_procedure_receives_a_copy"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_array_preserves_fixed_radix_axis_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_array_preserves_fixed_radix_axis_when_available"
+description = "jvm_callable_dynamic_array_preserves_fixed_radix_axis_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_allocates_inside_typed_branch_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_dim_allocates_inside_typed_branch_when_available"
+description = "jvm_callable_dynamic_dim_allocates_inside_typed_branch_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_evaluates_typed_bound_function_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_dim_evaluates_typed_bound_function_once_when_available"
+description = "jvm_callable_dynamic_dim_evaluates_typed_bound_function_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_dim_uses_callable_typed_parameter_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_dim_uses_callable_typed_parameter_when_available"
+description = "jvm_callable_dynamic_dim_uses_callable_typed_parameter_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_multidimensional_array_uses_typed_local_slot_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_multidimensional_array_uses_typed_local_slot_when_available"
+description = "jvm_callable_dynamic_multidimensional_array_uses_typed_local_slot_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_dynamic_string_array_uses_local_typed_slot_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_dynamic_string_array_uses_local_typed_slot_when_available"
+description = "jvm_callable_dynamic_string_array_uses_local_typed_slot_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_end_exits_the_process_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_end_exits_the_process_when_available"
+description = "jvm_callable_end_exits_the_process_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_callable_typed_restore_updates_shared_data_cursor_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_callable_typed_restore_updates_shared_data_cursor_when_available"
+description = "jvm_callable_typed_restore_updates_shared_data_cursor_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_catch_filters_and_source_bindings_run_when_available"
@@ -367,6 +754,15 @@ kind = "test"
 source = "jvm_conformance"
 name = "jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available"
 description = "jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_conditional_typed_read_does_not_advance_when_branch_is_skipped"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_conditional_typed_read_does_not_advance_when_branch_is_skipped"
+description = "jvm_conditional_typed_read_does_not_advance_when_branch_is_skipped"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -389,13 +785,103 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_expected_failure_mid_assignment_is_non_blocking"
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_fixed_octal_axis_when_available"
 kind = "test"
 source = "jvm_conformance"
-name = "jvm_expected_failure_mid_assignment_is_non_blocking"
-description = "Expected diagnostic for MID$ assignment"
+name = "jvm_dynamic_array_preserves_fixed_octal_axis_when_available"
+description = "jvm_dynamic_array_preserves_fixed_octal_axis_when_available"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_fixed_radix_axis_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_array_preserves_fixed_radix_axis_when_available"
+description = "jvm_dynamic_array_preserves_fixed_radix_axis_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_array_preserves_zero_upper_bound_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_array_preserves_zero_upper_bound_when_available"
+description = "jvm_dynamic_array_preserves_zero_upper_bound_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_color_expressions_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_color_expressions_run_when_available"
+description = "jvm_dynamic_color_expressions_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_dim_evaluates_side_effecting_typed_bound_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_dim_evaluates_side_effecting_typed_bound_once_when_available"
+description = "jvm_dynamic_dim_evaluates_side_effecting_typed_bound_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_dim_evaluates_typed_bound_at_statement_position_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_dim_evaluates_typed_bound_at_statement_position_when_available"
+description = "jvm_dynamic_dim_evaluates_typed_bound_at_statement_position_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_dim_transpiles_typed_arithmetic_bound_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_dim_transpiles_typed_arithmetic_bound_when_available"
+description = "jvm_dynamic_dim_transpiles_typed_arithmetic_bound_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_long_array_uses_typed_capacity_and_element_type_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_long_array_uses_typed_capacity_and_element_type_when_available"
+description = "jvm_dynamic_long_array_uses_typed_capacity_and_element_type_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_multidimensional_array_uses_typed_axes_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_multidimensional_array_uses_typed_axes_when_available"
+description = "jvm_dynamic_multidimensional_array_uses_typed_axes_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_multidimensional_bounds_each_evaluate_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_multidimensional_bounds_each_evaluate_once_when_available"
+description = "jvm_dynamic_multidimensional_bounds_each_evaluate_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_dynamic_string_array_uses_typed_capacity_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_dynamic_string_array_uses_typed_capacity_when_available"
+description = "jvm_dynamic_string_array_uses_typed_capacity_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking"
@@ -405,6 +891,15 @@ name = "jvm_expected_failure_random_record_io_is_non_blocking"
 description = "Expected diagnostic for random/record file I/O"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_expected_failure_read_without_data_has_specific_diagnostic"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_expected_failure_read_without_data_has_specific_diagnostic"
+description = "jvm_expected_failure_read_without_data_has_specific_diagnostic"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_sequential_file_io_is_non_blocking"
@@ -421,6 +916,42 @@ kind = "test"
 source = "jvm_conformance"
 name = "jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
 description = "jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_for_limit_is_captured_before_body_mutation_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_for_limit_is_captured_before_body_mutation_when_available"
+description = "jvm_for_limit_is_captured_before_body_mutation_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_for_limit_is_captured_before_mutating_method_step_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_for_limit_is_captured_before_mutating_method_step_when_available"
+description = "jvm_for_limit_is_captured_before_mutating_method_step_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_for_start_is_captured_before_mutating_method_bound_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_for_start_is_captured_before_mutating_method_bound_when_available"
+description = "jvm_for_start_is_captured_before_mutating_method_bound_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_function_and_scalar_method_default_arguments_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_function_and_scalar_method_default_arguments_run_when_available"
+description = "jvm_function_and_scalar_method_default_arguments_run_when_available"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -488,6 +1019,60 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
+id = "test.jvm_conformance.jvm_multi_index_arrays_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_multi_index_arrays_run_when_available"
+description = "jvm_multi_index_arrays_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_nested_dynamic_dim_allocates_only_in_typed_branch_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_nested_dynamic_dim_allocates_only_in_typed_branch_when_available"
+description = "jvm_nested_dynamic_dim_allocates_only_in_typed_branch_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_nested_typed_output_open_truncates_and_writes_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_nested_typed_output_open_truncates_and_writes_when_available"
+description = "jvm_nested_typed_output_open_truncates_and_writes_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_nested_typed_read_consumes_data_items_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_nested_typed_read_consumes_data_items_when_available"
+description = "jvm_nested_typed_read_consumes_data_items_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_nested_typed_read_stores_into_array_elements_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_nested_typed_read_stores_into_array_elements_when_available"
+description = "jvm_nested_typed_read_stores_into_array_elements_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_nested_typed_write_emits_csv_file_bytes_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_nested_typed_write_emits_csv_file_bytes_when_available"
+description = "jvm_nested_typed_write_emits_csv_file_bytes_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
 id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 kind = "test"
 source = "jvm_conformance"
@@ -524,11 +1109,308 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_copy_byval_array_arguments_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_scalar_method_calls_copy_byval_array_arguments_when_available"
+description = "jvm_scalar_method_calls_copy_byval_array_arguments_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_pass_byref_array_arguments_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_scalar_method_calls_pass_byref_array_arguments_when_available"
+description = "jvm_scalar_method_calls_pass_byref_array_arguments_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_scalar_method_calls_write_back_byref_string_arguments_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_scalar_method_calls_write_back_byref_string_arguments_when_available"
+description = "jvm_scalar_method_calls_write_back_byref_string_arguments_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_scalar_method_double_receiver_widens_integer_argument_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_scalar_method_double_receiver_widens_integer_argument_when_available"
+description = "jvm_scalar_method_double_receiver_widens_integer_argument_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
 id = "test.jvm_conformance.jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
 description = "jvm_select_case_registers_variables_declared_only_inside_a_case_clause"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_block_if_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_block_if_runs_when_available"
+description = "jvm_semantic_block_if_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_channel_print_writes_typed_file_bytes_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_channel_print_writes_typed_file_bytes_when_available"
+description = "jvm_semantic_channel_print_writes_typed_file_bytes_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_do_transfers_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_do_transfers_run_when_available"
+description = "jvm_semantic_do_transfers_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_double_comparisons_follow_ieee_ordering_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_double_comparisons_follow_ieee_ordering_when_available"
+description = "jvm_semantic_double_comparisons_follow_ieee_ordering_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_for_method_step_is_evaluated_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_for_method_step_is_evaluated_once_when_available"
+description = "jvm_semantic_for_method_step_is_evaluated_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_for_transfers_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_for_transfers_run_when_available"
+description = "jvm_semantic_for_transfers_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_function_calls_copy_typed_byval_arrays_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_function_calls_copy_typed_byval_arrays_when_available"
+description = "jvm_semantic_function_calls_copy_typed_byval_arrays_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_function_calls_pass_typed_byref_arrays_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_function_calls_pass_typed_byref_arrays_when_available"
+description = "jvm_semantic_function_calls_pass_typed_byref_arrays_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_method_loop_conditions_run_each_iteration_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_method_loop_conditions_run_each_iteration_when_available"
+description = "jvm_semantic_method_loop_conditions_run_each_iteration_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_mid_assignment_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_mid_assignment_runs_when_available"
+description = "jvm_semantic_mid_assignment_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_field_layout_round_trips_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_field_layout_round_trips_when_available"
+description = "jvm_semantic_nested_field_layout_round_trips_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_field_sets_round_trip_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_field_sets_round_trip_when_available"
+description = "jvm_semantic_nested_field_sets_round_trip_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_file_line_input_reads_a_typed_string_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_file_line_input_reads_a_typed_string_when_available"
+description = "jvm_semantic_nested_file_line_input_reads_a_typed_string_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_get_put_round_trip_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_get_put_round_trip_when_available"
+description = "jvm_semantic_nested_get_put_round_trip_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_input_reads_value_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_input_reads_value_when_available"
+description = "jvm_semantic_nested_input_reads_value_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_locate_color_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_locate_color_run_when_available"
+description = "jvm_semantic_nested_locate_color_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_random_file_lifecycle_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_random_file_lifecycle_runs_when_available"
+description = "jvm_semantic_nested_random_file_lifecycle_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_rename_moves_file_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_rename_moves_file_when_available"
+description = "jvm_semantic_nested_rename_moves_file_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_return_writes_back_byref_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_return_writes_back_byref_when_available"
+description = "jvm_semantic_nested_return_writes_back_byref_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_nested_swap_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_nested_swap_runs_when_available"
+description = "jvm_semantic_nested_swap_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_random_open_evaluates_channel_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_random_open_evaluates_channel_once_when_available"
+description = "jvm_semantic_random_open_evaluates_channel_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_seek_runs_at_module_and_nested_scope_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_seek_runs_at_module_and_nested_scope_when_available"
+description = "jvm_semantic_seek_runs_at_module_and_nested_scope_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_select_case_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_select_case_runs_when_available"
+description = "jvm_semantic_select_case_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_single_arithmetic_preserves_float32_precision_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_single_arithmetic_preserves_float32_precision_when_available"
+description = "jvm_semantic_single_arithmetic_preserves_float32_precision_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_while_runs_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_while_runs_when_available"
+description = "jvm_semantic_while_runs_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_semantic_while_transfers_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_semantic_while_transfers_run_when_available"
+description = "jvm_semantic_while_transfers_run_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_skipped_callable_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_skipped_callable_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+description = "jvm_skipped_callable_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_skipped_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_skipped_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+description = "jvm_skipped_dynamic_dim_does_not_evaluate_typed_bound_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_string_and_constant_default_arguments_run_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_string_and_constant_default_arguments_run_when_available"
+description = "jvm_string_and_constant_default_arguments_run_when_available"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -547,6 +1429,141 @@ kind = "test"
 source = "jvm_conformance"
 name = "jvm_try_catch_finally_runs_when_available"
 description = "Structured TRY/CATCH/FINALLY execution"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_data_in_callable_body_is_added_to_shared_pool_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_data_in_callable_body_is_added_to_shared_pool_when_available"
+description = "jvm_typed_data_in_callable_body_is_added_to_shared_pool_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_data_in_conditional_block_is_included_in_pool"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_data_in_conditional_block_is_included_in_pool"
+description = "jvm_typed_data_in_conditional_block_is_included_in_pool"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_assigns_unique_labels_for_multiple_statements_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_assigns_unique_labels_for_multiple_statements_when_available"
+description = "jvm_typed_on_goto_assigns_unique_labels_for_multiple_statements_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_converts_long_selector_for_later_target_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_converts_long_selector_for_later_target_when_available"
+description = "jvm_typed_on_goto_converts_long_selector_for_later_target_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_falls_through_outside_target_range_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_falls_through_outside_target_range_when_available"
+description = "jvm_typed_on_goto_falls_through_outside_target_range_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_selector_above_target_count_falls_through_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_selector_above_target_count_falls_through_when_available"
+description = "jvm_typed_on_goto_selector_above_target_count_falls_through_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_selector_one_selects_first_label_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_selector_one_selects_first_label_when_available"
+description = "jvm_typed_on_goto_selector_one_selects_first_label_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_on_goto_uses_one_based_label_dispatch_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_on_goto_uses_one_based_label_dispatch_when_available"
+description = "jvm_typed_on_goto_uses_one_based_label_dispatch_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_read_array_index_expression_is_evaluated_once_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_read_array_index_expression_is_evaluated_once_when_available"
+description = "jvm_typed_read_array_index_expression_is_evaluated_once_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_read_converts_long_double_and_string_data_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_read_converts_long_double_and_string_data_when_available"
+description = "jvm_typed_read_converts_long_double_and_string_data_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_read_reports_out_of_data_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_read_reports_out_of_data_when_available"
+description = "jvm_typed_read_reports_out_of_data_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_read_stores_string_data_into_array_elements_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_read_stores_string_data_into_array_elements_when_available"
+description = "jvm_typed_read_stores_string_data_into_array_elements_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_restore_resets_data_cursor_to_start_and_label_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_restore_resets_data_cursor_to_start_and_label_when_available"
+description = "jvm_typed_restore_resets_data_cursor_to_start_and_label_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_restore_resolves_labels_in_nested_blocks_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_restore_resolves_labels_in_nested_blocks_when_available"
+description = "jvm_typed_restore_resolves_labels_in_nested_blocks_when_available"
+groups = ["tutorials", "jvm"]
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_typed_single_read_preserves_binary32_rounding_when_available"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_typed_single_read_preserves_binary32_rounding_when_available"
+description = "jvm_typed_single_read_preserves_binary32_rounding_when_available"
 groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
@@ -737,6 +1754,24 @@ kind = "test"
 source = "record_methods"
 name = "builtin_scalar_method_syntax_is_unaffected"
 description = "builtin_scalar_method_syntax_is_unaffected"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.c_semantic_byref_calls_flatten_record_member_arguments"
+kind = "test"
+source = "record_methods"
+name = "c_semantic_byref_calls_flatten_record_member_arguments"
+description = "c_semantic_byref_calls_flatten_record_member_arguments"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_methods.c_semantic_string_byref_calls_flatten_record_member_arguments"
+kind = "test"
+source = "record_methods"
+name = "c_semantic_string_byref_calls_flatten_record_member_arguments"
+description = "c_semantic_string_byref_calls_flatten_record_member_arguments"
 groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 

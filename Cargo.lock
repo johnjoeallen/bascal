@@ -96,6 +96,8 @@ version = "0.99.69"
 dependencies = [
  "clap 4.6.6",
  "krakatau2",
+ "rdgen-codegen-rust",
+ "rdgen-grammar",
  "tempfile",
 ]
 
@@ -497,6 +499,44 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "rdgen"
+version = "0.1.0"
+dependencies = [
+ "rdgen-codegen-c",
+ "rdgen-codegen-rust",
+ "rdgen-grammar",
+]
+
+[[package]]
+name = "rdgen-codegen-c"
+version = "0.1.0"
+dependencies = [
+ "rdgen-grammar",
+ "rdgen-ir",
+ "tempfile",
+]
+
+[[package]]
+name = "rdgen-codegen-rust"
+version = "0.1.0"
+dependencies = [
+ "rdgen-grammar",
+ "rdgen-ir",
+ "tempfile",
+]
+
+[[package]]
+name = "rdgen-grammar"
+version = "0.1.0"
+dependencies = [
+ "rdgen-ir",
+]
+
+[[package]]
+name = "rdgen-ir"
+version = "0.1.0"
 
 [[package]]
 name = "regex"

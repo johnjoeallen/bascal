@@ -1,0 +1,2 @@
+# `timer` is seconds since midnight and works on every target.
+all: ok

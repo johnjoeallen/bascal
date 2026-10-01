@@ -1,0 +1,5 @@
+program p
+catch e%, l%
+print e%
+end try
+end

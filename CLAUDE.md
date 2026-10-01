@@ -2,7 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-See also [AGENTS.md](AGENTS.md) for terminology conventions.
+@AGENTS.md
+
+The import above loads [AGENTS.md](AGENTS.md) (terminology, compiler-stage rules,
+workflow orchestration) into every session.
 
 ## What this is
 
@@ -43,6 +46,7 @@ Pipeline, in `src/lib.rs`'s `compile_file`/`compile_source`: **lexer → parser 
 ### Testing conventions
 
 - `tutorial/**/*.bcl` are both the tutorial content and the transpiler's regression corpus: `tests/examples.rs` compiles every one and writes `.bas`/`.c` output alongside the source (tracked in git — regenerate rather than hand-edit when behavior changes).
+- `tests/fixtures/invalid/` is the growing corpus of invalid programs: each `<name>.bcl` has a `<name>.expected` listing, per target (`basic`/`c`/`jvm`/`all`), `ok` or a diagnostic substring (see its README). When you add or change a diagnostic, or fix a way an invalid program slipped through, add or update a case there.
 - New conformance fixtures (real-BASCOM-verified behavior) go in `tests/fixtures/conformance/*.bcl`, paired with a `*.expected.txt` of exact stdout; keep them small, deterministic, and scoped to one behavior.
 - Generated BASIC/C output for one-off manual checks belongs in `output/`; temporary compiled binaries belong in `tmp/` (both git-ignored except where noted above).
 

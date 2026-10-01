@@ -2,6 +2,39 @@
 .class public Stdlib
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 I
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
+.field public static g6 I
+.field public static g7 I
+.field public static g8 I
+.field public static g9 I
+.field public static g10 I
+.field public static g11 I
+.field public static g12 I
+.field public static g13 I
+.field public static g14 I
+.field public static g15 I
+.field public static g16 I
+.field public static g17 I
+.field public static g18 I
+.field public static g19 I
+.field public static g20 I
+.field public static g21 I
+.field public static g22 I
+.field public static g23 I
+.field public static g24 I
+.field public static g25 I
+.field public static g26 I
+.field public static g27 I
+.field public static g28 I
+.field public static g29 I
+.field public static g30 I
+.field public static g31 I
+.field public static g32 I
+.field public static g33 I
 .method public static ltrim : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
     .limit locals 2
@@ -10,7 +43,7 @@
     istore 1
     ldc 1
     istore 1
-L_while_0_top:
+L_condition_0:
     iload 1
     aload 0
     invokevirtual java/lang/String/length ()I
@@ -19,7 +52,7 @@ L_while_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_while_0_end
+    ifeq L_condition_2
     aload 0
     iload 1
     iconst_1
@@ -31,20 +64,28 @@ L_while_0_top:
     ldc " "
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     ineg
-    ifeq L_while_0_end
+    ifne L_condition_4
+    iconst_0
+    goto L_condition_5
+L_condition_4:
+    iconst_m1
+L_condition_5:
+    goto L_condition_3
+L_condition_2:
+    iconst_0
+L_condition_3:
+    ifeq L_condition_1
     iload 1
     ldc 1
     iadd
     istore 1
-    goto L_while_0_top
-L_while_0_end:
+    goto L_condition_0
+L_condition_1:
     aload 0
     iload 1
     iconst_1
     isub
     invokevirtual java/lang/String/substring (I)Ljava/lang/String;
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -59,14 +100,14 @@ L_while_0_end:
     aload 0
     invokevirtual java/lang/String/length ()I
     istore 1
-L_while_0_top:
+L_condition_0:
     iload 1
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_while_0_end
+    ifeq L_condition_2
     aload 0
     iload 1
     iconst_1
@@ -78,19 +119,27 @@ L_while_0_top:
     ldc " "
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     ineg
-    ifeq L_while_0_end
+    ifne L_condition_4
+    iconst_0
+    goto L_condition_5
+L_condition_4:
+    iconst_m1
+L_condition_5:
+    goto L_condition_3
+L_condition_2:
+    iconst_0
+L_condition_3:
+    ifeq L_condition_1
     iload 1
     ldc 1
     isub
     istore 1
-    goto L_while_0_top
-L_while_0_end:
+    goto L_condition_0
+L_condition_1:
     aload 0
     iconst_0
     iload 1
     invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -98,7 +147,7 @@ L_while_0_end:
 
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     iconst_0
     istore 1
@@ -109,11 +158,15 @@ L_while_0_end:
     ldc ""
     astore 3
     ldc 1
+    istore 4
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 5
+    iload 4
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 5
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -134,7 +187,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 122
     invokestatic java/lang/Integer/compare (II)I
@@ -142,12 +195,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     isub
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -159,6 +222,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -167,15 +231,13 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
 
 .method public static lcase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     iconst_0
     istore 1
@@ -186,11 +248,15 @@ L_for_0_end:
     ldc ""
     astore 3
     ldc 1
+    istore 4
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 5
+    iload 4
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 5
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -211,7 +277,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 90
     invokestatic java/lang/Integer/compare (II)I
@@ -219,12 +285,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     iadd
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -236,6 +312,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -243,8 +320,6 @@ L_if_1_else:
     goto L_for_0_top
 L_for_0_end:
     aload 3
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -256,199 +331,199 @@ L_for_0_end:
 
     iload 0
     dup
-    ldc 2
+    getstatic Stdlib/g31 I
     isub
     ifeq L_select_0_case_0
     goto L_select_0_next_0
 L_select_0_next_0:
     dup
-    ldc 3
+    getstatic Stdlib/g29 I
     isub
     ifeq L_select_0_case_1
     goto L_select_0_next_1
 L_select_0_next_1:
     dup
-    ldc 4
+    getstatic Stdlib/g21 I
     isub
     ifeq L_select_0_case_2
     goto L_select_0_next_2
 L_select_0_next_2:
     dup
-    ldc 5
+    getstatic Stdlib/g18 I
     isub
     ifeq L_select_0_case_3
     goto L_select_0_next_3
 L_select_0_next_3:
     dup
-    ldc 6
+    getstatic Stdlib/g25 I
     isub
     ifeq L_select_0_case_4
     goto L_select_0_next_4
 L_select_0_next_4:
     dup
-    ldc 7
+    getstatic Stdlib/g22 I
     isub
     ifeq L_select_0_case_5
     goto L_select_0_next_5
 L_select_0_next_5:
     dup
-    ldc 9
+    getstatic Stdlib/g30 I
     isub
     ifeq L_select_0_case_6
     goto L_select_0_next_6
 L_select_0_next_6:
     dup
-    ldc 10
+    getstatic Stdlib/g14 I
     isub
     ifeq L_select_0_case_7
     goto L_select_0_next_7
 L_select_0_next_7:
     dup
-    ldc 11
+    getstatic Stdlib/g13 I
     isub
     ifeq L_select_0_case_8
     goto L_select_0_next_8
 L_select_0_next_8:
     dup
-    ldc 13
+    getstatic Stdlib/g33 I
     isub
     ifeq L_select_0_case_9
     goto L_select_0_next_9
 L_select_0_next_9:
     dup
-    ldc 14
+    getstatic Stdlib/g24 I
     isub
     ifeq L_select_0_case_10
     goto L_select_0_next_10
 L_select_0_next_10:
     dup
-    ldc 19
+    getstatic Stdlib/g20 I
     isub
     ifeq L_select_0_case_11
     goto L_select_0_next_11
 L_select_0_next_11:
     dup
-    ldc 20
+    getstatic Stdlib/g28 I
     isub
     ifeq L_select_0_case_12
     goto L_select_0_next_12
 L_select_0_next_12:
     dup
-    ldc 24
+    getstatic Stdlib/g7 I
     isub
     ifeq L_select_0_case_13
     goto L_select_0_next_13
 L_select_0_next_13:
     dup
-    ldc 25
+    getstatic Stdlib/g5 I
     isub
     ifeq L_select_0_case_14
     goto L_select_0_next_14
 L_select_0_next_14:
     dup
-    ldc 27
+    getstatic Stdlib/g23 I
     isub
     ifeq L_select_0_case_15
     goto L_select_0_next_15
 L_select_0_next_15:
     dup
-    ldc 52
+    getstatic Stdlib/g3 I
     isub
     ifeq L_select_0_case_16
     goto L_select_0_next_16
 L_select_0_next_16:
     dup
-    ldc 53
+    getstatic Stdlib/g17 I
     isub
     ifeq L_select_0_case_17
     goto L_select_0_next_17
 L_select_0_next_17:
     dup
-    ldc 54
+    getstatic Stdlib/g1 I
     isub
     ifeq L_select_0_case_18
     goto L_select_0_next_18
 L_select_0_next_18:
     dup
-    ldc 55
+    getstatic Stdlib/g16 I
     isub
     ifeq L_select_0_case_19
     goto L_select_0_next_19
 L_select_0_next_19:
     dup
-    ldc 57
+    getstatic Stdlib/g6 I
     isub
     ifeq L_select_0_case_20
     goto L_select_0_next_20
 L_select_0_next_20:
     dup
-    ldc 58
+    getstatic Stdlib/g15 I
     isub
     ifeq L_select_0_case_21
     goto L_select_0_next_21
 L_select_0_next_21:
     dup
-    ldc 61
+    getstatic Stdlib/g9 I
     isub
     ifeq L_select_0_case_22
     goto L_select_0_next_22
 L_select_0_next_22:
     dup
-    ldc 62
+    getstatic Stdlib/g19 I
     isub
     ifeq L_select_0_case_23
     goto L_select_0_next_23
 L_select_0_next_23:
     dup
-    ldc 63
+    getstatic Stdlib/g4 I
     isub
     ifeq L_select_0_case_24
     goto L_select_0_next_24
 L_select_0_next_24:
     dup
-    ldc 64
+    getstatic Stdlib/g2 I
     isub
     ifeq L_select_0_case_25
     goto L_select_0_next_25
 L_select_0_next_25:
     dup
-    ldc 67
+    getstatic Stdlib/g32 I
     isub
     ifeq L_select_0_case_26
     goto L_select_0_next_26
 L_select_0_next_26:
     dup
-    ldc 68
+    getstatic Stdlib/g8 I
     isub
     ifeq L_select_0_case_27
     goto L_select_0_next_27
 L_select_0_next_27:
     dup
-    ldc 70
+    getstatic Stdlib/g12 I
     isub
     ifeq L_select_0_case_28
     goto L_select_0_next_28
 L_select_0_next_28:
     dup
-    ldc 71
+    getstatic Stdlib/g11 I
     isub
     ifeq L_select_0_case_29
     goto L_select_0_next_29
 L_select_0_next_29:
     dup
-    ldc 72
+    getstatic Stdlib/g10 I
     isub
     ifeq L_select_0_case_30
     goto L_select_0_next_30
 L_select_0_next_30:
     dup
-    ldc 75
+    getstatic Stdlib/g26 I
     isub
     ifeq L_select_0_case_31
     goto L_select_0_next_31
 L_select_0_next_31:
     dup
-    ldc 76
+    getstatic Stdlib/g27 I
     isub
     ifeq L_select_0_case_32
     goto L_select_0_next_32
@@ -637,8 +712,74 @@ L_select_0_end:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 1
+    .limit locals 34
 
+    iconst_0
+    putstatic Stdlib/g1 I
+    iconst_0
+    putstatic Stdlib/g2 I
+    iconst_0
+    putstatic Stdlib/g3 I
+    iconst_0
+    putstatic Stdlib/g4 I
+    iconst_0
+    putstatic Stdlib/g5 I
+    iconst_0
+    putstatic Stdlib/g6 I
+    iconst_0
+    putstatic Stdlib/g7 I
+    iconst_0
+    putstatic Stdlib/g8 I
+    iconst_0
+    putstatic Stdlib/g9 I
+    iconst_0
+    putstatic Stdlib/g10 I
+    iconst_0
+    putstatic Stdlib/g11 I
+    iconst_0
+    putstatic Stdlib/g12 I
+    iconst_0
+    putstatic Stdlib/g13 I
+    iconst_0
+    putstatic Stdlib/g14 I
+    iconst_0
+    putstatic Stdlib/g15 I
+    iconst_0
+    putstatic Stdlib/g16 I
+    iconst_0
+    putstatic Stdlib/g17 I
+    iconst_0
+    putstatic Stdlib/g18 I
+    iconst_0
+    putstatic Stdlib/g19 I
+    iconst_0
+    putstatic Stdlib/g20 I
+    iconst_0
+    putstatic Stdlib/g21 I
+    iconst_0
+    putstatic Stdlib/g22 I
+    iconst_0
+    putstatic Stdlib/g23 I
+    iconst_0
+    putstatic Stdlib/g24 I
+    iconst_0
+    putstatic Stdlib/g25 I
+    iconst_0
+    putstatic Stdlib/g26 I
+    iconst_0
+    putstatic Stdlib/g27 I
+    iconst_0
+    putstatic Stdlib/g28 I
+    iconst_0
+    putstatic Stdlib/g29 I
+    iconst_0
+    putstatic Stdlib/g30 I
+    iconst_0
+    putstatic Stdlib/g31 I
+    iconst_0
+    putstatic Stdlib/g32 I
+    iconst_0
+    putstatic Stdlib/g33 I
     ; Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
     ; verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
     ; BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
@@ -649,45 +790,105 @@ L_select_0_end:
     ; this same declaration, with no separate function needed (and no longer
     ; allowed: a function and a method sharing one name is a duplicate
     ; declaration, since they'd both claim the same callable identity).
-
     ; Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
     ; verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
     ; BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
     ; and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
     ; works via ordinary-call syntax resolving to this same declaration.
-
     ; Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Lower-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
     ; and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     ; returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
     ; ships a working implementation.
-    ; 
+    ;
     ; The named constants below are the complete common subset supported by
     ; ERROR$: use them in THROW and filtered CATCH clauses instead of magic
     ; numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
     ; BASCOM subset still fall through to ERROR$'s generic message.
-    ; 
+    ;
     ; Deliberately NOT a scalar method (see GitHub issue #41, which asked for
     ; this decision to be recorded either way): code% is an opaque lookup key,
     ; not a value the call is naturally "operating on" the way ltrim$/rtrim$/
     ; ucase$/lcase$ operate on their string -- code%.error() would read as if
     ; the *error code itself* has a message, when really this is a lookup
     ; table keyed by that code. Stays an ordinary function.
-
-
+    ldc 2
+    putstatic Stdlib/g31 I
+    ldc 3
+    putstatic Stdlib/g29 I
+    ldc 4
+    putstatic Stdlib/g21 I
+    ldc 5
+    putstatic Stdlib/g18 I
+    ldc 6
+    putstatic Stdlib/g25 I
+    ldc 7
+    putstatic Stdlib/g22 I
+    ldc 9
+    putstatic Stdlib/g30 I
+    ldc 10
+    putstatic Stdlib/g14 I
+    ldc 11
+    putstatic Stdlib/g13 I
+    ldc 13
+    putstatic Stdlib/g33 I
+    ldc 14
+    putstatic Stdlib/g24 I
+    ldc 19
+    putstatic Stdlib/g20 I
+    ldc 20
+    putstatic Stdlib/g28 I
+    ldc 24
+    putstatic Stdlib/g7 I
+    ldc 25
+    putstatic Stdlib/g5 I
+    ldc 27
+    putstatic Stdlib/g23 I
+    ldc 52
+    putstatic Stdlib/g3 I
+    ldc 53
+    putstatic Stdlib/g17 I
+    ldc 54
+    putstatic Stdlib/g1 I
+    ldc 55
+    putstatic Stdlib/g16 I
+    ldc 57
+    putstatic Stdlib/g6 I
+    ldc 58
+    putstatic Stdlib/g15 I
+    ldc 61
+    putstatic Stdlib/g9 I
+    ldc 62
+    putstatic Stdlib/g19 I
+    ldc 63
+    putstatic Stdlib/g4 I
+    ldc 64
+    putstatic Stdlib/g2 I
+    ldc 67
+    putstatic Stdlib/g32 I
+    ldc 68
+    putstatic Stdlib/g8 I
+    ldc 70
+    putstatic Stdlib/g12 I
+    ldc 71
+    putstatic Stdlib/g11 I
+    ldc 72
+    putstatic Stdlib/g10 I
+    ldc 75
+    putstatic Stdlib/g26 I
+    ldc 76
+    putstatic Stdlib/g27 I
     ; Tutorial — Standard library functions
-    ; 
+    ;
     ; com.bascal.stdlib is an ordinary require-able library, resolved the same
     ; way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
     ; directory to the search path automatically, so no -L flag is needed to
@@ -697,7 +898,7 @@ L_select_0_end:
     ; dosbox-x) -- see the manual's "String and error-message functions"
     ; section (https://johnjoeallen.github.io/bascal/manual/) for the full
     ; story.
-    ; 
+    ;
     ; ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
     ; receiver type, using self$ in place of an explicit s$ parameter -- see
     ; the "Declare and call a method" chapter. A method's receiver is really
@@ -708,11 +909,9 @@ L_select_0_end:
     ; error$ stays an ordinary function: an
     ; error code is a lookup key, not a value the call is naturally "operating
     ; on" the way the others operate on their string.
-    ; 
+    ;
     ; Run with:
     ; bcc tutorial/stdlib.bcl
-
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -757,7 +956,6 @@ L_select_0_end:
     ldc "QUIET THIS DOWN"
     invokestatic Stdlib/lcase (Ljava/lang/String;)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Same four functions, called as chained methods instead.
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -783,7 +981,6 @@ L_select_0_end:
     invokestatic Stdlib/ltrim (Ljava/lang/String;)Ljava/lang/String;
     invokestatic Stdlib/ucase (Ljava/lang/String;)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; ERROR$ maps a classic MBASIC/GW-BASIC/BASCOM error code to a message;
     ; pair it with ERR inside an ON ERROR GOTO handler in real code.
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -798,6 +995,5 @@ L_select_0_end:
     ldc 9999
     invokestatic Stdlib/error (I)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     return
 .end method

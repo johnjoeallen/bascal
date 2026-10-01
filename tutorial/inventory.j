@@ -4,210 +4,425 @@
 
 .field public static g1 I
 .field public static g2 I
-.field public static g3 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
+.field public static g6 I
+.field public static g7 I
+.field public static g8 I
+.field public static g9 I
+.field public static g10 I
+.field public static g11 I
+.field public static g12 I
+.field public static g13 I
+.field public static g14 I
+.field public static g15 I
+.field public static g16 I
+.field public static g17 I
+.field public static g18 I
+.field public static g19 I
+.field public static g20 I
+.field public static g21 I
+.field public static g22 I
+.field public static g23 I
+.field public static g24 I
+.field public static g25 I
+.field public static g26 I
+.field public static g27 I
+.field public static g28 I
+.field public static g29 I
+.field public static g30 I
+.field public static g31 I
+.field public static g32 I
+.field public static g33 I
+.field public static g34 I
+.field public static g35 I
+.field public static g36 Ljava/lang/String;
+.field public static g37 Ljava/lang/String;
+.field public static g38 D
+.field public static g40 I
+.field public static g41 I
+.field public static g42 Ljava/lang/String;
+.field public static g43 I
+.field public static g44 Ljava/lang/String;
+.field public static g45 Ljava/lang/String;
+.field public static g46 D
+.field public static g48 I
+.field public static g49 I
+.field public static g50 I
 .field public static bccFiles [Ljava/io/RandomAccessFile;
 .field public static bccBufs [[B
 .field public static bccRecLen [I
 .field public static bccStdin Ljava/io/BufferedReader;
+.method public static ltrim : (Ljava/lang/String;)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 18
+
+    iconst_0
+    istore 1
+    ldc ""
+    astore 2
+    ldc ""
+    astore 3
+    dconst_0
+    dstore 4
+    iconst_0
+    istore 6
+    iconst_0
+    istore 7
+    ldc ""
+    astore 8
+    ldc ""
+    astore 9
+    dconst_0
+    dstore 10
+    iconst_0
+    istore 12
+    iconst_0
+    istore 13
+    ldc 1
+    istore 1
+L_condition_0:
+    iload 1
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    invokestatic java/lang/Integer/compare (II)I
+    iconst_1
+    isub
+    bipush 31
+    ishr
+    ifeq L_condition_2
+    aload 0
+    iload 1
+    iconst_1
+    isub
+    dup
+    ldc 1
+    iadd
+    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
+    ldc " "
+    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
+    ineg
+    ifne L_condition_4
+    iconst_0
+    goto L_condition_5
+L_condition_4:
+    iconst_m1
+L_condition_5:
+    goto L_condition_3
+L_condition_2:
+    iconst_0
+L_condition_3:
+    ifeq L_condition_1
+    iload 1
+    ldc 1
+    iadd
+    istore 1
+    goto L_condition_0
+L_condition_1:
+    aload 0
+    iload 1
+    iconst_1
+    isub
+    invokevirtual java/lang/String/substring (I)Ljava/lang/String;
+    areturn
+    ldc ""
+    areturn
+.end method
+
+.method public static rtrim : (Ljava/lang/String;)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 18
+
+    iconst_0
+    istore 1
+    ldc ""
+    astore 2
+    ldc ""
+    astore 3
+    dconst_0
+    dstore 4
+    iconst_0
+    istore 6
+    iconst_0
+    istore 7
+    ldc ""
+    astore 8
+    ldc ""
+    astore 9
+    dconst_0
+    dstore 10
+    iconst_0
+    istore 12
+    iconst_0
+    istore 13
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 1
+L_condition_0:
+    iload 1
+    ldc 0
+    invokestatic java/lang/Integer/compare (II)I
+    ineg
+    bipush 31
+    ishr
+    ifeq L_condition_2
+    aload 0
+    iload 1
+    iconst_1
+    isub
+    dup
+    ldc 1
+    iadd
+    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
+    ldc " "
+    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
+    ineg
+    ifne L_condition_4
+    iconst_0
+    goto L_condition_5
+L_condition_4:
+    iconst_m1
+L_condition_5:
+    goto L_condition_3
+L_condition_2:
+    iconst_0
+L_condition_3:
+    ifeq L_condition_1
+    iload 1
+    ldc 1
+    isub
+    istore 1
+    goto L_condition_0
+L_condition_1:
+    aload 0
+    iconst_0
+    iload 1
+    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
+    areturn
+    ldc ""
+    areturn
+.end method
+
 .method public static error : (I)Ljava/lang/String;
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
+    ldc ""
+    astore 1
+    ldc ""
+    astore 2
+    dconst_0
+    dstore 3
+    iconst_0
+    istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     iload 0
     dup
-    ldc 2
+    getstatic Inventory/g33 I
     isub
     ifeq L_select_0_case_0
     goto L_select_0_next_0
 L_select_0_next_0:
     dup
-    ldc 3
+    getstatic Inventory/g31 I
     isub
     ifeq L_select_0_case_1
     goto L_select_0_next_1
 L_select_0_next_1:
     dup
-    ldc 4
+    getstatic Inventory/g23 I
     isub
     ifeq L_select_0_case_2
     goto L_select_0_next_2
 L_select_0_next_2:
     dup
-    ldc 5
+    getstatic Inventory/g20 I
     isub
     ifeq L_select_0_case_3
     goto L_select_0_next_3
 L_select_0_next_3:
     dup
-    ldc 6
+    getstatic Inventory/g27 I
     isub
     ifeq L_select_0_case_4
     goto L_select_0_next_4
 L_select_0_next_4:
     dup
-    ldc 7
+    getstatic Inventory/g24 I
     isub
     ifeq L_select_0_case_5
     goto L_select_0_next_5
 L_select_0_next_5:
     dup
-    ldc 9
+    getstatic Inventory/g32 I
     isub
     ifeq L_select_0_case_6
     goto L_select_0_next_6
 L_select_0_next_6:
     dup
-    ldc 10
+    getstatic Inventory/g16 I
     isub
     ifeq L_select_0_case_7
     goto L_select_0_next_7
 L_select_0_next_7:
     dup
-    ldc 11
+    getstatic Inventory/g15 I
     isub
     ifeq L_select_0_case_8
     goto L_select_0_next_8
 L_select_0_next_8:
     dup
-    ldc 13
+    getstatic Inventory/g35 I
     isub
     ifeq L_select_0_case_9
     goto L_select_0_next_9
 L_select_0_next_9:
     dup
-    ldc 14
+    getstatic Inventory/g26 I
     isub
     ifeq L_select_0_case_10
     goto L_select_0_next_10
 L_select_0_next_10:
     dup
-    ldc 19
+    getstatic Inventory/g22 I
     isub
     ifeq L_select_0_case_11
     goto L_select_0_next_11
 L_select_0_next_11:
     dup
-    ldc 20
+    getstatic Inventory/g30 I
     isub
     ifeq L_select_0_case_12
     goto L_select_0_next_12
 L_select_0_next_12:
     dup
-    ldc 24
+    getstatic Inventory/g9 I
     isub
     ifeq L_select_0_case_13
     goto L_select_0_next_13
 L_select_0_next_13:
     dup
-    ldc 25
+    getstatic Inventory/g7 I
     isub
     ifeq L_select_0_case_14
     goto L_select_0_next_14
 L_select_0_next_14:
     dup
-    ldc 27
+    getstatic Inventory/g25 I
     isub
     ifeq L_select_0_case_15
     goto L_select_0_next_15
 L_select_0_next_15:
     dup
-    ldc 52
+    getstatic Inventory/g5 I
     isub
     ifeq L_select_0_case_16
     goto L_select_0_next_16
 L_select_0_next_16:
     dup
-    ldc 53
+    getstatic Inventory/g19 I
     isub
     ifeq L_select_0_case_17
     goto L_select_0_next_17
 L_select_0_next_17:
     dup
-    ldc 54
+    getstatic Inventory/g3 I
     isub
     ifeq L_select_0_case_18
     goto L_select_0_next_18
 L_select_0_next_18:
     dup
-    ldc 55
+    getstatic Inventory/g18 I
     isub
     ifeq L_select_0_case_19
     goto L_select_0_next_19
 L_select_0_next_19:
     dup
-    ldc 57
+    getstatic Inventory/g8 I
     isub
     ifeq L_select_0_case_20
     goto L_select_0_next_20
 L_select_0_next_20:
     dup
-    ldc 58
+    getstatic Inventory/g17 I
     isub
     ifeq L_select_0_case_21
     goto L_select_0_next_21
 L_select_0_next_21:
     dup
-    ldc 61
+    getstatic Inventory/g11 I
     isub
     ifeq L_select_0_case_22
     goto L_select_0_next_22
 L_select_0_next_22:
     dup
-    ldc 62
+    getstatic Inventory/g21 I
     isub
     ifeq L_select_0_case_23
     goto L_select_0_next_23
 L_select_0_next_23:
     dup
-    ldc 63
+    getstatic Inventory/g6 I
     isub
     ifeq L_select_0_case_24
     goto L_select_0_next_24
 L_select_0_next_24:
     dup
-    ldc 64
+    getstatic Inventory/g4 I
     isub
     ifeq L_select_0_case_25
     goto L_select_0_next_25
 L_select_0_next_25:
     dup
-    ldc 67
+    getstatic Inventory/g34 I
     isub
     ifeq L_select_0_case_26
     goto L_select_0_next_26
 L_select_0_next_26:
     dup
-    ldc 68
+    getstatic Inventory/g10 I
     isub
     ifeq L_select_0_case_27
     goto L_select_0_next_27
 L_select_0_next_27:
     dup
-    ldc 70
+    getstatic Inventory/g14 I
     isub
     ifeq L_select_0_case_28
     goto L_select_0_next_28
 L_select_0_next_28:
     dup
-    ldc 71
+    getstatic Inventory/g13 I
     isub
     ifeq L_select_0_case_29
     goto L_select_0_next_29
 L_select_0_next_29:
     dup
-    ldc 72
+    getstatic Inventory/g12 I
     isub
     ifeq L_select_0_case_30
     goto L_select_0_next_30
 L_select_0_next_30:
     dup
-    ldc 75
+    getstatic Inventory/g28 I
     isub
     ifeq L_select_0_case_31
     goto L_select_0_next_31
 L_select_0_next_31:
     dup
-    ldc 76
+    getstatic Inventory/g29 I
     isub
     ifeq L_select_0_case_32
     goto L_select_0_next_32
@@ -396,8 +611,28 @@ L_select_0_end:
 
 .method public static isEmpty : (Ljava/lang/String;)I
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
+    ldc ""
+    astore 1
+    ldc ""
+    astore 2
+    dconst_0
+    dstore 3
+    iconst_0
+    istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     aload 0
     iconst_0
     invokevirtual java/lang/String/charAt (I)C
@@ -418,8 +653,28 @@ L_select_0_end:
 
 .method public static partInRange : (I)I
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
+    ldc ""
+    astore 1
+    ldc ""
+    astore 2
+    dconst_0
+    dstore 3
+    iconst_0
+    istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     iload 0
     ldc 1
     invokestatic java/lang/Integer/compare (II)I
@@ -428,18 +683,28 @@ L_select_0_end:
     isub
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     iload 0
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/Integer/compare (II)I
     iconst_1
     isub
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifne L_condition_2
+    iconst_0
+    goto L_condition_3
+L_condition_2:
+    iconst_m1
+L_condition_3:
+    goto L_condition_1
+L_condition_0:
+    iconst_0
+L_condition_1:
+    ifeq L_condition_4
     ldc 1
     ireturn
-L_if_0_else:
+L_condition_4:
     ldc 0
     ireturn
     iconst_0
@@ -448,10 +713,30 @@ L_if_0_else:
 
 .method public static readPartNumberInput : ()Ljava/lang/String;
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
     ldc ""
     astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
+    ldc ""
+    astore 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Input part number? "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -513,8 +798,8 @@ L_if_0_else:
     invokevirtual java/lang/ProcessBuilder/start ()Ljava/lang/Process;
     invokevirtual java/lang/Process/waitFor ()I
     pop
-    astore 0
-    aload 0
+    astore 12
+    aload 12
     areturn
     ldc ""
     areturn
@@ -522,24 +807,45 @@ L_if_0_else:
 
 .method public static readKey : ()Ljava/lang/String;
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
     ldc ""
     astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
 L_do_0_top:
     getstatic java/lang/System/in Ljava/io/InputStream;
     invokevirtual java/io/InputStream/available ()I
-    ifle L_condition_0
+    ifle L_condition_1
     getstatic java/lang/System/in Ljava/io/InputStream;
     invokevirtual java/io/InputStream/read ()I
     i2c
     invokestatic java/lang/String/valueOf (C)Ljava/lang/String;
-    goto L_condition_1
-L_condition_0:
-    ldc ""
+    goto L_condition_2
 L_condition_1:
-    astore 0
-    aload 0
+    ldc ""
+L_condition_2:
+    astore 6
+L_do_0_continue:
+    aload 6
     ldc ""
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     iconst_1
@@ -548,7 +854,7 @@ L_condition_1:
     ifne L_do_0_end
     goto L_do_0_top
 L_do_0_end:
-    aload 0
+    aload 6
     areturn
     ldc ""
     areturn
@@ -556,10 +862,30 @@ L_do_0_end:
 
 .method public static waitAnyKey : ()V
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
     ldc ""
     astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -584,17 +910,18 @@ L_do_0_end:
 L_do_0_top:
     getstatic java/lang/System/in Ljava/io/InputStream;
     invokevirtual java/io/InputStream/available ()I
-    ifle L_condition_0
+    ifle L_condition_1
     getstatic java/lang/System/in Ljava/io/InputStream;
     invokevirtual java/io/InputStream/read ()I
     i2c
     invokestatic java/lang/String/valueOf (C)Ljava/lang/String;
-    goto L_condition_1
-L_condition_0:
-    ldc ""
+    goto L_condition_2
 L_condition_1:
-    astore 0
-    aload 0
+    ldc ""
+L_condition_2:
+    astore 6
+L_do_0_continue:
+    aload 6
     ldc ""
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     iconst_1
@@ -608,8 +935,28 @@ L_do_0_end:
 
 .method public static showMainMenu : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -663,7 +1010,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -678,7 +1025,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -693,7 +1040,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -708,7 +1055,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "3......L)ist all"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -723,7 +1070,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -738,7 +1085,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -753,7 +1100,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -768,7 +1115,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -782,8 +1129,28 @@ L_do_0_end:
 
 .method public static showBadPartNumber : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -809,7 +1176,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Part number is out of permissable range of 1 to"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -819,8 +1186,28 @@ L_do_0_end:
 
 .method public static showRangeRetryMessage : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -843,7 +1230,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "The Part number is out of permissable range of 1 to"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -874,8 +1261,28 @@ L_do_0_end:
 
 .method public static showNullEntryMessage : (Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
+    ldc ""
+    astore 1
+    ldc ""
+    astore 2
+    dconst_0
+    dstore 3
+    iconst_0
+    istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -886,7 +1293,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -914,8 +1321,28 @@ L_do_0_end:
 
 .method public static showPartStatus : (ILjava/lang/String;IID)V
     .limit stack 16
-    .limit locals 10
+    .limit locals 22
 
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
+    ldc ""
+    astore 12
+    ldc ""
+    astore 13
+    dconst_0
+    dstore 14
+    iconst_0
+    istore 16
+    iconst_0
+    istore 17
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -941,7 +1368,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -956,7 +1383,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -971,7 +1398,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -994,7 +1421,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1016,7 +1443,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1039,7 +1466,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1062,7 +1489,7 @@ L_do_0_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "["
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "G"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1075,6 +1502,8 @@ L_do_0_end:
     ldc "      Unit price:  "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     dload 4
+    d2f
+    f2d
     invokestatic Inventory/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -1084,8 +1513,28 @@ L_do_0_end:
 
 .method public static printListHeader : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -1120,7 +1569,7 @@ L_do_0_end:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc "items"
@@ -1138,8 +1587,28 @@ L_do_0_end:
 
 .method public static printInventoryLine : (ILjava/lang/String;II)V
     .limit stack 16
-    .limit locals 8
+    .limit locals 20
 
+    ldc ""
+    astore 4
+    ldc ""
+    astore 5
+    dconst_0
+    dstore 6
+    iconst_0
+    istore 8
+    iconst_0
+    istore 9
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
+    dconst_0
+    dstore 12
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -1193,8 +1662,28 @@ L_do_0_end:
 
 .method public static printReorderHeader : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -1208,7 +1697,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1249,8 +1738,28 @@ L_do_0_end:
 
 .method public static printReorderLine : (ILjava/lang/String;II)V
     .limit stack 16
-    .limit locals 8
+    .limit locals 20
 
+    ldc ""
+    astore 4
+    ldc ""
+    astore 5
+    dconst_0
+    dstore 6
+    iconst_0
+    istore 8
+    iconst_0
+    istore 9
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
+    dconst_0
+    dstore 12
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -1311,8 +1820,28 @@ L_do_0_end:
 
 .method public static gatherPartDetails : (I[Ljava/lang/String;[I[I[D)V
     .limit stack 16
-    .limit locals 14
+    .limit locals 26
 
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
+    dconst_0
+    dstore 12
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
+    ldc ""
+    astore 16
+    ldc ""
+    astore 17
+    dconst_0
+    dstore 18
+    iconst_0
+    istore 20
+    iconst_0
+    istore 21
     aload 1
     iconst_0
     aaload
@@ -1342,7 +1871,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1361,7 +1890,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1407,7 +1936,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1485,7 +2014,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1565,7 +2094,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1645,7 +2174,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1714,6 +2243,8 @@ L_do_0_end:
     pop
     invokevirtual java/lang/String/trim ()Ljava/lang/String;
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dstore 8
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -1725,7 +2256,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1755,8 +2286,28 @@ L_do_0_end:
 
 .method public static showAddStockScreen : (ILjava/lang/String;II)V
     .limit stack 16
-    .limit locals 8
+    .limit locals 20
 
+    ldc ""
+    astore 4
+    ldc ""
+    astore 5
+    dconst_0
+    dstore 6
+    iconst_0
+    istore 8
+    iconst_0
+    istore 9
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
+    dconst_0
+    dstore 12
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -1808,7 +2359,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1835,7 +2386,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1861,7 +2412,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1888,7 +2439,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1910,8 +2461,28 @@ L_do_0_end:
 
 .method public static showNegativeQtyWarning : ()V
     .limit stack 16
-    .limit locals 4
+    .limit locals 16
 
+    ldc ""
+    astore 0
+    ldc ""
+    astore 1
+    dconst_0
+    dstore 2
+    iconst_0
+    istore 4
+    iconst_0
+    istore 5
+    ldc ""
+    astore 6
+    ldc ""
+    astore 7
+    dconst_0
+    dstore 8
+    iconst_0
+    istore 10
+    iconst_0
+    istore 11
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -1957,8 +2528,28 @@ L_do_0_end:
 
 .method public static showSubtractStockScreen : (ILjava/lang/String;II)V
     .limit stack 16
-    .limit locals 8
+    .limit locals 20
 
+    ldc ""
+    astore 4
+    ldc ""
+    astore 5
+    dconst_0
+    dstore 6
+    iconst_0
+    istore 8
+    iconst_0
+    istore 9
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
+    dconst_0
+    dstore 12
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -1972,7 +2563,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -1991,7 +2582,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2010,7 +2601,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2037,7 +2628,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2063,7 +2654,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2090,7 +2681,7 @@ L_do_0_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2112,8 +2703,28 @@ L_do_0_end:
 
 .method public static showOverSubtractWarning : (I)V
     .limit stack 16
-    .limit locals 5
+    .limit locals 17
 
+    ldc ""
+    astore 1
+    ldc ""
+    astore 2
+    dconst_0
+    dstore 3
+    iconst_0
+    istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -2193,31 +2804,39 @@ L_do_0_end:
 
 .method public static checkPart : ()V
     .limit stack 16
-    .limit locals 14
+    .limit locals 18
 
-    iconst_0
-    istore 0
+    ldc ""
+    astore 0
     ldc ""
     astore 1
-    ldc ""
-    astore 2
+    dconst_0
+    dstore 2
     iconst_0
-    istore 3
-    ldc ""
-    astore 4
+    istore 4
     iconst_0
     istore 5
+    iconst_0
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    ldc ""
+    astore 9
     dconst_0
-    dstore 6
+    dstore 10
     iconst_0
-    istore 8
+    istore 12
     iconst_0
-    istore 9
+    istore 13
     ; global inv
     invokestatic Inventory/readPartNumberInput ()Ljava/lang/String;
-    astore 1
-    aload 1
+    astore 7
+    aload 7
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -2226,8 +2845,8 @@ L_do_0_end:
     dadd
     d2l
     l2i
-    istore 0
-    iload 0
+    istore 6
+    iload 6
     invokestatic Inventory/partInRange (I)I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
@@ -2239,11 +2858,11 @@ L_do_0_end:
     iconst_1
     ixor
     ineg
-    ifeq L_if_0_else
+    ifeq L_condition_0
     invokestatic Inventory/showBadPartNumber ()V
     invokestatic Inventory/waitAnyKey ()V
     return
-L_if_0_else:
+L_condition_0:
     ; BASCAL-ism: `let p = inv[part%]` reads record `part%` of the
     ; `inv` file into a local record variable `p` -- one expression
     ; for what fhb's `GET #1, PART!` plus five separate field reads
@@ -2257,7 +2876,7 @@ L_if_0_else:
     isub
     aaload
     dup
-    iload 0
+    iload 6
     i2l
     lconst_1
     lsub
@@ -2286,57 +2905,8 @@ L_if_0_else:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 5
-L_while_1_top:
-    iload 5
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_1_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 5
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_1_end
-    iload 5
-    ldc 1
-    isub
-    istore 5
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 5
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 4
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 9
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2347,57 +2917,8 @@ L_while_1_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 3
-L_while_2_top:
-    iload 3
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 3
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 3
-    ldc 1
-    isub
-    istore 3
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 3
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 2
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 8
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2414,7 +2935,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 8
+    istore 12
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2431,7 +2952,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 9
+    istore 13
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2449,10 +2970,14 @@ L_while_2_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 6
-    aload 4
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 10
+    aload 9
     invokestatic Inventory/isEmpty (Ljava/lang/String;)I
-    ifeq L_if_3_else
+    ifeq L_condition_2
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -2481,7 +3006,7 @@ L_while_2_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Part number"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    iload 0
+    iload 6
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -2492,12 +3017,14 @@ L_while_2_end:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     invokestatic Inventory/waitAnyKey ()V
     return
-L_if_3_else:
-    iload 0
-    aload 2
-    iload 8
-    iload 9
-    dload 6
+L_condition_2:
+    iload 6
+    aload 8
+    iload 12
+    iload 13
+    dload 10
+    d2f
+    f2d
     invokestatic Inventory/showPartStatus (ILjava/lang/String;IID)V
     invokestatic Inventory/waitAnyKey ()V
     return
@@ -2505,7 +3032,7 @@ L_if_3_else:
 
 .method public static editRecord : ()V
     .limit stack 16
-    .limit locals 20
+    .limit locals 24
 
     ldc ""
     astore 0
@@ -2517,24 +3044,30 @@ L_if_3_else:
     istore 4
     ldc ""
     astore 5
-    iconst_0
-    istore 6
     ldc ""
-    astore 7
-    ldc ""
-    astore 8
+    astore 6
+    dconst_0
+    dstore 7
     iconst_0
     istore 9
+    iconst_0
+    istore 10
     ldc ""
-    astore 10
+    astore 11
     iconst_0
-    istore 11
+    istore 12
+    ldc ""
+    astore 13
+    ldc ""
+    astore 14
+    ldc ""
+    astore 15
     dconst_0
-    dstore 12
+    dstore 16
     iconst_0
-    istore 14
+    istore 18
     iconst_0
-    istore 15
+    istore 19
     ; global inv
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
@@ -2549,16 +3082,18 @@ L_if_3_else:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     invokestatic Inventory/readPartNumberInput ()Ljava/lang/String;
-    astore 7
-    aload 7
+    astore 13
+    aload 13
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -2567,8 +3102,8 @@ L_if_3_else:
     dadd
     d2l
     l2i
-    istore 6
-    iload 6
+    istore 12
+    iload 12
     invokestatic Inventory/partInRange (I)I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
@@ -2580,11 +3115,11 @@ L_if_3_else:
     iconst_1
     ixor
     ineg
-    ifeq L_if_0_else
+    ifeq L_condition_0
     invokestatic Inventory/showBadPartNumber ()V
     invokestatic Inventory/waitAnyKey ()V
     return
-L_if_0_else:
+L_condition_0:
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
     ldc 1
@@ -2592,7 +3127,7 @@ L_if_0_else:
     isub
     aaload
     dup
-    iload 6
+    iload 12
     i2l
     lconst_1
     lsub
@@ -2621,57 +3156,8 @@ L_if_0_else:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 11
-L_while_1_top:
-    iload 11
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_1_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 11
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_1_end
-    iload 11
-    ldc 1
-    isub
-    istore 11
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 11
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 10
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 15
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2682,57 +3168,8 @@ L_while_1_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 9
-L_while_2_top:
-    iload 9
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 9
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 9
-    ldc 1
-    isub
-    istore 9
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 9
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 8
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 14
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2749,7 +3186,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 14
+    istore 18
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2766,7 +3203,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 15
+    istore 19
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -2784,8 +3221,12 @@ L_while_2_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 12
-    aload 10
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 16
+    aload 15
     invokestatic Inventory/isEmpty (Ljava/lang/String;)I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
@@ -2797,7 +3238,7 @@ L_while_2_end:
     iconst_1
     ixor
     ineg
-    ifeq L_if_3_else
+    ifeq L_condition_2
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -2808,7 +3249,7 @@ L_while_2_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -2818,90 +3259,110 @@ L_while_2_end:
     ldc "Overwrite existing part data?"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     invokestatic Inventory/readKey ()Ljava/lang/String;
-    astore 5
-    aload 5
+    astore 11
+    aload 11
     ldc "Y"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     iconst_1
     ixor
     ineg
-    ifeq L_if_4_else
-    aload 5
+    ifeq L_condition_4
+    aload 11
     ldc "y"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     iconst_1
     ixor
     ineg
-    ifeq L_if_4_else
+    ifne L_condition_6
+    iconst_0
+    goto L_condition_7
+L_condition_6:
+    iconst_m1
+L_condition_7:
+    goto L_condition_5
+L_condition_4:
+    iconst_0
+L_condition_5:
+    ifeq L_condition_8
     return
-L_if_4_else:
-L_if_3_else:
-
-L_do_5_top:
-    iload 6
+L_condition_8:
+L_condition_2:
+L_do_10_top:
+    iload 12
     iconst_1
     anewarray java/lang/String
     dup
     iconst_0
     aload 0
     aastore
-    astore 16
-    aload 16
+    astore 20
+    aload 20
     iconst_1
     newarray int
     dup
     iconst_0
     iload 3
     iastore
-    astore 17
-    aload 17
+    astore 21
+    aload 21
     iconst_1
     newarray int
     dup
     iconst_0
     iload 4
     iastore
-    astore 18
-    aload 18
+    astore 22
+    aload 22
     iconst_1
     newarray double
     dup
     iconst_0
     dload 1
     dastore
-    astore 19
-    aload 19
+    astore 23
+    aload 23
     invokestatic Inventory/gatherPartDetails (I[Ljava/lang/String;[I[I[D)V
-    aload 16
+    aload 20
     iconst_0
     aaload
     astore 0
-    aload 17
+    aload 21
     iconst_0
     iaload
     istore 3
-    aload 18
+    aload 22
     iconst_0
     iaload
     istore 4
-    aload 19
+    aload 23
     iconst_0
     daload
     dstore 1
     invokestatic Inventory/readKey ()Ljava/lang/String;
-    astore 5
-    aload 5
+    astore 11
+L_do_10_continue:
+    aload 11
     ldc "Y"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     ineg
-    ifne L_do_5_end
-    aload 5
+    ifne L_condition_11
+    aload 11
     ldc "y"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
     ineg
-    ifne L_do_5_end
-    goto L_do_5_top
-L_do_5_end:
+    ifne L_condition_13
+    iconst_0
+    goto L_condition_14
+L_condition_13:
+    iconst_m1
+L_condition_14:
+    goto L_condition_12
+L_condition_11:
+    iconst_m1
+L_condition_12:
+    ifne L_do_10_end
+    goto L_do_10_top
+L_do_10_end:
     ; inv[...] = { ... }  (whole-record write)
     ldc "1"
     ldc 1
@@ -3025,6 +3486,8 @@ L_do_5_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     dload 1
     d2f
+    f2d
+    d2f
     invokevirtual java/nio/ByteBuffer/putFloat (F)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
     new java/lang/String
@@ -3060,7 +3523,7 @@ L_do_5_end:
     isub
     aaload
     dup
-    iload 6
+    iload 12
     i2l
     lconst_1
     lsub
@@ -3083,35 +3546,45 @@ L_do_5_end:
 
 .method public static listAll : ()V
     .limit stack 16
-    .limit locals 14
+    .limit locals 20
 
     iconst_0
     istore 0
     ldc ""
     astore 1
-    iconst_0
-    istore 2
     ldc ""
-    astore 3
-    iconst_0
-    istore 4
+    astore 2
     dconst_0
-    dstore 5
+    dstore 3
     iconst_0
-    istore 7
+    istore 5
     iconst_0
-    istore 8
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
     iconst_0
-    istore 9
+    istore 11
+    iconst_0
+    istore 12
+    iconst_0
+    istore 13
     ; global inv
     invokestatic Inventory/printListHeader ()V
     ldc 0
-    istore 9
+    istore 13
     ldc 1
+    istore 18
+    getstatic Inventory/g43 I
+    istore 19
+    iload 18
     istore 0
 L_for_0_top:
     iload 0
-    ldc 100
+    iload 19
     if_icmpgt L_for_0_end
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
@@ -3149,57 +3622,8 @@ L_for_0_top:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 4
-L_while_1_top:
-    iload 4
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_1_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 4
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_1_end
-    iload 4
-    ldc 1
-    isub
-    istore 4
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 4
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 3
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 8
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3210,57 +3634,8 @@ L_while_1_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 2
-L_while_2_top:
-    iload 2
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 2
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 2
-    ldc 1
-    isub
-    istore 2
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 2
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 1
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 7
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3277,7 +3652,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 7
+    istore 11
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3294,7 +3669,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 8
+    istore 12
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3312,17 +3687,21 @@ L_while_2_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 5
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 9
     iload 0
-    aload 1
-    iload 7
-    iload 8
+    aload 7
+    iload 11
+    iload 12
     invokestatic Inventory/printInventoryLine (ILjava/lang/String;II)V
-    iload 9
+    iload 13
     ldc 1
     iadd
-    istore 9
-    iload 9
+    istore 13
+    iload 13
     ldc 20
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -3333,22 +3712,23 @@ L_while_2_end:
     iconst_1
     ixor
     ineg
-    ifeq L_if_3_else
+    ifeq L_condition_1
     invokestatic Inventory/waitAnyKey ()V
     ldc 0
-    istore 9
+    istore 13
     ; Redraw for the next page rather than let it keep scrolling
     ; past row 25 -- see printListHeader()'s own note on why a
     ; fixed-row prompt can't coexist with unbounded scrolling.
     iload 0
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_4_else
+    ifeq L_condition_3
     invokestatic Inventory/printListHeader ()V
-L_if_4_else:
-L_if_3_else:
+L_condition_3:
+L_condition_1:
+L_for_0_continue:
     iload 0
     ldc 1
     iadd
@@ -3360,32 +3740,38 @@ L_for_0_end:
 
 .method public static addStock : ()V
     .limit stack 16
-    .limit locals 17
+    .limit locals 21
 
     iconst_0
     istore 0
     ldc ""
     astore 1
-    iconst_0
-    istore 2
+    ldc ""
+    astore 2
     ldc ""
     astore 3
-    ldc ""
-    astore 4
+    dconst_0
+    dstore 4
     iconst_0
-    istore 5
-    ldc ""
-    astore 6
+    istore 6
     iconst_0
     istore 7
+    iconst_0
+    istore 8
+    ldc ""
+    astore 9
+    ldc ""
+    astore 10
+    ldc ""
+    astore 11
     dconst_0
-    dstore 8
+    dstore 12
     iconst_0
-    istore 10
+    istore 14
     iconst_0
-    istore 11
+    istore 15
     iconst_0
-    istore 12
+    istore 16
     ; global inv
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
@@ -3409,7 +3795,6 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "A D D I N G   S T O C K"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
 L_do_0_top:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -3428,9 +3813,11 @@ L_do_0_top:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     invokestatic Inventory/readPartNumberInput ()Ljava/lang/String;
-    astore 3
-    aload 3
+    astore 9
+    aload 9
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -3439,11 +3826,11 @@ L_do_0_top:
     dadd
     d2l
     l2i
-    istore 2
-    iload 2
+    istore 8
+    iload 8
     invokestatic Inventory/partInRange (I)I
-    istore 12
-    iload 12
+    istore 16
+    iload 16
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -3454,12 +3841,13 @@ L_do_0_top:
     iconst_1
     ixor
     ineg
-    ifeq L_if_1_else
+    ifeq L_condition_1
     invokestatic Inventory/showRangeRetryMessage ()V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
-L_if_1_else:
-    iload 12
+L_condition_1:
+L_do_0_continue:
+    iload 16
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -3471,7 +3859,6 @@ L_if_1_else:
     ifne L_do_0_end
     goto L_do_0_top
 L_do_0_end:
-
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
     ldc 1
@@ -3479,7 +3866,7 @@ L_do_0_end:
     isub
     aaload
     dup
-    iload 2
+    iload 8
     i2l
     lconst_1
     lsub
@@ -3508,57 +3895,8 @@ L_do_0_end:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 7
-L_while_2_top:
-    iload 7
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 7
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 7
-    ldc 1
-    isub
-    istore 7
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 7
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 6
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 11
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3569,57 +3907,8 @@ L_while_2_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 5
-L_while_3_top:
-    iload 5
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_3_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 5
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_3_end
-    iload 5
-    ldc 1
-    isub
-    istore 5
-    goto L_while_3_top
-L_while_3_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 5
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 4
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 10
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3636,7 +3925,7 @@ L_while_3_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 10
+    istore 14
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3653,7 +3942,7 @@ L_while_3_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 11
+    istore 15
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -3671,22 +3960,25 @@ L_while_3_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 8
-    aload 6
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 12
+    aload 11
     invokestatic Inventory/isEmpty (Ljava/lang/String;)I
-    ifeq L_if_4_else
-    aload 3
+    ifeq L_condition_3
+    aload 9
     invokestatic Inventory/showNullEntryMessage (Ljava/lang/String;)V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
     return
-L_if_4_else:
-
+L_condition_3:
 L_do_5_top:
-    iload 2
-    aload 4
-    iload 10
-    iload 11
+    iload 8
+    aload 10
+    iload 14
+    iload 15
     invokestatic Inventory/showAddStockScreen (ILjava/lang/String;II)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -3698,7 +3990,7 @@ L_do_5_top:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -3768,6 +4060,8 @@ L_do_5_top:
     astore 1
     aload 1
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -3782,11 +4076,12 @@ L_do_5_top:
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_6_else
+    ifeq L_condition_6
     invokestatic Inventory/showNegativeQtyWarning ()V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
-L_if_6_else:
+L_condition_6:
+L_do_5_continue:
     iload 0
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
@@ -3798,13 +4093,12 @@ L_if_6_else:
     ifne L_do_5_end
     goto L_do_5_top
 L_do_5_end:
-
-    iload 10
+    iload 14
     iload 0
     iadd
-    istore 10
+    istore 14
     ; inv[...] = p  (write back a let-bound record)
-    aload 6
+    aload 11
     ldc 1
     newarray char
     dup
@@ -3827,7 +4121,7 @@ L_do_5_end:
     ldc 0
     ldc 1
     invokestatic java/lang/System/arraycopy (Ljava/lang/Object;ILjava/lang/Object;II)V
-    aload 4
+    aload 10
     ldc 30
     newarray char
     dup
@@ -3854,7 +4148,7 @@ L_do_5_end:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    iload 10
+    iload 14
     i2s
     invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -3889,7 +4183,7 @@ L_do_5_end:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    iload 11
+    iload 15
     i2s
     invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -3924,7 +4218,9 @@ L_do_5_end:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    dload 8
+    dload 12
+    d2f
+    f2d
     d2f
     invokevirtual java/nio/ByteBuffer/putFloat (F)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -3961,7 +4257,7 @@ L_do_5_end:
     isub
     aaload
     dup
-    iload 2
+    iload 8
     i2l
     lconst_1
     lsub
@@ -3984,34 +4280,40 @@ L_do_5_end:
 
 .method public static subtractStock : ()V
     .limit stack 16
-    .limit locals 18
+    .limit locals 22
 
-    iconst_0
-    istore 0
-    iconst_0
-    istore 1
     ldc ""
-    astore 2
+    astore 0
     ldc ""
-    astore 3
+    astore 1
+    dconst_0
+    dstore 2
     iconst_0
     istore 4
-    ldc ""
-    astore 5
+    iconst_0
+    istore 5
     iconst_0
     istore 6
-    dconst_0
-    dstore 7
     iconst_0
-    istore 9
-    iconst_0
-    istore 10
-    iconst_0
-    istore 11
+    istore 7
     ldc ""
-    astore 12
+    astore 8
+    ldc ""
+    astore 9
+    ldc ""
+    astore 10
+    dconst_0
+    dstore 11
     iconst_0
     istore 13
+    iconst_0
+    istore 14
+    iconst_0
+    istore 15
+    ldc ""
+    astore 16
+    iconst_0
+    istore 17
     ; global inv
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
@@ -4035,7 +4337,6 @@ L_do_5_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "S U B T R A C T I N G    S T O C K"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
 L_do_0_top:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -4054,9 +4355,11 @@ L_do_0_top:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     invokestatic Inventory/readPartNumberInput ()Ljava/lang/String;
-    astore 2
-    aload 2
+    astore 8
+    aload 8
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -4065,11 +4368,11 @@ L_do_0_top:
     dadd
     d2l
     l2i
-    istore 1
-    iload 1
+    istore 7
+    iload 7
     invokestatic Inventory/partInRange (I)I
-    istore 13
-    iload 13
+    istore 17
+    iload 17
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -4080,12 +4383,13 @@ L_do_0_top:
     iconst_1
     ixor
     ineg
-    ifeq L_if_1_else
+    ifeq L_condition_1
     invokestatic Inventory/showRangeRetryMessage ()V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
-L_if_1_else:
-    iload 13
+L_condition_1:
+L_do_0_continue:
+    iload 17
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -4097,7 +4401,6 @@ L_if_1_else:
     ifne L_do_0_end
     goto L_do_0_top
 L_do_0_end:
-
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
     ldc 1
@@ -4105,7 +4408,7 @@ L_do_0_end:
     isub
     aaload
     dup
-    iload 1
+    iload 7
     i2l
     lconst_1
     lsub
@@ -4134,57 +4437,8 @@ L_do_0_end:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 6
-L_while_2_top:
-    iload 6
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 6
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 6
-    ldc 1
-    isub
-    istore 6
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 6
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 5
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 10
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4195,57 +4449,8 @@ L_while_2_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 4
-L_while_3_top:
-    iload 4
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_3_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 4
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_3_end
-    iload 4
-    ldc 1
-    isub
-    istore 4
-    goto L_while_3_top
-L_while_3_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 4
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 3
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 9
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4262,7 +4467,7 @@ L_while_3_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 9
+    istore 13
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4279,7 +4484,7 @@ L_while_3_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 10
+    istore 14
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4297,22 +4502,25 @@ L_while_3_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 7
-    aload 5
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 11
+    aload 10
     invokestatic Inventory/isEmpty (Ljava/lang/String;)I
-    ifeq L_if_4_else
-    aload 2
+    ifeq L_condition_3
+    aload 8
     invokestatic Inventory/showNullEntryMessage (Ljava/lang/String;)V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
     return
-L_if_4_else:
-
+L_condition_3:
 L_do_5_top:
-    iload 1
-    aload 3
-    iload 9
-    iload 10
+    iload 7
+    aload 9
+    iload 13
+    iload 14
     invokestatic Inventory/showSubtractStockScreen (ILjava/lang/String;II)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -4324,7 +4532,7 @@ L_do_5_top:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -4391,9 +4599,11 @@ L_do_5_top:
     invokevirtual java/lang/ProcessBuilder/start ()Ljava/lang/Process;
     invokevirtual java/lang/Process/waitFor ()I
     pop
-    astore 12
-    aload 12
+    astore 16
+    aload 16
     invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D
+    d2f
+    f2d
     dup2
     ldc2_w 0.5
     dup2_x2
@@ -4402,10 +4612,10 @@ L_do_5_top:
     dadd
     d2l
     l2i
-    istore 11
+    istore 15
     ldc 0
-    istore 0
-    iload 11
+    istore 6
+    iload 15
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -4413,23 +4623,34 @@ L_do_5_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_6_else
-    iload 9
-    iload 11
+    ifeq L_condition_6
+    iload 13
+    iload 15
     isub
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_6_else
+    ifne L_condition_8
+    iconst_0
+    goto L_condition_9
+L_condition_8:
+    iconst_m1
+L_condition_9:
+    goto L_condition_7
+L_condition_6:
+    iconst_0
+L_condition_7:
+    ifeq L_condition_10
     ldc 1
-    istore 0
-    iload 9
+    istore 6
+    iload 13
     invokestatic Inventory/showOverSubtractWarning (I)V
     invokestatic Inventory/readKey ()Ljava/lang/String;
     pop
-L_if_6_else:
-    iload 11
+L_condition_10:
+L_do_5_continue:
+    iload 15
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -4437,8 +4658,8 @@ L_if_6_else:
     isub
     bipush 31
     ishr
-    ifeq L_condition_0
-    iload 0
+    ifeq L_condition_12
+    iload 6
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -4449,23 +4670,31 @@ L_if_6_else:
     iconst_1
     ixor
     ineg
+    ifne L_condition_14
+    iconst_0
+    goto L_condition_15
+L_condition_14:
+    iconst_m1
+L_condition_15:
+    goto L_condition_13
+L_condition_12:
+    iconst_0
+L_condition_13:
     ifne L_do_5_end
-L_condition_0:
     goto L_do_5_top
 L_do_5_end:
-
-    iload 9
-    iload 11
+    iload 13
+    iload 15
     isub
-    istore 9
-    iload 9
-    iload 10
+    istore 13
+    iload 13
+    iload 14
     invokestatic java/lang/Integer/compare (II)I
     iconst_1
     isub
     bipush 31
     ishr
-    ifeq L_if_7_else
+    ifeq L_condition_16
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -4476,13 +4705,13 @@ L_do_5_end:
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc ";"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    ldc 20
+    getstatic Inventory/g50 I
     invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
     ldc "H"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
-L_if_7_else:
+L_condition_16:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -4495,7 +4724,7 @@ L_if_7_else:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "quantity now"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    iload 9
+    iload 13
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -4504,13 +4733,13 @@ L_if_7_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    iload 10
+    iload 14
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ; inv[...] = p  (write back a let-bound record)
-    aload 5
+    aload 10
     ldc 1
     newarray char
     dup
@@ -4533,7 +4762,7 @@ L_if_7_else:
     ldc 0
     ldc 1
     invokestatic java/lang/System/arraycopy (Ljava/lang/Object;ILjava/lang/Object;II)V
-    aload 3
+    aload 9
     ldc 30
     newarray char
     dup
@@ -4560,7 +4789,7 @@ L_if_7_else:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    iload 9
+    iload 13
     i2s
     invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -4595,7 +4824,7 @@ L_if_7_else:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    iload 10
+    iload 14
     i2s
     invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -4630,7 +4859,9 @@ L_if_7_else:
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
-    dload 7
+    dload 11
+    d2f
+    f2d
     d2f
     invokevirtual java/nio/ByteBuffer/putFloat (F)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/array ()[B
@@ -4667,7 +4898,7 @@ L_if_7_else:
     isub
     aaload
     dup
-    iload 1
+    iload 7
     i2l
     lconst_1
     lsub
@@ -4690,35 +4921,45 @@ L_if_7_else:
 
 .method public static reorderReport : ()V
     .limit stack 16
-    .limit locals 14
+    .limit locals 20
 
     iconst_0
     istore 0
     ldc ""
     astore 1
-    iconst_0
-    istore 2
     ldc ""
-    astore 3
-    iconst_0
-    istore 4
+    astore 2
     dconst_0
-    dstore 5
+    dstore 3
     iconst_0
-    istore 7
+    istore 5
     iconst_0
-    istore 8
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
     iconst_0
-    istore 9
+    istore 11
+    iconst_0
+    istore 12
+    iconst_0
+    istore 13
     ; global inv
     invokestatic Inventory/printReorderHeader ()V
     ldc 0
-    istore 9
+    istore 13
     ldc 1
+    istore 18
+    getstatic Inventory/g43 I
+    istore 19
+    iload 18
     istore 0
 L_for_0_top:
     iload 0
-    ldc 100
+    iload 19
     if_icmpgt L_for_0_end
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
@@ -4756,57 +4997,8 @@ L_for_0_top:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 4
-L_while_1_top:
-    iload 4
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_1_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 4
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_1_end
-    iload 4
-    ldc 1
-    isub
-    istore 4
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 4
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 3
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 8
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4817,57 +5009,8 @@ L_while_1_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 2
-L_while_2_top:
-    iload 2
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_2_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 2
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_2_end
-    iload 2
-    ldc 1
-    isub
-    istore 2
-    goto L_while_2_top
-L_while_2_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 2
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 1
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 7
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4884,7 +5027,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 7
+    istore 11
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4901,7 +5044,7 @@ L_while_2_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 8
+    istore 12
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -4919,46 +5062,51 @@ L_while_2_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 5
-    iload 7
-    iload 8
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 9
+    iload 11
+    iload 12
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_3_else
+    ifeq L_condition_1
     iload 0
-    aload 1
-    iload 7
-    iload 8
+    aload 7
+    iload 11
+    iload 12
     invokestatic Inventory/printReorderLine (ILjava/lang/String;II)V
-    iload 9
+    iload 13
     ldc 1
     iadd
-    istore 9
-    iload 9
+    istore 13
+    iload 13
     ldc 15
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_4_else
+    ifeq L_condition_3
     invokestatic Inventory/waitAnyKey ()V
     ldc 0
-    istore 9
+    istore 13
     ; Redraw for the next page rather than let it keep
     ; scrolling past row 25 -- see printListHeader()'s own
     ; note (same underlying issue, same fix) on why a
     ; fixed-row prompt can't coexist with unbounded scrolling.
     iload 0
-    ldc 100
+    getstatic Inventory/g43 I
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_5_else
+    ifeq L_condition_5
     invokestatic Inventory/printReorderHeader ()V
-L_if_5_else:
-L_if_4_else:
-L_if_3_else:
+L_condition_5:
+L_condition_3:
+L_condition_1:
+L_for_0_continue:
     iload 0
     ldc 1
     iadd
@@ -4971,24 +5119,30 @@ L_for_0_end:
 
 .method public static initializeInventoryFileIfNew : ()V
     .limit stack 16
-    .limit locals 13
+    .limit locals 19
 
     iconst_0
     istore 0
     ldc ""
     astore 1
-    iconst_0
-    istore 2
     ldc ""
-    astore 3
-    iconst_0
-    istore 4
+    astore 2
     dconst_0
-    dstore 5
+    dstore 3
     iconst_0
-    istore 7
+    istore 5
     iconst_0
-    istore 8
+    istore 6
+    ldc ""
+    astore 7
+    ldc ""
+    astore 8
+    dconst_0
+    dstore 9
+    iconst_0
+    istore 11
+    iconst_0
+    istore 12
     ; global inv
     ; let p = inv[...]  (whole-record read)
     getstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
@@ -5026,57 +5180,8 @@ L_for_0_end:
     ldc 1
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 4
-L_while_0_top:
-    iload 4
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_0_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 4
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_0_end
-    iload 4
-    ldc 1
-    isub
-    istore 4
-    goto L_while_0_top
-L_while_0_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 0
-    ldc 1
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 4
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 3
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 8
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -5087,57 +5192,8 @@ L_while_0_end:
     ldc 30
     getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
     invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    invokevirtual java/lang/String/length ()I
-    istore 2
-L_while_1_top:
-    iload 2
-    ldc 0
-    invokestatic java/lang/Integer/compare (II)I
-    ineg
-    bipush 31
-    ishr
-    ifeq L_while_1_end
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iload 2
-    iconst_1
-    isub
-    dup
-    ldc 1
-    iadd
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    ldc " "
-    invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ineg
-    ifeq L_while_1_end
-    iload 2
-    ldc 1
-    isub
-    istore 2
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Inventory/bccBufs [[B
-    ldc 0
-    aaload
-    new java/lang/String
-    dup_x1
-    swap
-    ldc 1
-    ldc 30
-    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;
-    invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V
-    iconst_0
-    iload 2
-    invokevirtual java/lang/String/substring (II)Ljava/lang/String;
-    astore 1
+    invokestatic Inventory/rtrim (Ljava/lang/String;)Ljava/lang/String;
+    astore 7
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -5154,7 +5210,7 @@ L_while_1_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 7
+    istore 11
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -5171,7 +5227,7 @@ L_while_1_end:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getShort ()S
-    istore 8
+    istore 12
     getstatic Inventory/bccBufs [[B
     ldc 0
     aaload
@@ -5189,8 +5245,12 @@ L_while_1_end:
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getFloat ()F
     f2d
-    dstore 5
-    aload 3
+    d2f
+    f2d
+    d2f
+    f2d
+    dstore 9
+    aload 8
     iconst_0
     invokevirtual java/lang/String/charAt (I)C
     ldc 0
@@ -5203,13 +5263,17 @@ L_while_1_end:
     iconst_1
     ixor
     ineg
-    ifeq L_if_2_else
+    ifeq L_condition_0
     ldc 1
+    istore 17
+    getstatic Inventory/g43 I
+    istore 18
+    iload 17
     istore 0
-L_for_3_top:
+L_for_2_top:
     iload 0
-    ldc 100
-    if_icmpgt L_for_3_end
+    iload 18
+    if_icmpgt L_for_2_end
     ; inv[...] = { ... }  (whole-record write)
     ldc 255
     i2c
@@ -5389,22 +5453,43 @@ L_for_3_top:
     isub
     aaload
     invokevirtual java/io/RandomAccessFile/write ([B)V
+L_for_2_continue:
     iload 0
     ldc 1
     iadd
     istore 0
-    goto L_for_3_top
-L_for_3_end:
-L_if_2_else:
+    goto L_for_2_top
+L_for_2_end:
+L_condition_0:
     return
 .end method
 
 .method public static reportInventoryError : (II)V
     .limit stack 16
-    .limit locals 7
+    .limit locals 19
 
     ldc ""
     astore 2
+    ldc ""
+    astore 3
+    dconst_0
+    dstore 4
+    iconst_0
+    istore 6
+    iconst_0
+    istore 7
+    ldc ""
+    astore 8
+    ldc ""
+    astore 9
+    ldc ""
+    astore 10
+    dconst_0
+    dstore 11
+    iconst_0
+    istore 13
+    iconst_0
+    istore 14
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -5448,7 +5533,7 @@ L_if_2_else:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     invokestatic Inventory/readKey ()Ljava/lang/String;
-    astore 2
+    astore 8
     return
 .end method
 
@@ -5472,14 +5557,104 @@ L_if_2_else:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 8
+    .limit locals 55
 
     iconst_0
     putstatic Inventory/g1 I
     iconst_0
     putstatic Inventory/g2 I
+    iconst_0
+    putstatic Inventory/g3 I
+    iconst_0
+    putstatic Inventory/g4 I
+    iconst_0
+    putstatic Inventory/g5 I
+    iconst_0
+    putstatic Inventory/g6 I
+    iconst_0
+    putstatic Inventory/g7 I
+    iconst_0
+    putstatic Inventory/g8 I
+    iconst_0
+    putstatic Inventory/g9 I
+    iconst_0
+    putstatic Inventory/g10 I
+    iconst_0
+    putstatic Inventory/g11 I
+    iconst_0
+    putstatic Inventory/g12 I
+    iconst_0
+    putstatic Inventory/g13 I
+    iconst_0
+    putstatic Inventory/g14 I
+    iconst_0
+    putstatic Inventory/g15 I
+    iconst_0
+    putstatic Inventory/g16 I
+    iconst_0
+    putstatic Inventory/g17 I
+    iconst_0
+    putstatic Inventory/g18 I
+    iconst_0
+    putstatic Inventory/g19 I
+    iconst_0
+    putstatic Inventory/g20 I
+    iconst_0
+    putstatic Inventory/g21 I
+    iconst_0
+    putstatic Inventory/g22 I
+    iconst_0
+    putstatic Inventory/g23 I
+    iconst_0
+    putstatic Inventory/g24 I
+    iconst_0
+    putstatic Inventory/g25 I
+    iconst_0
+    putstatic Inventory/g26 I
+    iconst_0
+    putstatic Inventory/g27 I
+    iconst_0
+    putstatic Inventory/g28 I
+    iconst_0
+    putstatic Inventory/g29 I
+    iconst_0
+    putstatic Inventory/g30 I
+    iconst_0
+    putstatic Inventory/g31 I
+    iconst_0
+    putstatic Inventory/g32 I
+    iconst_0
+    putstatic Inventory/g33 I
+    iconst_0
+    putstatic Inventory/g34 I
+    iconst_0
+    putstatic Inventory/g35 I
     ldc ""
-    putstatic Inventory/g3 Ljava/lang/String;
+    putstatic Inventory/g36 Ljava/lang/String;
+    ldc ""
+    putstatic Inventory/g37 Ljava/lang/String;
+    dconst_0
+    putstatic Inventory/g38 D
+    iconst_0
+    putstatic Inventory/g40 I
+    iconst_0
+    putstatic Inventory/g41 I
+    ldc ""
+    putstatic Inventory/g42 Ljava/lang/String;
+    iconst_0
+    putstatic Inventory/g43 I
+    ldc ""
+    putstatic Inventory/g44 Ljava/lang/String;
+    ldc ""
+    putstatic Inventory/g45 Ljava/lang/String;
+    dconst_0
+    putstatic Inventory/g46 D
+    iconst_0
+    putstatic Inventory/g48 I
+    iconst_0
+    putstatic Inventory/g49 I
+    iconst_0
+    putstatic Inventory/g50 I
     ldc 16
     anewarray java/io/RandomAccessFile
     putstatic Inventory/bccFiles [Ljava/io/RandomAccessFile;
@@ -5534,34 +5709,113 @@ L_if_2_else:
     invokevirtual java/lang/ProcessBuilder/start ()Ljava/lang/Process;
     invokevirtual java/lang/Process/waitFor ()I
     pop
+    ; Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    ; verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    ; BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+    ; so a required stdlib call reads the same way as a built-in method call
+    ; (docs/language/functions-and-procedures.html#built-in-methods). The
+    ; ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+    ; implicit first parameter, so ordinary-call syntax resolves straight to
+    ; this same declaration, with no separate function needed (and no longer
+    ; allowed: a function and a method sharing one name is a duplicate
+    ; declaration, since they'd both claim the same callable identity).
+    ; Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    ; verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    ; BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
+    ; and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
+    ; works via ordinary-call syntax resolving to this same declaration.
     ; Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
     ; and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     ; returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
     ; ships a working implementation.
-    ; 
+    ;
     ; The named constants below are the complete common subset supported by
     ; ERROR$: use them in THROW and filtered CATCH clauses instead of magic
     ; numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
     ; BASCOM subset still fall through to ERROR$'s generic message.
-    ; 
+    ;
     ; Deliberately NOT a scalar method (see GitHub issue #41, which asked for
     ; this decision to be recorded either way): code% is an opaque lookup key,
     ; not a value the call is naturally "operating on" the way ltrim$/rtrim$/
     ; ucase$/lcase$ operate on their string -- code%.error() would read as if
     ; the *error code itself* has a message, when really this is a lookup
     ; table keyed by that code. Stays an ordinary function.
-
-
+    ldc 2
+    putstatic Inventory/g33 I
+    ldc 3
+    putstatic Inventory/g31 I
+    ldc 4
+    putstatic Inventory/g23 I
+    ldc 5
+    putstatic Inventory/g20 I
+    ldc 6
+    putstatic Inventory/g27 I
+    ldc 7
+    putstatic Inventory/g24 I
+    ldc 9
+    putstatic Inventory/g32 I
+    ldc 10
+    putstatic Inventory/g16 I
+    ldc 11
+    putstatic Inventory/g15 I
+    ldc 13
+    putstatic Inventory/g35 I
+    ldc 14
+    putstatic Inventory/g26 I
+    ldc 19
+    putstatic Inventory/g22 I
+    ldc 20
+    putstatic Inventory/g30 I
+    ldc 24
+    putstatic Inventory/g9 I
+    ldc 25
+    putstatic Inventory/g7 I
+    ldc 27
+    putstatic Inventory/g25 I
+    ldc 52
+    putstatic Inventory/g5 I
+    ldc 53
+    putstatic Inventory/g19 I
+    ldc 54
+    putstatic Inventory/g3 I
+    ldc 55
+    putstatic Inventory/g18 I
+    ldc 57
+    putstatic Inventory/g8 I
+    ldc 58
+    putstatic Inventory/g17 I
+    ldc 61
+    putstatic Inventory/g11 I
+    ldc 62
+    putstatic Inventory/g21 I
+    ldc 63
+    putstatic Inventory/g6 I
+    ldc 64
+    putstatic Inventory/g4 I
+    ldc 67
+    putstatic Inventory/g34 I
+    ldc 68
+    putstatic Inventory/g10 I
+    ldc 70
+    putstatic Inventory/g14 I
+    ldc 71
+    putstatic Inventory/g13 I
+    ldc 72
+    putstatic Inventory/g12 I
+    ldc 75
+    putstatic Inventory/g28 I
+    ldc 76
+    putstatic Inventory/g29 I
     ; ============================================================
     ; INVENTORY.BCL -- Random-Access Inventory Program
-    ; 
+    ;
     ; A BASCAL reconstruction of "Example program for RANDOM ACCESS
     ; FILE study", by fhb, 8/19/98, from Joseph Sixpack's GW-BASIC
     ; programs page (part of his "Last Book of GW-Basic" collection):
     ; http://www.geocities.ws/joseph_sixpack/binventory.html
     ; fhb's own header comment credits the original as "suggested
     ; from MS-BASIC manual".
-    ; 
+    ;
     ; This is a reconstruction, not a line-by-line port -- some
     ; original pieces have no BASCAL equivalent and were dropped
     ; rather than approximated:
@@ -5587,10 +5841,10 @@ L_if_2_else:
     ; V=30) are collapsed into a single `TAB_COL = 20`; a couple of
     ; screens that used U=25 in the original (see showAddStockScreen
     ; below) keep 25 as a literal rather than reusing TAB_COL.
-    ; 
+    ;
     ; Tracks parts in a fixed 100-record file: check status, add,
     ; edit, add/subtract stock, and a reorder report.
-    ; 
+    ;
     ; Error handling uses try/catch (GitHub issue #60), not the raw `on
     ; error goto` / `resume next` fhb's original relies on: a failed menu
     ; action is abandoned outright and the program returns straight to the
@@ -5604,8 +5858,6 @@ L_if_2_else:
     ; the same ON ERROR GOTO/RESUME primitives BASCOM accepts, but hasn't
     ; itself been independently re-verified against a real BASCOM compile.
     ; ============================================================
-
-
     ; BASCAL-ism: the record/file DSL. `record ... end record` plus
     ; `file ... as ... = open(...)` below replace fhb's manual
     ; FIELD #1,1 AS F$,30 AS D$,2 AS Q$,... buffer layout entirely --
@@ -5614,13 +5866,15 @@ L_if_2_else:
     ; field access (`p.flag`, `p.qty`, ...) and whole-record
     ; read/write via `inv[n]` (see checkPart() below) replace fhb's
     ; manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
-
     ; BASCAL-ism: `const` is a real compile-time constant, not a plain
     ; variable assignment like fhb's `N=100` / `T=20` -- it can never
     ; be reassigned, and resolves to the same value everywhere,
     ; including inside every function/procedure below, with no
     ; `global` declaration needed.
-
+    ldc 100
+    putstatic Inventory/g43 I
+    ldc 20
+    putstatic Inventory/g50 I
     ; `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
     ; LEN = <record width> plus the FIELD statement fhb wrote out by
     ; hand at his line 550. Wrapped in its own try/catch: a file that
@@ -5636,6 +5890,7 @@ L_try_0_start:
     ldc 1
     iconst_1
     isub
+    dup_x1
     new java/io/RandomAccessFile
     dup
     ldc "inven.dat"
@@ -5643,18 +5898,17 @@ L_try_0_start:
     invokespecial java/io/RandomAccessFile/<init> (Ljava/lang/String;Ljava/lang/String;)V
     aastore
     getstatic Inventory/bccRecLen [I
-    ldc 1
-    iconst_1
-    isub
+    swap
+    dup_x1
     ldc 39
     iastore
     getstatic Inventory/bccBufs [[B
-    ldc 1
-    iconst_1
-    isub
+    swap
+    dup_x1
     ldc 39
     newarray byte
     aastore
+    pop
     goto L_try_0_finish
 L_try_0_end:
 L_try_0_catch:
@@ -5694,16 +5948,13 @@ L_try_0_catch:
     return
     goto L_try_0_finish
 L_try_0_finish:
-
     ; -------------------- Pure functions (no file access) --------------------
-
     ; BASCAL-ism: `function ... end function` with `return` replaces
     ; fhb's convention of a GOSUB target plus a bare RETURN -- there's
     ; no separate "subroutine label" and no shared/global result
     ; variable to manage by hand; `isEmpty%(...)` is called like an
     ; ordinary expression at every use below (e.g. `isEmpty%(p.flag)`).
     ; A record whose flag byte is CHR$(255) is an empty/never-used slot.
-
     ; BASCAL-ism: `&&` and `||` are short-circuit AND/OR -- real
     ; MBASIC/BASCOM only has bitwise AND/OR (which fhb relies on here
     ; too, since `PART!<1 OR PART!>N!` never short-circuits anyway).
@@ -5711,25 +5962,14 @@ L_try_0_finish:
     ; short-circuit *is* real at the generated-BASIC level; see the
     ; manual's "Short-Circuit && and ||" section
     ; (https://johnjoeallen.github.io/bascal/manual/).
-
-
     ; -------------------- Keyboard input --------------------
-
     ; BASCAL-ism: `do ... loop until` is a structured post-check loop
     ; replacing fhb's `730 KP$=INKEY$:IF KP$="" THEN 730` GOTO-polling
     ; idiom. `inkey$` itself is the real INKEY$ builtin passed straight
     ; through, resolving correctly from inside a function/procedure
     ; body like this one -- every menu action below calls
     ; readKey$()/waitAnyKey() rather than polling INKEY$ inline.
-
-
     ; -------------------- Display procedures --------------------
-
-
-
-
-
-
     ; BASCAL-ism: no `VIEW PRINT` (see the header note above), so this
     ; deliberately does NOT pin a "press any key" line to a fixed row the way
     ; fhb's original does -- a bare `LOCATE 25, ...` sitting under content
@@ -5738,25 +5978,9 @@ L_try_0_finish:
     ; region: waitAnyKey() is the only thing that ever touches row 25, and
     ; only right when it actually blocks (see listAll()'s own redraw-per-page
     ; structure below).
-
-
-
-
     ; byref scalar parameters: gatherPartDetails writes the four editable
     ; fields for a part directly back into the caller's variables.
-
-
-
-
-
     ; -------------------- Menu actions --------------------
-
-
-
-
-
-
-
     ; fhb's own one-time "hidden" datafile initializer PUT-ing 100 blank,
     ; CHR$(255)-flagged records (see the header note above) -- reproduced
     ; here so inven.dat no longer has to be pre-populated by hand before
@@ -5767,20 +5991,17 @@ L_try_0_finish:
     ; CHR$(255), still an empty slot, or a real part's own "1") could never
     ; produce, so it's what isEmpty%() itself can't use (see its own
     ; header note) but this one-time check safely can.
-
     ; -------------------- Program entry --------------------
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[2J[H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     invokestatic Inventory/initializeInventoryFileIfNew ()V
-
-L_do_1_top:
+L_do_0_top:
     invokestatic Inventory/showMainMenu ()V
     invokestatic Inventory/readKey ()Ljava/lang/String;
-    putstatic Inventory/g3 Ljava/lang/String;
+    putstatic Inventory/g42 Ljava/lang/String;
     ldc "1234567cCeElLaAsSrRxX"
-    getstatic Inventory/g3 Ljava/lang/String;
+    getstatic Inventory/g42 Ljava/lang/String;
     invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I
     iconst_1
     iadd
@@ -5792,11 +6013,11 @@ L_do_1_top:
     bipush 31
     iushr
     ineg
-    ifeq L_if_2_else
+    ifeq L_condition_1
     ; BASCAL-ism: `select case` replaces fhb's chain of eight
     ; `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
     ; (his 770-840) with one multi-way dispatch.
-    ; 
+    ;
     ; BASCAL-ism: `try`/`catch` (issue #60) replaces fhb's own global
     ; `ON ERROR GOTO` trap. A failed menu action is abandoned outright
     ; here -- the `catch` below runs, then execution continues right
@@ -5806,133 +6027,133 @@ L_do_1_top:
     ; reportInventoryError() below and tutorial/inventory_try_catch.
     ; draft's own header comment for why that arbitrary resume-point
     ; behavior isn't something try/catch reproduces.
-L_try_3_start:
-    getstatic Inventory/g3 Ljava/lang/String;
+L_try_1_start:
+    getstatic Inventory/g42 Ljava/lang/String;
     dup
     ldc "1"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_0
+    ifne L_select_3_case_0
     dup
     ldc "c"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_0
+    ifne L_select_3_case_0
     dup
     ldc "C"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_0
-    goto L_select_4_next_0
-L_select_4_next_0:
+    ifne L_select_3_case_0
+    goto L_select_3_next_0
+L_select_3_next_0:
     dup
     ldc "2"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_1
+    ifne L_select_3_case_1
     dup
     ldc "e"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_1
+    ifne L_select_3_case_1
     dup
     ldc "E"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_1
-    goto L_select_4_next_1
-L_select_4_next_1:
+    ifne L_select_3_case_1
+    goto L_select_3_next_1
+L_select_3_next_1:
     dup
     ldc "3"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_2
+    ifne L_select_3_case_2
     dup
     ldc "l"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_2
+    ifne L_select_3_case_2
     dup
     ldc "L"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_2
-    goto L_select_4_next_2
-L_select_4_next_2:
+    ifne L_select_3_case_2
+    goto L_select_3_next_2
+L_select_3_next_2:
     dup
     ldc "4"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_3
+    ifne L_select_3_case_3
     dup
     ldc "a"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_3
+    ifne L_select_3_case_3
     dup
     ldc "A"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_3
-    goto L_select_4_next_3
-L_select_4_next_3:
+    ifne L_select_3_case_3
+    goto L_select_3_next_3
+L_select_3_next_3:
     dup
     ldc "5"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_4
+    ifne L_select_3_case_4
     dup
     ldc "s"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_4
+    ifne L_select_3_case_4
     dup
     ldc "S"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_4
-    goto L_select_4_next_4
-L_select_4_next_4:
+    ifne L_select_3_case_4
+    goto L_select_3_next_4
+L_select_3_next_4:
     dup
     ldc "6"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_5
+    ifne L_select_3_case_5
     dup
     ldc "r"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_5
+    ifne L_select_3_case_5
     dup
     ldc "R"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_5
-    goto L_select_4_next_5
-L_select_4_next_5:
+    ifne L_select_3_case_5
+    goto L_select_3_next_5
+L_select_3_next_5:
     dup
     ldc "7"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_6
+    ifne L_select_3_case_6
     dup
     ldc "x"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_6
+    ifne L_select_3_case_6
     dup
     ldc "X"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
-    ifne L_select_4_case_6
-    goto L_select_4_next_6
-L_select_4_next_6:
+    ifne L_select_3_case_6
+    goto L_select_3_next_6
+L_select_3_next_6:
     pop
-    goto L_select_4_end
-L_select_4_case_0:
+    goto L_select_3_end
+L_select_3_case_0:
     pop
     invokestatic Inventory/checkPart ()V
-    goto L_select_4_end
-L_select_4_case_1:
+    goto L_select_3_end
+L_select_3_case_1:
     pop
     invokestatic Inventory/editRecord ()V
-    goto L_select_4_end
-L_select_4_case_2:
+    goto L_select_3_end
+L_select_3_case_2:
     pop
     invokestatic Inventory/listAll ()V
-    goto L_select_4_end
-L_select_4_case_3:
+    goto L_select_3_end
+L_select_3_case_3:
     pop
     invokestatic Inventory/addStock ()V
-    goto L_select_4_end
-L_select_4_case_4:
+    goto L_select_3_end
+L_select_3_case_4:
     pop
     invokestatic Inventory/subtractStock ()V
-    goto L_select_4_end
-L_select_4_case_5:
+    goto L_select_3_end
+L_select_3_case_5:
     pop
     invokestatic Inventory/reorderReport ()V
-    goto L_select_4_end
-L_select_4_case_6:
+    goto L_select_3_end
+L_select_3_case_6:
     pop
     ; BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
     ; matching fhb's own `90 CLOSE:SYSTEM`. fhb's original
@@ -5974,11 +6195,11 @@ L_select_4_case_6:
     pop
     iconst_0
     invokestatic java/lang/System/exit (I)V
-    goto L_select_4_end
-L_select_4_end:
-    goto L_try_3_finish
-L_try_3_end:
-L_try_3_catch:
+    goto L_select_3_end
+L_select_3_end:
+    goto L_try_1_finish
+L_try_1_end:
+L_try_1_catch:
     invokevirtual java/lang/Throwable/getMessage ()Ljava/lang/String;
     invokestatic java/lang/Integer/parseInt (Ljava/lang/String;)I
     putstatic Inventory/g2 I
@@ -5987,12 +6208,12 @@ L_try_3_catch:
     getstatic Inventory/g2 I
     getstatic Inventory/g1 I
     invokestatic Inventory/reportInventoryError (II)V
-    goto L_try_3_finish
-L_try_3_finish:
-L_if_2_else:
-    goto L_do_1_top
-L_do_1_end:
-
+    goto L_try_1_finish
+L_try_1_finish:
+L_condition_1:
+L_do_0_continue:
+    goto L_do_0_top
+L_do_0_end:
     ; -------------------- Error handling --------------------
     ; err%/erl% are ordinary locals scoped to the `catch` block above, not
     ; aliases for the ambient (readable-anywhere) `err`/`erl` pseudo-
@@ -6024,5 +6245,5 @@ L_do_1_end:
     pop
     return
     .catch java/lang/RuntimeException from L_try_0_start to L_try_0_end using L_try_0_catch
-    .catch java/lang/RuntimeException from L_try_3_start to L_try_3_end using L_try_3_catch
+    .catch java/lang/RuntimeException from L_try_1_start to L_try_1_end using L_try_1_catch
 .end method

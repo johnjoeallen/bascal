@@ -1,0 +1,3 @@
+program p
+throw 5
+end

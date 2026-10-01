@@ -63,7 +63,7 @@ Every declared field is required in the record literal — a field forgotten by 
 ' db[...] = { ... }  (whole-record write)
 LSET dbIdBuf$ = MKI$(1)
 LSET dbNameBuf$ = "Alice"
-LSET dbScoreBuf$ = MKD$(95)
+LSET dbScoreBuf$ = MKD$(95.0)
 PUT #1, 1
 ```
 
@@ -96,16 +96,17 @@ db[1] = { id: 1, name: "Alice", score: 95.0 }
 <span class="tag">Generated BASIC</span>
 
 ```basic
-FOR i = 3 TO 1 STEP -1
+FOR i! = 3 TO 1 STEP -1
     ' let s = db[...]  (whole-record read)
     GET #1, i
     sid% = CVI(dbIdBuf$)
     rtrimSelf0$ = dbNameBuf$
-    GOSUB 20
-    sname$ = rtrimResult0$
+    GOSUB 50
+    BCCT2$ = rtrimResult0$
+    sname$ = BCCT2$
     sscore# = CVD(dbScoreBuf$)
     PRINT (((("[" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
-10 NEXT i
+10 NEXT i!
 ```
 
 </div>
@@ -180,7 +181,7 @@ Alice got married and re-sat the exam. Whether the fields you *didn't* list need
 IF LOF(#1) < (1) * 30 THEN ERROR 63
 GET #1, 1
 LSET dbNameBuf$ = "Alice Smith"
-LSET dbScoreBuf$ = MKD$(91)
+LSET dbScoreBuf$ = MKD$(91.0)
 PUT #1, 1
 ```
 
@@ -225,11 +226,12 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 GET #1, 3
 carolid% = CVI(dbIdBuf$)
 rtrimSelf0$ = dbNameBuf$
-GOSUB 10
-carolname$ = rtrimResult0$
+GOSUB 40
+BCCT1$ = rtrimResult0$
+carolname$ = BCCT1$
 carolscore# = CVD(dbScoreBuf$)
 carolname$ = "Carol Jones"
-carolscore# = 88
+carolscore# = 88.0
 ' db[...] = carol  (write back a let-bound record)
 LSET dbIdBuf$ = MKI$(carolid%)
 LSET dbNameBuf$ = carolname$

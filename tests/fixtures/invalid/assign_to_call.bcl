@@ -1,0 +1,6 @@
+program p
+function f%()
+return 1
+end function
+f%() = 3
+end

@@ -1,0 +1,1 @@
+all: `g%` has 2 dimensions -- sizeof needs an axis argument, e.g. `sizeof(g%, 0)`

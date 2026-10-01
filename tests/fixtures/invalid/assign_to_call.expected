@@ -1,0 +1,1 @@
+all: cannot assign to the result of a call to `f%`

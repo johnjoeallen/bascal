@@ -1,0 +1,1 @@
+all: default value for parameter `a%` of `f%` must be a literal or a top-level `const`

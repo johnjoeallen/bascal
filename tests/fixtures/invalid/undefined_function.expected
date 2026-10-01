@@ -1,0 +1,3 @@
+# A call to a name that is neither a built-in nor a user-defined function is an
+# error on every target.
+all: unknown function or array `nosuch%`

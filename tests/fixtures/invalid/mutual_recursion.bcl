@@ -1,0 +1,9 @@
+program p
+function a%()
+return b%()
+end function
+function b%()
+return a%()
+end function
+print a%()
+end

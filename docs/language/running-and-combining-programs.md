@@ -16,15 +16,17 @@ bcc hello.bcl --target jvm --run    # emit JVM assembly, assemble, and run it
 
 `-L dir` adds a directory `require` searches, beyond the source file’s own directory; repeat it for more than one.
 
-`--target` (or `-t`) chooses `basic`, `c`, or `jvm`; omit it and `bcc` falls
+`--target` (or `-t`) chooses `basic`, `fbc`, `c`, `jvm`, or `c64`; omit it and `bcc` falls
 back to whatever `BASCAL_TARGET` or a config file says, or `basic` failing all
 of that.
 
 `--binary` additionally builds the generated output into something runnable
-(`fbc` for BASIC, `gcc` for C; the JVM target's assembler is built directly
-into `bcc`, so no external toolchain is needed there); `--run` implies
+(real BASCOM under `dosbox-x` for `basic`, `fbc` for `fbc`, `gcc` for C,
+`cl65` for `c64`; the JVM target's assembler is built directly into `bcc`, so
+no external toolchain is needed there); `--run` implies
 `--binary` and then runs it, with the program’s own stdin/stdout/stderr
-connected directly to your terminal.
+connected directly to your terminal. Add `--verbose` to see each step, and each
+external command, `bcc` runs.
 
 `bcc` skips redoing work that’s already up to date — pass `--clean` to force a full retranspile.
 

@@ -1,0 +1,1 @@
+all: recursion is not supported: `f%` calls itself -- functions and procedures transpile to shared global

@@ -1,0 +1,3 @@
+program p
+print chr$("a")
+end

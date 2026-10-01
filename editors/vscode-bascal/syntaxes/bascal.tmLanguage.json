@@ -69,7 +69,7 @@
     "dependency-decls": {
       "patterns": [
         {
-          "match": "(?i)\\b(require|import)\\b(\\s+[A-Za-z_][A-Za-z0-9_.]*)?",
+          "match": "(?i)\\b(require|import|library)\\b(\\s+[A-Za-z_][A-Za-z0-9_.]*)?",
           "captures": {
             "1": { "name": "keyword.control.import.bascal" },
             "2": { "name": "entity.name.type.module.bascal" }
@@ -81,7 +81,7 @@
       "patterns": [
         {
           "name": "storage.type.bascal",
-          "match": "(?i)\\b(dim|declare|global|const|record|field|file|def|fn|method|combines|extends|fluent|byref|byval|returns|shared|common)\\b"
+          "match": "(?i)\\b(dim|declare|global|const|record|field|file|def|fn|method|combines|extends|fluent|byref|byval|returns|shared|common|lpad|rpad|integer|long|single|double|string)\\b"
         },
         {
           "name": "storage.type.function.bascal keyword.declaration.bascal",
@@ -121,7 +121,7 @@
       "patterns": [
         {
           "name": "keyword.other.io.bascal",
-          "match": "(?i)\\b(open|close|input|output|append|random|binary|as|write|line|print|lprint|get|put|lset|rset|seek|kill|name|data|read|restore|erase|stop|cls|beep|system|randomize|poke|out|width|clear|swap|locate|color|let|option|base)\\b"
+          "match": "(?i)\\b(open|close|input|output|append|random|binary|as|write|line|print|lprint|get|put|lset|rset|using|seek|kill|name|data|read|restore|erase|stop|cls|beep|system|randomize|poke|out|width|clear|swap|locate|color|let|option|base)\\b"
         }
       ]
     },
@@ -129,7 +129,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.bascal",
-          "match": "(?i)\\b(str|chr|hex|oct|space|environ|command|trim|left|right|mid|instr|format|len|val|asc|sqr|abs|int|fix|sgn|rnd|eof|sin|cos|tan|atn|log|exp|cint|clng|csng|cdbl|peek|inp|lof|loc|pos|csrlin|freefile|fre|lpos|varptr|date|time|timer|inkey|err|erl|tab|spc|ubound|lbound|iif|mki|mkl|mks|mkd|cvi|cvl|cvs|cvd|lpad|rpad)\\$?%?\\b(?=\\s*\\()"
+          "match": "(?i)\\b(str|chr|hex|oct|space|environ|command|left|right|mid|instr|format|len|val|asc|sqr|abs|int|fix|sgn|rnd|eof|sin|cos|tan|atn|log|exp|cint|clng|csng|cdbl|peek|inp|lof|loc|pos|csrlin|freefile|fre|lpos|varptr|date|time|timer|inkey|err|erl|tab|spc|ubound|lbound|iif|mki|mkl|mks|mkd|cvi|cvl|cvs|cvd|erdev|input|ioctl|pen|play|point|screen|stick|strig|string|usr)\\$?%?\\b(?=\\s*\\()"
         }
       ]
     },

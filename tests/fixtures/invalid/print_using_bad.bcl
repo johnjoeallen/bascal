@@ -1,0 +1,3 @@
+program p
+print using 3; 4
+end

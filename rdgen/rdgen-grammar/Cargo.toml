@@ -1,0 +1,9 @@
+[package]
+name = "rdgen-grammar"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Grammar DSL parser and semantic validation for rdgen"
+
+[dependencies]
+rdgen-ir = { path = "../rdgen-ir" }

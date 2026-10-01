@@ -4,8 +4,11 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
+
+static REMLINE_RUNTIME_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 fn is_library_path(path: &Path) -> bool {
     path.components()
@@ -92,6 +95,1024 @@ fn c_target_builds_and_runs_noninteractive_tutorials() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+}
+
+#[test]
+fn c_semantic_multi_index_arrays_compile_and_run() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping multidimensional C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create multidimensional array directory");
+    let source_path = temp.path().join("rank_two.bcl");
+    fs::write(
+        &source_path,
+        "program RankTwo\ndim grid%(2, 3)\ndim labels(2, 3) as string\ngrid%(2, 3) = 41\nlabels(2, 3) = \"ready\"\nprint grid%(2, 3)\nprint labels(2, 3)\nend\n",
+    )
+    .expect("failed to write multidimensional array source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for multidimensional C program");
+
+    assert!(
+        output.status.success(),
+        "multidimensional C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("41\nready\n"),
+        "unexpected multidimensional C output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_driver_transpiles_callable_array_indices_from_typed_ir() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping callable array-index C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create callable array-index directory");
+    let source_path = temp.path().join("callable_array_index.bcl");
+    fs::write(
+        &source_path,
+        "program CallableArrayIndex\ndim values%(3)\nfunction index%()\nreturn 2\nend function\nvalues%(index%()) = 17\nprint values%(index%())\nend\n",
+    )
+    .expect("failed to write callable array-index source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for callable array-index program");
+
+    assert!(
+        output.status.success(),
+        "callable array-index program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("17\n"),
+        "unexpected callable array-index output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_driver_runs_nested_semantic_input_through_typed_ir() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping nested C INPUT runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create nested INPUT directory");
+    let source_path = temp.path().join("nested_input.bcl");
+    fs::write(
+        &source_path,
+        "program NestedInput\ndim values%(2, 3)\nfunction axis%(value%)\nreturn value%\nend function\nif true then\ninput \"value\"; values%(axis%(1), axis%(2))\nend if\nprint values%(1, 2)\nend\n",
+    )
+    .expect("failed to write nested INPUT source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to invoke bcc for nested INPUT program");
+    child
+        .stdin
+        .take()
+        .expect("compiler stdin should be piped to the generated program")
+        .write_all(b"41\n")
+        .expect("failed to provide nested INPUT value");
+    let output = child
+        .wait_with_output()
+        .expect("failed to collect nested INPUT program output");
+    assert!(
+        output.status.success(),
+        "nested INPUT program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("value? 41\n"),
+        "unexpected nested INPUT output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_driver_runs_nested_typed_data_read() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping nested READ runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create nested READ directory");
+    let source_path = temp.path().join("nested_read.bcl");
+    fs::write(
+        &source_path,
+        "program NestedRead\ndata 42\nif true then\nread value%\nend if\nprint value%\nend\n",
+    )
+    .expect("failed to write nested READ source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for nested READ program");
+
+    assert!(
+        output.status.success(),
+        "nested READ program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "unexpected nested READ output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_driver_runs_nested_typed_file_write_after_output_open() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping nested file WRITE runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create nested file WRITE directory");
+    let source_path = temp.path().join("nested_file_write.bcl");
+    let data_path = temp.path().join("typed-output.txt");
+    fs::write(
+        &source_path,
+        "program NestedFileWrite\nopen \"typed-output.txt\" for output as #4\nif true then\nwrite #4, 42\nend if\nclose #4\nend\n",
+    )
+    .expect("failed to write nested file WRITE source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for nested file WRITE program");
+
+    assert!(
+        output.status.success(),
+        "nested file WRITE program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&data_path).expect("generated program should write its output file"),
+        "42\n"
+    );
+}
+
+#[test]
+fn c_driver_runs_callable_nested_typed_output_open() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping callable nested OUTPUT runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create callable OUTPUT directory");
+    let source_path = temp.path().join("callable_output.bcl");
+    let data_path = temp.path().join("typed-output.txt");
+    fs::write(
+        &source_path,
+        "program CallableOutput\nprocedure writer()\nif true then\nopen \"typed-output.txt\" for output as #4\nend if\nwrite #4, 73\nclose #4\nend procedure\nwriter()\nend\n",
+    )
+    .expect("failed to write callable OUTPUT source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for callable OUTPUT program");
+
+    assert!(
+        output.status.success(),
+        "callable OUTPUT program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&data_path).expect("generated procedure should write its output file"),
+        "73\n"
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_multi_index_arrays_compile_and_run() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping dynamic multidimensional C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp =
+        tempfile::tempdir().expect("failed to create dynamic multidimensional array directory");
+    let source_path = temp.path().join("dynamic_rank_two.bcl");
+    fs::write(
+        &source_path,
+        "program DynamicRankTwo\nrows% = 2\ncols% = 3\ndim grid%(rows%, cols%)\ndim labels$(rows%, cols%)\ngrid%(1, 2) = 41\nlabels$(1, 2) = \"ready\"\nprint grid%(1, 2)\nprint labels$(1, 2)\nend\n",
+    )
+    .expect("failed to write dynamic multidimensional array source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for dynamic multidimensional C program");
+
+    assert!(
+        output.status.success(),
+        "dynamic multidimensional C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("41\nready\n"),
+        "unexpected dynamic multidimensional C output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_array_allocates_inside_typed_branch() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping conditional dynamic C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create conditional dynamic array directory");
+    let source_path = temp.path().join("conditional_dynamic_array.bcl");
+    fs::write(
+        &source_path,
+        "program ConditionalDynamicArray\nbound%=3\nflag%=1\nif flag% then\ndim values%(bound%)\nvalues%(3)=42\nend if\nprint values%(3)\nend\n",
+    )
+    .expect("failed to write conditional dynamic array source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for conditional dynamic C program");
+
+    assert!(
+        output.status.success(),
+        "conditional dynamic C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "unexpected conditional dynamic C output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_callable_dynamic_array_uses_typed_parameter() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping callable dynamic C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create callable dynamic array directory");
+    let source_path = temp.path().join("callable_dynamic_array.bcl");
+    fs::write(
+        &source_path,
+        "program CallableDynamicArray\nfunction local%(limit%)\ndim values%(limit%)\nvalues%(limit%)=42\nreturn values%(limit%)\nend function\nprint local%(3)\nend\n",
+    )
+    .expect("failed to write callable dynamic array source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for callable dynamic C program");
+
+    assert!(
+        output.status.success(),
+        "callable dynamic C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "unexpected callable dynamic C output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_array_evaluates_typed_bound_function_once() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping dynamic bound function C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create bound function C directory");
+    let source_path = temp.path().join("dynamic_bound_function.bcl");
+    fs::write(
+        &source_path,
+        "program DynamicBoundFunction\ncount%=0\nfunction nextBound%()\nglobal count%\ncount%=count%+1\nreturn 3\nend function\ndim values%(nextBound%())\nvalues%(3)=42\nprint values%(3);\",\";count%\nend\n",
+    )
+    .expect("failed to write dynamic bound function source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for dynamic bound C program");
+
+    assert!(
+        output.status.success(),
+        "dynamic bound C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42,1\n"),
+        "typed dynamic bound function should run once: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_callable_dynamic_array_evaluates_typed_bound_function_once() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping callable dynamic bound C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create callable bound function C directory");
+    let source_path = temp.path().join("callable_dynamic_bound_function.bcl");
+    fs::write(
+        &source_path,
+        "program CallableDynamicBoundFunction\ncount%=0\nfunction nextBound%()\nglobal count%\ncount%=count%+1\nreturn 3\nend function\nfunction local%()\ndim values%(nextBound%())\nvalues%(3)=42\nreturn values%(3)\nend function\nresult%=local%()\nprint result%;\",\";count%\nend\n",
+    )
+    .expect("failed to write callable dynamic bound function source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for callable dynamic bound C program");
+
+    assert!(
+        output.status.success(),
+        "callable dynamic bound C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42,1\n"),
+        "callable typed bound function should run once: stdout={} stderr={} generated={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        fs::read_to_string(temp.path().join("out/callable_dynamic_bound_function.c"))
+            .unwrap_or_else(|error| format!("<unavailable: {error}>"))
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_long_array_uses_suffix_inferred_element_type() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping dynamic LONG array C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create dynamic LONG array directory");
+    let source_path = temp.path().join("dynamic_long_array.bcl");
+    fs::write(
+        &source_path,
+        "program DynamicLongArray\nbound&=3\ndim values&(bound&)\nvalues&(bound&)=123456789\nprint values&(bound&)\nend\n",
+    )
+    .expect("failed to write dynamic LONG array source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for dynamic LONG C program");
+
+    assert!(
+        output.status.success(),
+        "dynamic LONG C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("123456789\n"),
+        "suffix-inferred LONG array value was not preserved: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_array_preserves_fixed_radix_axis_at_runtime() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping mixed-axis dynamic C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create mixed-axis dynamic C directory");
+    let source_path = temp.path().join("mixed_axis_dynamic_array.bcl");
+    fs::write(
+        &source_path,
+        "program MixedAxisDynamicArray\nrow%=3\ndim grid%(&H10,row%)\ngrid%(16,3)=42\nprint grid%(16,3)\nend\n",
+    )
+    .expect("failed to write mixed-axis dynamic C source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for mixed-axis dynamic C program");
+
+    assert!(
+        output.status.success(),
+        "mixed-axis dynamic C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "C dynamic array should retain its fixed radix axis: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_array_preserves_fixed_octal_axis_at_runtime() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping mixed-axis octal C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create octal mixed-axis C directory");
+    let source_path = temp.path().join("octal_mixed_axis_array.bcl");
+    fs::write(
+        &source_path,
+        "program OctalMixedAxisArray\nrow%=3\ndim grid%(&O20,row%)\ngrid%(16,3)=42\nprint grid%(16,3)\nend\n",
+    )
+    .expect("failed to write octal mixed-axis C source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for octal mixed-axis C program");
+
+    assert!(
+        output.status.success(),
+        "octal mixed-axis C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "C dynamic array should retain its fixed octal axis: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_multidimensional_bounds_each_evaluate_once() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping multidimensional bound C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create multidimensional bound C directory");
+    let source_path = temp.path().join("multidimensional_bound_calls.bcl");
+    fs::write(
+        &source_path,
+        "program MultidimensionalBoundCalls\ncount%=0\nfunction nextBound%()\nglobal count%\ncount%=count%+1\nreturn 3\nend function\ndim grid%(nextBound%(),nextBound%())\ngrid%(3,3)=42\nresult%=grid%(3,3)\nprint result%;\",\";count%\nend\n",
+    )
+    .expect("failed to write multidimensional bound source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for multidimensional bound C program");
+
+    assert!(
+        output.status.success(),
+        "multidimensional bound C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42,2\n"),
+        "each typed C array axis bound should run exactly once: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_dim_evaluates_typed_arithmetic_bound() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping arithmetic dynamic C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create arithmetic dynamic C directory");
+    let source_path = temp.path().join("arithmetic_dynamic_dim.bcl");
+    fs::write(
+        &source_path,
+        "program ArithmeticDynamicDim\nbase%=2\ndim values%(base%+1)\nvalues%(3)=42\nprint values%(3)\nend\n",
+    )
+    .expect("failed to write arithmetic dynamic C source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for arithmetic dynamic C program");
+
+    assert!(
+        output.status.success(),
+        "arithmetic dynamic C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "C dynamic DIM should evaluate its typed arithmetic bound: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_dynamic_array_preserves_zero_upper_bound() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping zero-bound C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create zero-bound C directory");
+    let source_path = temp.path().join("zero_bound_dynamic_array.bcl");
+    fs::write(
+        &source_path,
+        "program ZeroBoundDynamicArray\nbound%=0\ndim values%(bound%)\nvalues%(0)=42\nprint values%(0)\nend\n",
+    )
+    .expect("failed to write zero-bound C source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for zero-bound C program");
+
+    assert!(
+        output.status.success(),
+        "zero-bound C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("42\n"),
+        "zero upper bound must allocate one element: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_skipped_dynamic_dim_does_not_evaluate_typed_bound() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping skipped-bound C runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create skipped-bound C directory");
+    let source_path = temp.path().join("skipped_dynamic_dim.bcl");
+    fs::write(
+        &source_path,
+        "program SkippedDynamicDim\ncount%=0\nfunction nextBound%()\nglobal count%\ncount%=count%+1\nreturn 3\nend function\nif 0 then\ndim values%(nextBound%())\nend if\nprint count%\nend\n",
+    )
+    .expect("failed to write skipped-bound C source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for skipped-bound C program");
+
+    assert!(
+        output.status.success(),
+        "skipped-bound C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("0\n"),
+        "a skipped typed C DIM must not evaluate its bound: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_string_intrinsics_compile_and_run_through_semantic_ir() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping string intrinsic runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create string intrinsic directory");
+    let source_path = temp.path().join("string_intrinsics.bcl");
+    fs::write(
+        &source_path,
+        "program StringIntrinsics\nprint chr$(65)\nprint str$(7)\nprint mid$(\"abcdef\", 2, 3)\nprint left$(\"abcdef\", 2)\nprint right$(\"abcdef\", 2)\nprint len(\"abc\")\nprint asc(\"A\")\nprint val(\"12.5\")\nprint instr(\"BASCAL\", \"CAL\")\nend\n",
+    )
+    .expect("failed to write string intrinsic source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for string intrinsic program");
+
+    assert!(
+        output.status.success(),
+        "string intrinsic program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("A\n 7\nbcd\nab\nef\n3\n65\n12.5\n4\n"),
+        "unexpected string intrinsic output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_numeric_user_function_calls_compile_and_run() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping numeric user function runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create user function directory");
+    let source_path = temp.path().join("numeric_calls.bcl");
+    fs::write(
+        &source_path,
+        "program NumericCalls\nfunction add%(left%, right% = 3)\nreturn left% + right%\nend function\nfunction double%(value%)\nreturn value% * 2\nend function\nfunction widen#(value#)\nreturn value#\nend function\nfunction bump%(byref value%)\nvalue% = value% + 1\nreturn value%\nend function\nresult% = double%(add%(3, 4))\nprint result%\nprint double%(add%(5, 6))\nprint add%(9)\nprint widen#(7)\ninitial% = 4\nprint bump%(initial%)\nprint initial%\nend\n",
+    )
+    .expect("failed to write user function source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for numeric user function program");
+
+    assert!(
+        output.status.success(),
+        "numeric user function program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("14\n22\n12\n7\n5\n5\n"),
+        "unexpected numeric user function output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_callable_end_exits_the_process() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping callable END runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create callable END directory");
+    let source_path = temp.path().join("callable_end.bcl");
+    fs::write(
+        &source_path,
+        "program CallableEndC\nfunction stop%()\nif 1 = 1 then\nend\nend if\nreturn 1\nend function\nprint \"before\"\nstop%()\nprint \"after\"\nend\n",
+    )
+    .expect("failed to write callable END source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for callable END program");
+
+    assert!(
+        output.status.success(),
+        "callable END program failed to build or run:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    assert!(stdout.ends_with("before\n"), "unexpected output: {stdout}");
+    assert!(
+        !stdout.contains("after"),
+        "callable END must suppress statements after the call: {stdout}"
+    );
+}
+
+#[test]
+fn c_string_user_function_calls_compile_and_run() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping string user function runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create user function directory");
+    let source_path = temp.path().join("string_calls.bcl");
+    fs::write(
+        &source_path,
+        "program StringCalls\nfunction join$(left$, right$ = \"!\")\nreturn left$ + right$\nend function\nresult$ = join$(\"Hi\")\nprint result$\nprint join$(join$(\"A\"))\nend\n",
+    )
+    .expect("failed to write user function source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for string user function program");
+
+    assert!(
+        output.status.success(),
+        "string user function program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("Hi!\nA!!\n"),
+        "unexpected string user function output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_print_channel_writes_formatted_tokens() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let temp = tempfile::tempdir().expect("failed to create PRINT # directory");
+    let source_path = temp.path().join("print_channel.bcl");
+    fs::write(
+        &source_path,
+        "program PrintChannel\nopen \"print-channel.txt\" for output as #4\nprint #4, \"semantic\"; 99\nclose #4\nend\n",
+    )
+    .expect("failed to write PRINT # source");
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for PRINT # program");
+    assert!(
+        output.status.success(),
+        "PRINT # program failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(temp.path().join("print-channel.txt")).unwrap(),
+        "semantic99\n"
+    );
+}
+
+#[test]
+fn c_semantic_file_input_stores_indexed_array_values() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let temp = tempfile::tempdir().expect("failed to create INPUT # array directory");
+    let source_path = temp.path().join("input_channel_array.bcl");
+    fs::write(
+        &source_path,
+        "program InputChannelArray\ndim values%(2)\ndim labels$(2)\nopen \"input-channel.txt\" for input as #4\ninput #4, values%(2), labels$(1)\nclose #4\nprint values%(2)\nprint labels$(1)\nend\n",
+    )
+    .expect("failed to write INPUT # array source");
+    fs::write(temp.path().join("input-channel.txt"), "41,\"ready\"\n")
+        .expect("failed to write INPUT # data");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for INPUT # array program");
+    assert!(
+        output.status.success(),
+        "INPUT # array program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("41\nready\n"),
+        "unexpected INPUT # array output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[test]
@@ -238,6 +1259,292 @@ end
     // convention, so the failed input open's error 53 is printed as " 53".
     assert!(stdout.contains("caught  53 at"), "{stdout}");
     assert!(stdout.contains("after"), "{stdout}");
+}
+
+#[test]
+fn c_semantic_throw_propagates_through_try_reachable_procedure() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let temp = tempfile::tempdir().expect("failed to create semantic THROW directory");
+    let source_path = temp.path().join("semantic_throw.bcl");
+    fs::write(
+        &source_path,
+        "program SemanticThrow\nprocedure fail()\nthrow 7\nend procedure\ntry\nfail()\ncatch e%, l%\nprint e%\nend try\nend\n",
+    )
+    .expect("failed to write semantic THROW source");
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for semantic THROW program");
+    assert!(
+        output.status.success(),
+        "semantic THROW program failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("7\n"),
+        "unexpected caught THROW output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_seek_positions_random_record_channel() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let temp = tempfile::tempdir().expect("failed to create semantic SEEK directory");
+    let source_path = temp.path().join("semantic_seek.bcl");
+    fs::write(
+        &source_path,
+        "program SemanticSeek\nopen \"records.dat\" for random as #1 len = 4\nfield #1, 4 as record$\nseek #1, 2\nprint #1, \"X\"\nclose #1\nend\n",
+    )
+    .expect("failed to write semantic SEEK source");
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for semantic SEEK program");
+    assert!(
+        output.status.success(),
+        "semantic SEEK program failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let bytes = fs::read(temp.path().join("records.dat")).expect("SEEK output file missing");
+    assert_eq!(bytes, b"\0\0\0\0X\n");
+}
+
+#[test]
+fn c_semantic_lset_packed_numeric_runtime_roundtrip() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping packed LSET runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create packed LSET directory");
+    let source_path = temp.path().join("packed_lset.bcl");
+    fs::write(
+        &source_path,
+        "program PackedLset\nopen \"records.dat\" for random as #1 len = 2\nfield #1, 2 as raw$\nlset raw$ = mki$(1234)\nput #1, 1\nget #1, 1\nprint cvi(raw$)\nclose #1\nend\n",
+    )
+    .expect("failed to write packed LSET source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for packed LSET program");
+
+    assert!(
+        output.status.success(),
+        "packed LSET C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("1234\n"),
+        "unexpected packed LSET round-trip output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_record_dsl_open_registers_synthesized_error_runtime() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping record DSL runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create record DSL directory");
+    let source_path = temp.path().join("record_dsl_open.bcl");
+    fs::write(
+        &source_path,
+        "program RecordDslOpen\nrecord R\nvalue: int16\nend record\nfile db as R = open(\"records.dat\")\ndb[1] = { value: 1234 }\nlet row = db[1]\nprint row.value\ndb.close()\nend\n",
+    )
+    .expect("failed to write record DSL source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for record DSL program");
+
+    assert!(
+        output.status.success(),
+        "record DSL C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("1234\n"),
+        "unexpected record DSL runtime output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_record_variable_write_roundtrips_all_typed_fields() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping record variable runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create record variable directory");
+    let source_path = temp.path().join("record_variable_write.bcl");
+    fs::write(
+        &source_path,
+        "program RecordVariableWrite\nfunction recordNumber%(index%)\nreturn index%\nend function\nfunction realRecord#(index#)\nreturn index#\nend function\nrecord Identity\nid: int16\nwide: int32\nend record\nrecord R combines Identity\nsmallFloat: float32\nlargeFloat: float64\nname: string(8)\nend record\nfile db as R = open(\"records.dat\")\ndim slots%(3)\nslots%(1) = 1\nslots%(2) = 2\nslots%(3) = 3\ndb[recordNumber%(1)] = { id: 4, wide: 30000, smallFloat: 1.5, largeFloat: 2.25, name: \"Ada\" }\nlet row = db[recordNumber%(1)]\nrow.id = 5\ndb[slots%(2)] = row\nprocedure save()\nglobal db\nlet localRow = db[recordNumber%(1)]\nlocalRow.wide = 32000\nlocalRow.name = \"Grace\"\ndb[realRecord#(3.0)] = (localRow)\nend procedure\nsave()\nlet first = db[recordNumber%(1)]\nlet second = db[recordNumber%(2)]\nlet third = db[recordNumber%(3)]\nprint first.id\nprint first.wide\nprint first.smallFloat\nprint first.largeFloat\nprint first.name\nprint second.id\nprint second.wide\nprint second.smallFloat\nprint second.largeFloat\nprint second.name\nprint third.id\nprint third.wide\nprint third.smallFloat\nprint third.largeFloat\nprint third.name\ndb.close()\nend\n",
+    )
+    .expect("failed to write record variable source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for record variable program");
+
+    assert!(
+        output.status.success(),
+        "record variable C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with(
+            "4\n30000\n1.5\n2.25\nAda\n5\n30000\n1.5\n2.25\nAda\n4\n32000\n1.5\n2.25\nGrace\n"
+        ),
+        "unexpected record variable round-trip output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_semantic_lset_packed_numeric_record_dsl_roundtrip() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping record DSL packed LSET runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create record DSL packed LSET directory");
+    let source_path = temp.path().join("record_dsl_packed_lset.bcl");
+    fs::write(
+        &source_path,
+        "program PackedRecordLset\nrecord R\ni16: int16\ni32: int32\nf32: float32\nf64: float64\nend record\nfile db as R = open(\"records.dat\")\nlset dbI16Buf$ = mki$(1234)\nlset dbI32Buf$ = mkl$(1234567)\nlset dbF32Buf$ = mks$(1.25)\nlset dbF64Buf$ = mkd$(9.5)\nput #1, 1\nget #1, 1\nprint cvi(dbI16Buf$)\nprint cvl(dbI32Buf$)\nprint cvs(dbF32Buf$)\nprint cvd(dbF64Buf$)\ndb.close()\nend\n",
+    )
+    .expect("failed to write record DSL packed LSET source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for record DSL packed LSET program");
+
+    assert!(
+        output.status.success(),
+        "record DSL packed LSET C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).ends_with("1234\n1234567\n1.25\n9.5\n"),
+        "unexpected record DSL packed LSET output: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn c_record_dsl_partial_update_preserves_omitted_field_runtime() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping record DSL partial update runtime check: gcc is unavailable");
+        return;
+    }
+
+    let temp = tempfile::tempdir().expect("failed to create partial record update directory");
+    let source_path = temp.path().join("record_dsl_partial_update.bcl");
+    fs::write(
+        &source_path,
+        "program PartialRecordUpdate\nrecord R\nid: int16\nwide: int32\nsmallFloat: float32\nlargeFloat: float64\nname: string(8)\nend record\nfile db as R = open(\"records.dat\")\nprocedure show()\nglobal db\nlet row = db[1]\nprint row.id\nprint row.wide\nprint row.smallFloat\nprint row.largeFloat\nprint row.name\nend procedure\ndb[1] = { id: 4, wide: 30000, smallFloat: 1.5, largeFloat: 2.25, name: \"Ada\" }\ndb[1] = ?{ id: 9 }\nlet topRow = db[1]\nprint topRow.id\nprint topRow.wide\nprint topRow.smallFloat\nprint topRow.largeFloat\nprint topRow.name\nshow()\ndb.close()\nend\n",
+    )
+    .expect("failed to write partial record update source");
+
+    let mut output_dir = temp.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("c")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_dir)
+        .current_dir(temp.path())
+        .output()
+        .expect("failed to invoke bcc for partial record update program");
+
+    assert!(
+        output.status.success(),
+        "partial record update C program failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .ends_with("9\n30000\n1.5\n2.25\nAda\n9\n30000\n1.5\n2.25\nAda\n"),
+        "partial update did not preserve the omitted field: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 /// End-to-end confirmation that the real case-study program (issue #66's
@@ -509,6 +1816,9 @@ fn gcc_runs_remline_under_c_target_when_available() {
     if Command::new("gcc").arg("--version").output().is_err() {
         return;
     }
+    let _guard = REMLINE_RUNTIME_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = repo_root.join("examples/remline/remline.bcl");
@@ -594,6 +1904,95 @@ fn freebasic_runs_mid_assign_edge_cases_when_available() {
             "012345678Z", // 2-arg form, pos at the very end of the string
         ],
         "MID$ assignment edge cases produced unexpected output:\n{stdout}"
+    );
+}
+
+#[test]
+fn freebasic_runs_semantic_mid_assign_byref_operand_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/mid_assign_byref.bcl");
+    let output_path = repo_root.join("output/mid_assign_byref.bas");
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/mid_assign_byref");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled mid_assign_byref");
+    assert!(
+        run.status.success(),
+        "compiled mid_assign_byref failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(lines, ["aXYdef", "2"], "ByRef MID$ operand output mismatch");
+}
+
+#[test]
+fn freebasic_runs_semantic_mid_assign_dynamic_target_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/mid_assign_dynamic_target.bcl");
+    let output_path = repo_root.join("output/mid_assign_dynamic_target.bas");
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/mid_assign_dynamic_target");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled mid_assign_dynamic_target");
+    assert!(
+        run.status.success(),
+        "compiled mid_assign_dynamic_target failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(
+        lines,
+        ["aXYdefgh", "1"],
+        "dynamic MID$ target output mismatch"
+    );
+}
+
+#[test]
+fn freebasic_runs_semantic_mid_assign_array_argument_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/mid_assign_array_argument.bcl");
+    let output_path = repo_root.join("output/mid_assign_array_argument.bas");
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/mid_assign_array_argument");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled mid_assign_array_argument");
+    assert!(
+        run.status.success(),
+        "compiled mid_assign_array_argument failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(
+        lines,
+        ["aXYdef", "2"],
+        "array-argument MID$ output mismatch"
     );
 }
 
@@ -891,6 +2290,9 @@ fn freebasic_runs_remline_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
         return;
     }
+    let _guard = REMLINE_RUNTIME_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = repo_root.join("examples/remline/remline.bcl");

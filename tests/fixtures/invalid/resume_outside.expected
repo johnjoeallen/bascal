@@ -1,0 +1,3 @@
+basic: ok
+c: `resume` is not supported with --target c; use `try`/`catch`/`finally`
+jvm: `resume` is not supported with --target jvm; use `try`/`catch`/`finally`

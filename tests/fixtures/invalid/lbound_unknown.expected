@@ -1,0 +1,1 @@
+all: `nope%` isn't a known array, so `lbound` can't determine its size

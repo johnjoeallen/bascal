@@ -4,6 +4,7 @@
 
 .field public static g1 I
 .field public static g2 I
+.field public static g3 I
 .field public static a0 [I
 .method public static printSeparator : ()V
     .limit stack 16
@@ -49,9 +50,10 @@
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     return
-L_if_0_else:
+    ; early exit — nothing printed for failing scores
+L_condition_0:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -75,23 +77,28 @@ L_if_0_else:
 
 .method public static fillRange : ([II)V
     .limit stack 16
-    .limit locals 3
+    .limit locals 5
 
     iconst_0
     istore 2
     ldc 0
-    istore 2
-L_for_0_top:
-    iload 2
+    istore 3
     aload 0
     arraylength
     ldc 1
     isub
+    istore 4
+    iload 3
+    istore 2
+L_for_0_top:
+    iload 2
+    iload 4
     if_icmpgt L_for_0_end
     aload 0
     iload 2
     iload 1
     iastore
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -114,54 +121,48 @@ L_for_0_end:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 3
+    .limit locals 6
 
     iconst_0
     putstatic Procedures/g1 I
     iconst_0
     putstatic Procedures/g2 I
+    iconst_0
+    putstatic Procedures/g3 I
     ldc 5
     iconst_1
     iadd
     multianewarray [I 1
     putstatic Procedures/a0 [I
     ; Tutorial — Procedures
-    ; 
+    ;
     ; A procedure is like a function but returns no value.  Declare it with
     ; PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.
-    ; 
+    ;
     ; Variables inside a procedure are LOCAL by default: the compiler prefixes
     ; them with the procedure name.  To access a global variable, declare it
     ; inside the body with:  global varname
-    ; 
+    ;
     ; Use procedures for actions that produce side effects (output, file I/O,
     ; modifying arrays) rather than for computing a value.
-    ; 
+    ;
     ; A bare RETURN exits a procedure early.  Falling through to END PROCEDURE
     ; is also valid — an implicit RETURN is emitted.
-
     ; Procedure with no parameters
-
     ; Procedure that prints a labelled value
     ; label$ -- text shown before the score
     ; score% -- value to print
-
     ; Procedure with early exit
     ; name$  -- person's name
     ; score% -- score to test against the passing threshold
-
     ; Procedure that modifies an array in place -- byref copies the result
     ; back to the caller; the default byval would fill a private copy only.
     ; arr%   -- array to fill; byref because it's mutated in place
     ; value% -- value written into every element
-
     ; Procedure that uses a global variable
     ldc 0
     putstatic Procedures/g1 I
-
-
     ; --- Drive the procedures ---
-
     invokestatic Procedures/printSeparator ()V
     ldc "Alice"
     ldc 91
@@ -173,20 +174,23 @@ L_for_0_end:
     ldc 78
     invokestatic Procedures/printScore (Ljava/lang/String;I)V
     invokestatic Procedures/printSeparator ()V
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Passes only:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc "Alice"
     ldc 91
     invokestatic Procedures/printIfPass (Ljava/lang/String;I)V
+    ; printed
     ldc "Bob"
     ldc 54
     invokestatic Procedures/printIfPass (Ljava/lang/String;I)V
+    ; skipped (score < 60)
     ldc "Carol"
     ldc 78
     invokestatic Procedures/printIfPass (Ljava/lang/String;I)V
-
+    ; printed
+    ldc 5
+    putstatic Procedures/g3 I
     getstatic Procedures/a0 [I
     ldc 99
     invokestatic Procedures/fillRange ([II)V
@@ -194,12 +198,16 @@ L_for_0_end:
     ldc "Filled array:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 0
+    istore 4
+    getstatic Procedures/g3 I
+    ldc 1
+    isub
+    istore 5
+    iload 4
     putstatic Procedures/g2 I
 L_for_0_top:
     getstatic Procedures/g2 I
-    ldc 5
-    ldc 1
-    isub
+    iload 5
     if_icmpgt L_for_0_end
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -229,13 +237,13 @@ L_for_0_top:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+L_for_0_continue:
     getstatic Procedures/g2 I
     ldc 1
     iadd
     putstatic Procedures/g2 I
     goto L_for_0_top
 L_for_0_end:
-
     invokestatic Procedures/increment ()V
     invokestatic Procedures/increment ()V
     invokestatic Procedures/increment ()V
@@ -250,6 +258,6 @@ L_for_0_end:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
+    ; 3
     return
 .end method

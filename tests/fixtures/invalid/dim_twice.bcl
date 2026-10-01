@@ -1,0 +1,4 @@
+program p
+dim a%(3)
+dim a%(5)
+end

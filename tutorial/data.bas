@@ -11,36 +11,30 @@
 100 ' 
 110 ' randomize seeds the BASIC RND function.  Pass timer for a
 120 ' time-based seed; pass a literal for reproducible results.
-
-130 numCAPITALS% = 5
-
-140 DIM country$(numCAPITALS%)
-150 BCCT1% = numCAPITALS%
-160 DIM capital$(numCAPITALS%)
-170 BCCT2% = numCAPITALS%
-
+130 CONSTNUMCAPITALS% = 5
+140 DIM country$(CONSTNUMCAPITALS%)
+150 BCCT1% = CONSTNUMCAPITALS%
+160 DIM capital$(CONSTNUMCAPITALS%)
+170 BCCT2% = CONSTNUMCAPITALS%
 180 ' Load the lookup table
-190 FOR i% = 1 TO numCAPITALS%
+190 FOR i% = 1 TO CONSTNUMCAPITALS%
 200     READ country$(i%), capital$(i%)
 210 NEXT i%
-
 220 ' Print the table
 230 PRINT "Country         Capital"
 240 PRINT "--------------- ---------------"
-250 FOR i% = 1 TO numCAPITALS%
+250 FOR i% = 1 TO CONSTNUMCAPITALS%
 260     PRINT (country$(i%) + "        ") + capital$(i%)
 270 NEXT i%
-
 280 ' swap — sort two variables without a temp
 290 a% = 42
 300 b% = 17
 310 PRINT (("Before swap: a=" + STR$(a%)) + " b=") + STR$(b%)
 320 SWAP a%, b%
 330 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
-
 340 ' Bubble-sort the country array using swap
-350 FOR pass% = 1 TO numCAPITALS% - 1
-360     FOR i% = 1 TO numCAPITALS% - pass%
+350 FOR pass% = 1 TO CONSTNUMCAPITALS% - 1
+360     FOR i% = 1 TO CONSTNUMCAPITALS% - pass%
 370         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 400
 380             SWAP country$(i%), country$(i% + 1)
 390             SWAP capital$(i%), capital$(i% + 1)
@@ -48,15 +42,12 @@
 410     NEXT i%
 420 NEXT pass%
 430 PRINT "Sorted by country:"
-440 FOR i% = 1 TO numCAPITALS%
+440 FOR i% = 1 TO CONSTNUMCAPITALS%
 450     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
 460 NEXT i%
-
 470 ' randomize — seed with a literal for reproducible output
 480 RANDOMIZE 99
-
 490 END
-
 500 DATA "France", "Paris"
 510 DATA "Germany", "Berlin"
 520 DATA "Japan", "Tokyo"

@@ -62,7 +62,7 @@ p% = 1
 10 IF (p% < 100) = 0 THEN GOTO 20
     PRINT STR$(p%)
     p% = p% * 2
-    GOTO 10
+GOTO 10
 20 REM END WHILE
 ```
 
