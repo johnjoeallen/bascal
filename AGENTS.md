@@ -452,3 +452,67 @@ passes if the same semantic path is consumed by other stages or backends.
 
 For cross-backend work, explicitly consider every backend before concluding
 that the implementation is complete.
+
+## Workflow orchestration
+
+These sections are how work is organised; the compiler-specific rules above
+(stage ownership, typed IR, cross-backend behaviour, validation, git workflow)
+still apply to everything below.
+
+### 1. Plan mode default
+
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately - don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent strategy
+
+- Use subagents liberally to keep the main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-improvement loop
+
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until the mistake rate drops
+- Review lessons at session start for the relevant project
+
+### 4. Verification before done
+
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a Staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness (see Validation above for
+  what that means for compiler changes)
+
+### 5. Demand elegance (balanced)
+
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes - don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous bug fixing
+
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests - then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task management
+
+1. **Plan first**: write the plan to `tasks/todo.md` with checkable items
+2. **Verify plan**: check in before starting implementation
+3. **Track progress**: mark items complete as you go
+4. **Explain changes**: high-level summary at each step
+5. **Document results**: add a review section to `tasks/todo.md`
+6. **Capture lessons**: update `tasks/lessons.md` after corrections
+
+## Core principles
+
+- **Simplicity first**: make every change as simple as possible. Impact minimal code.
+- **No laziness**: find root causes. No temporary fixes. Senior developer standards.
+- **Minimal impact**: changes should only touch what's necessary. Avoid introducing bugs.

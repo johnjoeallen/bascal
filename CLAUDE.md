@@ -2,7 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-See also [AGENTS.md](AGENTS.md) for terminology conventions.
+@AGENTS.md
+
+The import above loads [AGENTS.md](AGENTS.md) (terminology, compiler-stage rules,
+workflow orchestration) into every session.
 
 ## What this is
 
