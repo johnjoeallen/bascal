@@ -36,4 +36,4 @@ prefix: these constructs are part of the language itself.
 
 </div>
 
-[← Back to Why BASCAL](index.md)  ·  [Read the development journey →](journey.md)
+[← Back to Why was it created](home/why.md)  ·  [Read the development journey →](journey.md)

@@ -226,4 +226,4 @@ IF (score% > highscore%) = 0 THEN GOTO 10
 
 ---
 
-[← Previous: Why BASCAL exists](../index.md) · [Next: Structured control flow →](control-flow.md)
+[← Previous: How has it evolved](evolution.md) · [Next: Structured control flow →](control-flow.md)
