@@ -128,14 +128,6 @@ pub fn lower(
     ))
 }
 
-/// The `com.bascal.stdlib` methods reading a string field back out of a record
-/// file calls: `rtrim` for a left-aligned field, `ltrim` for a right-aligned one.
-#[derive(Clone, Copy, Default)]
-pub struct TrimMethods {
-    pub right: bool,
-    pub left: bool,
-}
-
 #[derive(Clone)]
 struct FieldSpec {
     name: String,
@@ -230,8 +222,6 @@ struct Lowerer {
     /// camelCased and should keep that case, while a user-typed one still
     /// gets BASCAL's normal lowercase normalization.
     synthesized_buffer_names: std::collections::HashSet<String>,
-    /// Which stdlib trim methods the unpacking of string fields calls.
-    trim_methods: TrimMethods,
     /// A user-declared scalar method's own declared
     /// result type, keyed by (receiver suffix, lowercase method name) --
     /// built once, up front, from `program.functions` (before it's moved
@@ -276,7 +266,6 @@ impl Lowerer {
             next_channel: 1,
             diagnostics: Vec::new(),
             synthesized_buffer_names: std::collections::HashSet::new(),
-            trim_methods: TrimMethods::default(),
             user_method_results: HashMap::new(),
             known_ordinary_functions: HashSet::new(),
             current_function: None,
