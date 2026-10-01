@@ -37,12 +37,12 @@
     iconst_0
     putstatic Arithmetic/g4 I
     ; Tutorial — Operators and Expressions
-    ; 
+    ;
     ; Arithmetic:   +  -  *  /  \  MOD  ^
     ; Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)
     ; Logical:      AND  OR  NOT  XOR  (bitwise — see note below)
     ; String:       + concatenates strings
-    ; 
+    ;
     ; Precedence (highest first):
     ; ^                 exponentiation (right-associative)
     ; unary -           negation
@@ -55,10 +55,9 @@
     ; AND               bitwise AND
     ; OR                bitwise OR
     ; XOR               bitwise XOR
-    ; 
+    ;
     ; IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
     ; Test for false with (expr) = 0, not NOT expr.
-
     ; Arithmetic — mix labels and numbers with ;
     ldc 17
     putstatic Arithmetic/g1 I
@@ -81,6 +80,7 @@
     getstatic Arithmetic/g2 I
     iadd
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 + 5 = 22
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
@@ -98,6 +98,7 @@
     getstatic Arithmetic/g2 I
     isub
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 - 5 = 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
@@ -115,6 +116,7 @@
     getstatic Arithmetic/g2 I
     imul
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 * 5 = 85
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
@@ -133,9 +135,11 @@
     getstatic Arithmetic/g2 I
     i2d
     ddiv
+    d2f
+    f2d
     invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
+    ; 17 / 5 = 3  (truncates)
     ; Integer division and MOD
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g1 I
@@ -170,6 +174,7 @@
     d2l
     ldiv
     invokevirtual java/io/PrintStream/println (J)V
+    ; 17 \ 5 = 3  (integer quotient)
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
@@ -203,7 +208,7 @@
     d2l
     lrem
     invokevirtual java/io/PrintStream/println (J)V
-
+    ; 17 MOD 5 = 2  (remainder)
     ; Exponentiation — right-associative
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "2 ^ 8 ="
@@ -216,6 +221,7 @@
     invokestatic java/lang/Math/pow (DD)D
     invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; 256
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "2 ^ 3 ^ 2 ="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -230,7 +236,7 @@
     invokestatic java/lang/Math/pow (DD)D
     invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
+    ; 512  (= 2 ^ (3^2) = 2^9)
     ; Precedence
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 2
@@ -252,7 +258,6 @@
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect 20 — parens first)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Comparison — -1 means true, 0 means false
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 10
@@ -305,7 +310,6 @@
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect -1)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
     ldc 7
     putstatic Arithmetic/g4 I
@@ -339,14 +343,14 @@
     land
     lconst_0
     lcmp
-    ifeq L_if_0_else
+    ifeq L_condition_0
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arithmetic/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is in 1..9"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_0_else:
+L_condition_0:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 6
     i2d
@@ -371,7 +375,6 @@ L_if_0_else:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect 5 — 110 XOR 011 = 101)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; String concatenation
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -397,7 +400,6 @@ L_if_0_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Unary negation
     ldc 42
     putstatic Arithmetic/g3 I
@@ -405,6 +407,6 @@ L_if_0_else:
     getstatic Arithmetic/g3 I
     ineg
     invokevirtual java/io/PrintStream/println (I)V
-
+    ; -42
     return
 .end method

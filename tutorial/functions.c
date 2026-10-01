@@ -37,11 +37,12 @@ void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
+    int bt_start_0 = 1;
     int bt_lim_0 = ((int)strlen(bv_s_self));
     int bt_step_0 = 1;
-    for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bt_start_0; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
-        if (((-(bv_i_c >= 97)) && (-(bv_i_c <= 122)))) {
+        if ((-(((-(bv_i_c >= 97))) != 0 && ((-(bv_i_c <= 122))) != 0))) {
             bv_i_c = (bv_i_c - 32);
         }
         char bt_s_1[256];
@@ -60,11 +61,12 @@ void bf_s_lcase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
+    int bt_start_2 = 1;
     int bt_lim_2 = ((int)strlen(bv_s_self));
     int bt_step_2 = 1;
-    for (bv_i_i = 1; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
+    for (bv_i_i = bt_start_2; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
         bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
-        if (((-(bv_i_c >= 65)) && (-(bv_i_c <= 90)))) {
+        if ((-(((-(bv_i_c >= 65))) != 0 && ((-(bv_i_c <= 90))) != 0))) {
             bv_i_c = (bv_i_c + 32);
         }
         char bt_s_3[256];
@@ -201,7 +203,6 @@ int main(void) {
     // dot syntax and can chain: word$.left(1).ucase().  The existing titleCase$
     // function below demonstrates this form; methods transpile to ordinary
     // calls for both targets.
-
 
     // Integer arithmetic functions
     // a% -- first value to compare

@@ -903,3 +903,11 @@ observed = "PASS"
 [[result]]
 id = "test.record_methods.zero_argument_record_method_compiles_and_runs"
 observed = "PASS"
+
+[[result]]
+id = "test.verbose.verbose_reports_each_step_to_stderr"
+observed = "PASS"
+
+[[result]]
+id = "test.verbose.without_verbose_bcc_stays_quiet"
+observed = "PASS"

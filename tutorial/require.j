@@ -2,10 +2,11 @@
 .class public RequireDemo
 .super java/lang/Object
 
+.field public static g1 I
 .field public static a0 [I
 .method public static mean : ([I)D
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     iconst_0
     istore 1
@@ -26,12 +27,16 @@
     arraylength
     istore 1
     ldc 0
-    istore 2
-L_for_0_top:
-    iload 2
+    istore 4
     iload 1
     ldc 1
     isub
+    istore 5
+    iload 4
+    istore 2
+L_for_0_top:
+    iload 2
+    iload 5
     if_icmpgt L_for_0_end
     iload 3
     aload 0
@@ -39,6 +44,7 @@ L_for_0_top:
     iaload
     iadd
     istore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -50,6 +56,8 @@ L_for_0_end:
     iload 1
     i2d
     ddiv
+    d2f
+    f2d
     dreturn
     dconst_0
     dreturn
@@ -57,7 +65,7 @@ L_for_0_end:
 
 .method public static maximum : ([I)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 5
 
     iconst_0
     istore 1
@@ -75,13 +83,17 @@ L_for_0_end:
     iaload
     istore 1
     ldc 1
-    istore 2
-L_for_0_top:
-    iload 2
+    istore 3
     aload 0
     arraylength
     ldc 1
     isub
+    istore 4
+    iload 3
+    istore 2
+L_for_0_top:
+    iload 2
+    iload 4
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -91,12 +103,13 @@ L_for_0_top:
     ineg
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     aload 0
     iload 2
     iaload
     istore 1
-L_if_1_else:
+L_condition_1:
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -111,7 +124,7 @@ L_for_0_end:
 
 .method public static minimum : ([I)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 5
 
     iconst_0
     istore 1
@@ -129,13 +142,17 @@ L_for_0_end:
     iaload
     istore 1
     ldc 1
-    istore 2
-L_for_0_top:
-    iload 2
+    istore 3
     aload 0
     arraylength
     ldc 1
     isub
+    istore 4
+    iload 3
+    istore 2
+L_for_0_top:
+    iload 2
+    iload 4
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -144,12 +161,13 @@ L_for_0_top:
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     aload 0
     iload 2
     iaload
     istore 1
-L_if_1_else:
+L_condition_1:
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -196,27 +214,36 @@ L_for_0_end:
         L_copy_long
         L_copy_double
         L_copy_object
+    default : L_copy_invalid
 L_copy_int:
+    .stack full
+    locals Object java/lang/Object Integer Integer
+    stack
+    .end stack
     aload 0
     checkcast [I
     invokevirtual [I/clone ()Ljava/lang/Object;
     areturn
 L_copy_long:
+    .stack same
     aload 0
     checkcast [J
     invokevirtual [J/clone ()Ljava/lang/Object;
     areturn
 L_copy_double:
+    .stack same
     aload 0
     checkcast [D
     invokevirtual [D/clone ()Ljava/lang/Object;
     areturn
 L_copy_object:
+    .stack same
     aload 0
     checkcast [Ljava/lang/Object;
     invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
     areturn
 L_copy_nested:
+    .stack same
     aload 0
     checkcast [Ljava/lang/Object;
     invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
@@ -225,6 +252,10 @@ L_copy_nested:
     iconst_0
     istore 4
 L_copy_loop:
+    .stack full
+    locals Object java/lang/Object Integer Integer Object [Ljava/lang/Object; Integer
+    stack
+    .end stack
     iload 4
     aload 3
     arraylength
@@ -243,8 +274,18 @@ L_copy_loop:
     iinc 4 1
     goto L_copy_loop
 L_copy_done:
+    .stack same
     aload 3
     areturn
+L_copy_invalid:
+    .stack full
+    locals Object java/lang/Object Integer Integer
+    stack
+    .end stack
+    new java/lang/IllegalArgumentException
+    dup
+    invokespecial java/lang/IllegalArgumentException/<init> ()V
+    athrow
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
@@ -267,11 +308,11 @@ L_copy_done:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 1
+    .limit locals 2
 
-    ldc 8
-    ldc 1
-    isub
+    iconst_0
+    putstatic RequireDemo/g1 I
+    ldc 7
     iconst_1
     iadd
     multianewarray [I 1
@@ -279,36 +320,31 @@ L_copy_done:
     ; stats.bcl — basic statistics library for the BASCAL tutorial.
     ; Loaded by tutorial/require.bcl via:
     ; require stats
-    ; 
+    ;
     ; Provides: mean!, maximum%, minimum%, rangeOf%
-
     ; data% -- array to average; byval, since mean! only reads it
-
     ; data% -- array to search; byval, since maximum% only reads it
-
     ; data% -- array to search; byval, since minimum% only reads it
-
     ; data% -- array to measure; byval, since rangeOf% only reads it
     ; Tutorial — REQUIRE and multi-file projects
-    ; 
+    ;
     ; REQUIRE loads another .bcl file and merges its functions into the
     ; generated output.  The path is dot-separated and maps to a file:
-    ; 
+    ;
     ; require stats   →  stats.bcl  (in the same directory or a -L path)
     ; require com.bascal.sort.bubbleSort
     ; →  com/bascal/sort/bubbleSort.bcl
-    ; 
+    ;
     ; All required functions become part of the single generated .bas file.
     ; The original require line is preserved as a comment in the output.
-    ; 
+    ;
     ; Run with:
     ; bcc tutorial/require.bcl -L tutorial/lib
-    ; 
+    ;
     ; The -L flag adds tutorial/lib/ to the search path so that
     ; require stats   resolves to  tutorial/lib/stats.bcl
-
-
-
+    ldc 8
+    putstatic RequireDemo/g1 I
     getstatic RequireDemo/a0 [I
     ldc 0
     ldc 74
@@ -341,7 +377,6 @@ L_copy_done:
     ldc 7
     ldc 84
     iastore
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Scores: 74 91 63 88 55 97 72 84"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -353,6 +388,8 @@ L_copy_done:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     getstatic RequireDemo/a0 [I
     invokestatic RequireDemo/mean ([I)D
+    d2f
+    f2d
     invokestatic RequireDemo/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
@@ -393,6 +430,5 @@ L_copy_done:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     return
 .end method

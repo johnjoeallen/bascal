@@ -18,6 +18,8 @@ static const char *bcc_err_file = "";
 #define BCC_MAX_CHANNELS 32
 static FILE* bcc_files[BCC_MAX_CHANNELS];
 
+static char bcc_file_field_buf[256];
+
 static char bcc_input_buf[256];
 
 static char* bcc_strbuf_take(void);
@@ -28,12 +30,8 @@ static const char* bcc_strd(double value);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
-static void bcc_mks(char* out, double value);
-static void bcc_mkd(char* out, double value);
 static int bcc_cvi(const char* s);
 static int bcc_cvl(const char* s);
-static float bcc_cvs(const char* s);
-static double bcc_cvd(const char* s);
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
 static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
 static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
@@ -41,9 +39,15 @@ static int bcc_put_record_header(FILE* file, long record, const int16_t* field_0
 static int bcc_get_record_header(FILE* file, long record, char* field_0, char* field_1);
 static int bcc_put_record_entry(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2);
 static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* field_1, char* field_2);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_eof(FILE* file);
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
 static void bcc_read_line(void);
 
-static float bv_f_last_slot = 0;
 static int bv_i_last_slot = 0;
 static char bv_s_catalogauthorbuf[256] = {0};
 static char bv_s_catalogsubjectbuf[256] = {0};
@@ -51,6 +55,8 @@ static char bv_s_catalogtitlebuf[256] = {0};
 static char bv_s_headerreservedbuf[256] = {0};
 static char bv_s_headersizebuf[256] = {0};
 
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out);
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out);
 void bf_i_initcatalog(void);
 void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const char* bv_s_subject_in);
 void bf_i_listall(void);
@@ -59,8 +65,39 @@ void bf_i_searchbyauthortitle(const char* bv_s_author_in, const char* bv_s_title
 void bf_i_deleteitem(const char* bv_s_author_in, const char* bv_s_title_in);
 void bf_i_mainmenu(void);
 
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = 1;
+    while ((-(((-(bv_i_i <= ((int)strlen(bv_s_self))))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i + 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, bv_i_i, 2147483647));
+    return;
+}
+
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = ((int)strlen(bv_s_self));
+    while ((-(((-(bv_i_i > 0))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i - 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, 1, bv_i_i));
+    return;
+}
+
 void bf_i_initcatalog(void) {
     int bv_i_i = 0;
+    char bv_s_catalogauthorbuf[256] = {0};
+    char bv_s_catalogsubjectbuf[256] = {0};
+    char bv_s_catalogtitlebuf[256] = {0};
+    char bv_s_headerreservedbuf[256] = {0};
+    char bv_s_headersizebuf[256] = {0};
 
     // global header
     // global catalog
@@ -74,6 +111,7 @@ void bf_i_initcatalog(void) {
         bcc_put_record_entry(bcc_files[1], bv_i_i, "", "", "");
     }
 }
+
 void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const char* bv_s_subject_in) {
     char bv_s_author[256];
     snprintf(bv_s_author, sizeof(bv_s_author), "%s", bv_s_author_in);
@@ -81,10 +119,6 @@ void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const c
     snprintf(bv_s_title, sizeof(bv_s_title), "%s", bv_s_title_in);
     char bv_s_subject[256];
     snprintf(bv_s_subject, sizeof(bv_s_subject), "%s", bv_s_subject_in);
-    int bv_i_eauthortrimi = 0;
-    int bv_i_esubjecttrimi = 0;
-    int bv_i_etitletrimi = 0;
-    int bv_i_hreservedtrimi = 0;
     int bv_i_hsize = 0;
     int bv_i_i = 0;
     int bv_i_stop = 0;
@@ -103,11 +137,9 @@ void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const c
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
-    bv_i_hreservedtrimi = ((int)strlen(bv_s_headerreservedbuf));
-    while (((-(bv_i_hreservedtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_headerreservedbuf, bv_i_hreservedtrimi, 1), " ") == 0)))) {
-        bv_i_hreservedtrimi = (bv_i_hreservedtrimi - 1);
-    }
-    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bcc_mid(bv_s_headerreservedbuf, 1, bv_i_hreservedtrimi));
+    char bt_s_2[256];
+    bf_s_rtrim_s(bv_s_headerreservedbuf, bt_s_2);
+    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bt_s_2);
     bv_i_i = 1;
     bv_i_stop = 0;
     while (1) {
@@ -115,21 +147,15 @@ void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const c
         bv_i_i = (bv_i_i + 1);
         // let e = catalog[...]  (whole-record read)
         bcc_get_record_entry(bcc_files[1], bv_i_i, bv_s_catalogauthorbuf, bv_s_catalogtitlebuf, bv_s_catalogsubjectbuf);
-        bv_i_eauthortrimi = ((int)strlen(bv_s_catalogauthorbuf));
-        while (((-(bv_i_eauthortrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogauthorbuf, bv_i_eauthortrimi, 1), " ") == 0)))) {
-            bv_i_eauthortrimi = (bv_i_eauthortrimi - 1);
-        }
-        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bcc_mid(bv_s_catalogauthorbuf, 1, bv_i_eauthortrimi));
-        bv_i_etitletrimi = ((int)strlen(bv_s_catalogtitlebuf));
-        while (((-(bv_i_etitletrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogtitlebuf, bv_i_etitletrimi, 1), " ") == 0)))) {
-            bv_i_etitletrimi = (bv_i_etitletrimi - 1);
-        }
-        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bcc_mid(bv_s_catalogtitlebuf, 1, bv_i_etitletrimi));
-        bv_i_esubjecttrimi = ((int)strlen(bv_s_catalogsubjectbuf));
-        while (((-(bv_i_esubjecttrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogsubjectbuf, bv_i_esubjecttrimi, 1), " ") == 0)))) {
-            bv_i_esubjecttrimi = (bv_i_esubjecttrimi - 1);
-        }
-        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bcc_mid(bv_s_catalogsubjectbuf, 1, bv_i_esubjecttrimi));
+        char bt_s_3[256];
+        bf_s_rtrim_s(bv_s_catalogauthorbuf, bt_s_3);
+        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bt_s_3);
+        char bt_s_4[256];
+        bf_s_rtrim_s(bv_s_catalogtitlebuf, bt_s_4);
+        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bt_s_4);
+        char bt_s_5[256];
+        bf_s_rtrim_s(bv_s_catalogsubjectbuf, bt_s_5);
+        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bt_s_5);
         if ((-(strcmp(bv_s_eauthor, "") == 0))) {
             bv_i_stop = 1;
         }
@@ -141,17 +167,13 @@ void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const c
         // catalog[...] = { ... }  (whole-record write)
         bcc_put_record_entry(bcc_files[1], bv_i_i, bv_s_author, bv_s_title, bv_s_subject);
     } else {
-        char bt_s_2[256];
-        snprintf(bt_s_2, sizeof(bt_s_2), "%s%s", "Catalog is full -- cannot add ", bv_s_author);
-        printf("%s\n", bt_s_2);
+        char bt_s_6[256];
+        snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "Catalog is full -- cannot add ", bv_s_author);
+        printf("%s\n", bt_s_6);
     }
 }
 
 void bf_i_listall(void) {
-    int bv_i_eauthortrimi = 0;
-    int bv_i_esubjecttrimi = 0;
-    int bv_i_etitletrimi = 0;
-    int bv_i_hreservedtrimi = 0;
     int bv_i_hsize = 0;
     int bv_i_i = 0;
     char bv_s_catalogauthorbuf[256] = {0};
@@ -169,41 +191,33 @@ void bf_i_listall(void) {
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
-    bv_i_hreservedtrimi = ((int)strlen(bv_s_headerreservedbuf));
-    while (((-(bv_i_hreservedtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_headerreservedbuf, bv_i_hreservedtrimi, 1), " ") == 0)))) {
-        bv_i_hreservedtrimi = (bv_i_hreservedtrimi - 1);
-    }
-    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bcc_mid(bv_s_headerreservedbuf, 1, bv_i_hreservedtrimi));
-    int bt_lim_3 = bv_i_hsize;
-    int bt_step_3 = 1;
-    for (bv_i_i = 2; bt_step_3 >= 0 ? bv_i_i <= bt_lim_3 : bv_i_i >= bt_lim_3; bv_i_i += bt_step_3) {
+    char bt_s_7[256];
+    bf_s_rtrim_s(bv_s_headerreservedbuf, bt_s_7);
+    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bt_s_7);
+    int bt_lim_8 = bv_i_hsize;
+    int bt_step_8 = 1;
+    for (bv_i_i = 2; bt_step_8 >= 0 ? bv_i_i <= bt_lim_8 : bv_i_i >= bt_lim_8; bv_i_i += bt_step_8) {
         // let e = catalog[...]  (whole-record read)
         bcc_get_record_entry(bcc_files[1], bv_i_i, bv_s_catalogauthorbuf, bv_s_catalogtitlebuf, bv_s_catalogsubjectbuf);
-        bv_i_eauthortrimi = ((int)strlen(bv_s_catalogauthorbuf));
-        while (((-(bv_i_eauthortrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogauthorbuf, bv_i_eauthortrimi, 1), " ") == 0)))) {
-            bv_i_eauthortrimi = (bv_i_eauthortrimi - 1);
-        }
-        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bcc_mid(bv_s_catalogauthorbuf, 1, bv_i_eauthortrimi));
-        bv_i_etitletrimi = ((int)strlen(bv_s_catalogtitlebuf));
-        while (((-(bv_i_etitletrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogtitlebuf, bv_i_etitletrimi, 1), " ") == 0)))) {
-            bv_i_etitletrimi = (bv_i_etitletrimi - 1);
-        }
-        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bcc_mid(bv_s_catalogtitlebuf, 1, bv_i_etitletrimi));
-        bv_i_esubjecttrimi = ((int)strlen(bv_s_catalogsubjectbuf));
-        while (((-(bv_i_esubjecttrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogsubjectbuf, bv_i_esubjecttrimi, 1), " ") == 0)))) {
-            bv_i_esubjecttrimi = (bv_i_esubjecttrimi - 1);
-        }
-        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bcc_mid(bv_s_catalogsubjectbuf, 1, bv_i_esubjecttrimi));
+        char bt_s_9[256];
+        bf_s_rtrim_s(bv_s_catalogauthorbuf, bt_s_9);
+        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bt_s_9);
+        char bt_s_10[256];
+        bf_s_rtrim_s(bv_s_catalogtitlebuf, bt_s_10);
+        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bt_s_10);
+        char bt_s_11[256];
+        bf_s_rtrim_s(bv_s_catalogsubjectbuf, bt_s_11);
+        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bt_s_11);
         if ((-(strcmp(bv_s_eauthor, "") != 0))) {
-            char bt_s_4[256];
-            snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", bv_s_eauthor, "  |  ");
-            char bt_s_5[256];
-            snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bt_s_4, bv_s_etitle);
-            char bt_s_6[256];
-            snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bt_s_5, "  |  ");
-            char bt_s_7[256];
-            snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", bt_s_6, bv_s_esubject);
-            printf("%s\n", bt_s_7);
+            char bt_s_12[256];
+            snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", bv_s_eauthor, "  |  ");
+            char bt_s_13[256];
+            snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", bt_s_12, bv_s_etitle);
+            char bt_s_14[256];
+            snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", bt_s_13, "  |  ");
+            char bt_s_15[256];
+            snprintf(bt_s_15, sizeof(bt_s_15), "%s%s", bt_s_14, bv_s_esubject);
+            printf("%s\n", bt_s_15);
         }
     }
 }
@@ -211,10 +225,6 @@ void bf_i_listall(void) {
 void bf_i_searchbyauthor(const char* bv_s_author_in) {
     char bv_s_author[256];
     snprintf(bv_s_author, sizeof(bv_s_author), "%s", bv_s_author_in);
-    int bv_i_eauthortrimi = 0;
-    int bv_i_esubjecttrimi = 0;
-    int bv_i_etitletrimi = 0;
-    int bv_i_hreservedtrimi = 0;
     int bv_i_hsize = 0;
     int bv_i_i = 0;
     char bv_s_catalogauthorbuf[256] = {0};
@@ -232,41 +242,33 @@ void bf_i_searchbyauthor(const char* bv_s_author_in) {
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
-    bv_i_hreservedtrimi = ((int)strlen(bv_s_headerreservedbuf));
-    while (((-(bv_i_hreservedtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_headerreservedbuf, bv_i_hreservedtrimi, 1), " ") == 0)))) {
-        bv_i_hreservedtrimi = (bv_i_hreservedtrimi - 1);
-    }
-    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bcc_mid(bv_s_headerreservedbuf, 1, bv_i_hreservedtrimi));
-    int bt_lim_8 = bv_i_hsize;
-    int bt_step_8 = 1;
-    for (bv_i_i = 2; bt_step_8 >= 0 ? bv_i_i <= bt_lim_8 : bv_i_i >= bt_lim_8; bv_i_i += bt_step_8) {
+    char bt_s_16[256];
+    bf_s_rtrim_s(bv_s_headerreservedbuf, bt_s_16);
+    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bt_s_16);
+    int bt_lim_17 = bv_i_hsize;
+    int bt_step_17 = 1;
+    for (bv_i_i = 2; bt_step_17 >= 0 ? bv_i_i <= bt_lim_17 : bv_i_i >= bt_lim_17; bv_i_i += bt_step_17) {
         // let e = catalog[...]  (whole-record read)
         bcc_get_record_entry(bcc_files[1], bv_i_i, bv_s_catalogauthorbuf, bv_s_catalogtitlebuf, bv_s_catalogsubjectbuf);
-        bv_i_eauthortrimi = ((int)strlen(bv_s_catalogauthorbuf));
-        while (((-(bv_i_eauthortrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogauthorbuf, bv_i_eauthortrimi, 1), " ") == 0)))) {
-            bv_i_eauthortrimi = (bv_i_eauthortrimi - 1);
-        }
-        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bcc_mid(bv_s_catalogauthorbuf, 1, bv_i_eauthortrimi));
-        bv_i_etitletrimi = ((int)strlen(bv_s_catalogtitlebuf));
-        while (((-(bv_i_etitletrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogtitlebuf, bv_i_etitletrimi, 1), " ") == 0)))) {
-            bv_i_etitletrimi = (bv_i_etitletrimi - 1);
-        }
-        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bcc_mid(bv_s_catalogtitlebuf, 1, bv_i_etitletrimi));
-        bv_i_esubjecttrimi = ((int)strlen(bv_s_catalogsubjectbuf));
-        while (((-(bv_i_esubjecttrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogsubjectbuf, bv_i_esubjecttrimi, 1), " ") == 0)))) {
-            bv_i_esubjecttrimi = (bv_i_esubjecttrimi - 1);
-        }
-        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bcc_mid(bv_s_catalogsubjectbuf, 1, bv_i_esubjecttrimi));
+        char bt_s_18[256];
+        bf_s_rtrim_s(bv_s_catalogauthorbuf, bt_s_18);
+        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bt_s_18);
+        char bt_s_19[256];
+        bf_s_rtrim_s(bv_s_catalogtitlebuf, bt_s_19);
+        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bt_s_19);
+        char bt_s_20[256];
+        bf_s_rtrim_s(bv_s_catalogsubjectbuf, bt_s_20);
+        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bt_s_20);
         if ((-(strcmp(bv_s_eauthor, bv_s_author) == 0))) {
-            char bt_s_9[256];
-            snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", bv_s_eauthor, "  |  ");
-            char bt_s_10[256];
-            snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", bt_s_9, bv_s_etitle);
-            char bt_s_11[256];
-            snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", bt_s_10, "  |  ");
-            char bt_s_12[256];
-            snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", bt_s_11, bv_s_esubject);
-            printf("%s\n", bt_s_12);
+            char bt_s_21[256];
+            snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", bv_s_eauthor, "  |  ");
+            char bt_s_22[256];
+            snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, bv_s_etitle);
+            char bt_s_23[256];
+            snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", bt_s_22, "  |  ");
+            char bt_s_24[256];
+            snprintf(bt_s_24, sizeof(bt_s_24), "%s%s", bt_s_23, bv_s_esubject);
+            printf("%s\n", bt_s_24);
         }
     }
 }
@@ -276,10 +278,6 @@ void bf_i_searchbyauthortitle(const char* bv_s_author_in, const char* bv_s_title
     snprintf(bv_s_author, sizeof(bv_s_author), "%s", bv_s_author_in);
     char bv_s_title[256];
     snprintf(bv_s_title, sizeof(bv_s_title), "%s", bv_s_title_in);
-    int bv_i_eauthortrimi = 0;
-    int bv_i_esubjecttrimi = 0;
-    int bv_i_etitletrimi = 0;
-    int bv_i_hreservedtrimi = 0;
     int bv_i_hsize = 0;
     int bv_i_i = 0;
     char bv_s_catalogauthorbuf[256] = {0};
@@ -297,41 +295,33 @@ void bf_i_searchbyauthortitle(const char* bv_s_author_in, const char* bv_s_title
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
-    bv_i_hreservedtrimi = ((int)strlen(bv_s_headerreservedbuf));
-    while (((-(bv_i_hreservedtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_headerreservedbuf, bv_i_hreservedtrimi, 1), " ") == 0)))) {
-        bv_i_hreservedtrimi = (bv_i_hreservedtrimi - 1);
-    }
-    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bcc_mid(bv_s_headerreservedbuf, 1, bv_i_hreservedtrimi));
-    int bt_lim_13 = bv_i_hsize;
-    int bt_step_13 = 1;
-    for (bv_i_i = 2; bt_step_13 >= 0 ? bv_i_i <= bt_lim_13 : bv_i_i >= bt_lim_13; bv_i_i += bt_step_13) {
+    char bt_s_25[256];
+    bf_s_rtrim_s(bv_s_headerreservedbuf, bt_s_25);
+    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bt_s_25);
+    int bt_lim_26 = bv_i_hsize;
+    int bt_step_26 = 1;
+    for (bv_i_i = 2; bt_step_26 >= 0 ? bv_i_i <= bt_lim_26 : bv_i_i >= bt_lim_26; bv_i_i += bt_step_26) {
         // let e = catalog[...]  (whole-record read)
         bcc_get_record_entry(bcc_files[1], bv_i_i, bv_s_catalogauthorbuf, bv_s_catalogtitlebuf, bv_s_catalogsubjectbuf);
-        bv_i_eauthortrimi = ((int)strlen(bv_s_catalogauthorbuf));
-        while (((-(bv_i_eauthortrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogauthorbuf, bv_i_eauthortrimi, 1), " ") == 0)))) {
-            bv_i_eauthortrimi = (bv_i_eauthortrimi - 1);
-        }
-        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bcc_mid(bv_s_catalogauthorbuf, 1, bv_i_eauthortrimi));
-        bv_i_etitletrimi = ((int)strlen(bv_s_catalogtitlebuf));
-        while (((-(bv_i_etitletrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogtitlebuf, bv_i_etitletrimi, 1), " ") == 0)))) {
-            bv_i_etitletrimi = (bv_i_etitletrimi - 1);
-        }
-        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bcc_mid(bv_s_catalogtitlebuf, 1, bv_i_etitletrimi));
-        bv_i_esubjecttrimi = ((int)strlen(bv_s_catalogsubjectbuf));
-        while (((-(bv_i_esubjecttrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogsubjectbuf, bv_i_esubjecttrimi, 1), " ") == 0)))) {
-            bv_i_esubjecttrimi = (bv_i_esubjecttrimi - 1);
-        }
-        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bcc_mid(bv_s_catalogsubjectbuf, 1, bv_i_esubjecttrimi));
-        if (((-(strcmp(bv_s_eauthor, bv_s_author) == 0)) && (-(strcmp(bv_s_etitle, bv_s_title) == 0)))) {
-            char bt_s_14[256];
-            snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", bv_s_eauthor, "  |  ");
-            char bt_s_15[256];
-            snprintf(bt_s_15, sizeof(bt_s_15), "%s%s", bt_s_14, bv_s_etitle);
-            char bt_s_16[256];
-            snprintf(bt_s_16, sizeof(bt_s_16), "%s%s", bt_s_15, "  |  ");
-            char bt_s_17[256];
-            snprintf(bt_s_17, sizeof(bt_s_17), "%s%s", bt_s_16, bv_s_esubject);
-            printf("%s\n", bt_s_17);
+        char bt_s_27[256];
+        bf_s_rtrim_s(bv_s_catalogauthorbuf, bt_s_27);
+        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bt_s_27);
+        char bt_s_28[256];
+        bf_s_rtrim_s(bv_s_catalogtitlebuf, bt_s_28);
+        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bt_s_28);
+        char bt_s_29[256];
+        bf_s_rtrim_s(bv_s_catalogsubjectbuf, bt_s_29);
+        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bt_s_29);
+        if ((-(((-(strcmp(bv_s_eauthor, bv_s_author) == 0))) != 0 && ((-(strcmp(bv_s_etitle, bv_s_title) == 0))) != 0))) {
+            char bt_s_30[256];
+            snprintf(bt_s_30, sizeof(bt_s_30), "%s%s", bv_s_eauthor, "  |  ");
+            char bt_s_31[256];
+            snprintf(bt_s_31, sizeof(bt_s_31), "%s%s", bt_s_30, bv_s_etitle);
+            char bt_s_32[256];
+            snprintf(bt_s_32, sizeof(bt_s_32), "%s%s", bt_s_31, "  |  ");
+            char bt_s_33[256];
+            snprintf(bt_s_33, sizeof(bt_s_33), "%s%s", bt_s_32, bv_s_esubject);
+            printf("%s\n", bt_s_33);
         }
     }
 }
@@ -341,10 +331,6 @@ void bf_i_deleteitem(const char* bv_s_author_in, const char* bv_s_title_in) {
     snprintf(bv_s_author, sizeof(bv_s_author), "%s", bv_s_author_in);
     char bv_s_title[256];
     snprintf(bv_s_title, sizeof(bv_s_title), "%s", bv_s_title_in);
-    int bv_i_eauthortrimi = 0;
-    int bv_i_esubjecttrimi = 0;
-    int bv_i_etitletrimi = 0;
-    int bv_i_hreservedtrimi = 0;
     int bv_i_hsize = 0;
     int bv_i_i = 0;
     int bv_i_stop = 0;
@@ -363,11 +349,9 @@ void bf_i_deleteitem(const char* bv_s_author_in, const char* bv_s_title_in) {
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
-    bv_i_hreservedtrimi = ((int)strlen(bv_s_headerreservedbuf));
-    while (((-(bv_i_hreservedtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_headerreservedbuf, bv_i_hreservedtrimi, 1), " ") == 0)))) {
-        bv_i_hreservedtrimi = (bv_i_hreservedtrimi - 1);
-    }
-    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bcc_mid(bv_s_headerreservedbuf, 1, bv_i_hreservedtrimi));
+    char bt_s_34[256];
+    bf_s_rtrim_s(bv_s_headerreservedbuf, bt_s_34);
+    snprintf(bv_s_hreserved, sizeof(bv_s_hreserved), "%s", bt_s_34);
     bv_i_i = 1;
     bv_i_stop = 0;
     while (1) {
@@ -375,46 +359,40 @@ void bf_i_deleteitem(const char* bv_s_author_in, const char* bv_s_title_in) {
         bv_i_i = (bv_i_i + 1);
         // let e = catalog[...]  (whole-record read)
         bcc_get_record_entry(bcc_files[1], bv_i_i, bv_s_catalogauthorbuf, bv_s_catalogtitlebuf, bv_s_catalogsubjectbuf);
-        bv_i_eauthortrimi = ((int)strlen(bv_s_catalogauthorbuf));
-        while (((-(bv_i_eauthortrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogauthorbuf, bv_i_eauthortrimi, 1), " ") == 0)))) {
-            bv_i_eauthortrimi = (bv_i_eauthortrimi - 1);
-        }
-        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bcc_mid(bv_s_catalogauthorbuf, 1, bv_i_eauthortrimi));
-        bv_i_etitletrimi = ((int)strlen(bv_s_catalogtitlebuf));
-        while (((-(bv_i_etitletrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogtitlebuf, bv_i_etitletrimi, 1), " ") == 0)))) {
-            bv_i_etitletrimi = (bv_i_etitletrimi - 1);
-        }
-        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bcc_mid(bv_s_catalogtitlebuf, 1, bv_i_etitletrimi));
-        bv_i_esubjecttrimi = ((int)strlen(bv_s_catalogsubjectbuf));
-        while (((-(bv_i_esubjecttrimi > 0)) && (-(strcmp(bcc_mid(bv_s_catalogsubjectbuf, bv_i_esubjecttrimi, 1), " ") == 0)))) {
-            bv_i_esubjecttrimi = (bv_i_esubjecttrimi - 1);
-        }
-        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bcc_mid(bv_s_catalogsubjectbuf, 1, bv_i_esubjecttrimi));
-        if (((-(strcmp(bv_s_eauthor, bv_s_author) == 0)) && (-(strcmp(bv_s_etitle, bv_s_title) == 0)))) {
+        char bt_s_35[256];
+        bf_s_rtrim_s(bv_s_catalogauthorbuf, bt_s_35);
+        snprintf(bv_s_eauthor, sizeof(bv_s_eauthor), "%s", bt_s_35);
+        char bt_s_36[256];
+        bf_s_rtrim_s(bv_s_catalogtitlebuf, bt_s_36);
+        snprintf(bv_s_etitle, sizeof(bv_s_etitle), "%s", bt_s_36);
+        char bt_s_37[256];
+        bf_s_rtrim_s(bv_s_catalogsubjectbuf, bt_s_37);
+        snprintf(bv_s_esubject, sizeof(bv_s_esubject), "%s", bt_s_37);
+        if ((-(((-(strcmp(bv_s_eauthor, bv_s_author) == 0))) != 0 && ((-(strcmp(bv_s_etitle, bv_s_title) == 0))) != 0))) {
             bv_i_stop = 1;
         }
         if ((-(bv_i_i == bv_i_hsize))) {
             bv_i_stop = 1;
         }
     }
-    if (((-(strcmp(bv_s_eauthor, bv_s_author) == 0)) && (-(strcmp(bv_s_etitle, bv_s_title) == 0)))) {
-        char bt_s_18[256];
-        snprintf(bt_s_18, sizeof(bt_s_18), "%s%s", "Deleting: ", bv_s_eauthor);
-        char bt_s_19[256];
-        snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", bt_s_18, "  |  ");
-        char bt_s_20[256];
-        snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, bv_s_etitle);
-        printf("%s\n", bt_s_20);
+    if ((-(((-(strcmp(bv_s_eauthor, bv_s_author) == 0))) != 0 && ((-(strcmp(bv_s_etitle, bv_s_title) == 0))) != 0))) {
+        char bt_s_38[256];
+        snprintf(bt_s_38, sizeof(bt_s_38), "%s%s", "Deleting: ", bv_s_eauthor);
+        char bt_s_39[256];
+        snprintf(bt_s_39, sizeof(bt_s_39), "%s%s", bt_s_38, "  |  ");
+        char bt_s_40[256];
+        snprintf(bt_s_40, sizeof(bt_s_40), "%s%s", bt_s_39, bv_s_etitle);
+        printf("%s\n", bt_s_40);
         // catalog[...] = { ... }  (whole-record write)
         bcc_put_record_entry(bcc_files[1], bv_i_i, "", "", "");
     } else {
-        char bt_s_21[256];
-        snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", "Not found: ", bv_s_author);
-        char bt_s_22[256];
-        snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, "  |  ");
-        char bt_s_23[256];
-        snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", bt_s_22, bv_s_title);
-        printf("%s\n", bt_s_23);
+        char bt_s_41[256];
+        snprintf(bt_s_41, sizeof(bt_s_41), "%s%s", "Not found: ", bv_s_author);
+        char bt_s_42[256];
+        snprintf(bt_s_42, sizeof(bt_s_42), "%s%s", bt_s_41, "  |  ");
+        char bt_s_43[256];
+        snprintf(bt_s_43, sizeof(bt_s_43), "%s%s", bt_s_42, bv_s_title);
+        printf("%s\n", bt_s_43);
     }
 }
 
@@ -440,19 +418,18 @@ void bf_i_mainmenu(void) {
         fflush(stdout);
         bcc_read_line();
         bv_i_choice = atoi(bcc_input_buf);
-
         {
-            int bt_sel_24 = bv_i_choice;
-            int bt_sel_match_25 = 0;
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 1)) {
-                    bt_sel_match_25 = 1;
+            int bt_sel_44 = bv_i_choice;
+            int bt_sel_match_45 = 0;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 1)) {
+                    bt_sel_match_45 = 1;
                     bf_i_listall();
                 }
             }
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 2)) {
-                    bt_sel_match_25 = 1;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 2)) {
+                    bt_sel_match_45 = 1;
                     printf("AUTHOR  ? ");
                     fflush(stdout);
                     bcc_read_line();
@@ -465,22 +442,30 @@ void bf_i_mainmenu(void) {
                     fflush(stdout);
                     bcc_read_line();
                     snprintf(bv_s_subject, sizeof(bv_s_subject), "%s", bcc_input_buf);
-                    bf_i_additem(bv_s_author, bv_s_title, bv_s_subject);
+                    char bt_arg_46[256];
+                    snprintf(bt_arg_46, sizeof(bt_arg_46), "%s", bv_s_author);
+                    char bt_arg_47[256];
+                    snprintf(bt_arg_47, sizeof(bt_arg_47), "%s", bv_s_title);
+                    char bt_arg_48[256];
+                    snprintf(bt_arg_48, sizeof(bt_arg_48), "%s", bv_s_subject);
+                    bf_i_additem(bt_arg_46, bt_arg_47, bt_arg_48);
                 }
             }
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 3)) {
-                    bt_sel_match_25 = 1;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 3)) {
+                    bt_sel_match_45 = 1;
                     printf("AUTHOR ? ");
                     fflush(stdout);
                     bcc_read_line();
                     snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
-                    bf_i_searchbyauthor(bv_s_author);
+                    char bt_arg_49[256];
+                    snprintf(bt_arg_49, sizeof(bt_arg_49), "%s", bv_s_author);
+                    bf_i_searchbyauthor(bt_arg_49);
                 }
             }
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 4)) {
-                    bt_sel_match_25 = 1;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 4)) {
+                    bt_sel_match_45 = 1;
                     printf("AUTHOR ? ");
                     fflush(stdout);
                     bcc_read_line();
@@ -489,12 +474,16 @@ void bf_i_mainmenu(void) {
                     fflush(stdout);
                     bcc_read_line();
                     snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
-                    bf_i_searchbyauthortitle(bv_s_author, bv_s_title);
+                    char bt_arg_50[256];
+                    snprintf(bt_arg_50, sizeof(bt_arg_50), "%s", bv_s_author);
+                    char bt_arg_51[256];
+                    snprintf(bt_arg_51, sizeof(bt_arg_51), "%s", bv_s_title);
+                    bf_i_searchbyauthortitle(bt_arg_50, bt_arg_51);
                 }
             }
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 5)) {
-                    bt_sel_match_25 = 1;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 5)) {
+                    bt_sel_match_45 = 1;
                     printf("AUTHOR (to delete) ? ");
                     fflush(stdout);
                     bcc_read_line();
@@ -503,16 +492,20 @@ void bf_i_mainmenu(void) {
                     fflush(stdout);
                     bcc_read_line();
                     snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
-                    bf_i_deleteitem(bv_s_author, bv_s_title);
+                    char bt_arg_52[256];
+                    snprintf(bt_arg_52, sizeof(bt_arg_52), "%s", bv_s_author);
+                    char bt_arg_53[256];
+                    snprintf(bt_arg_53, sizeof(bt_arg_53), "%s", bv_s_title);
+                    bf_i_deleteitem(bt_arg_52, bt_arg_53);
                 }
             }
-            if (!bt_sel_match_25) {
-                if ((bt_sel_24 == 6)) {
-                    bt_sel_match_25 = 1;
+            if (!bt_sel_match_45) {
+                if ((bt_sel_44 == 6)) {
+                    bt_sel_match_45 = 1;
                     bv_i_running = 0;
                 }
             }
-            if (!bt_sel_match_25) {
+            if (!bt_sel_match_45) {
                 printf("Invalid choice\n");
             }
         }
@@ -520,6 +513,23 @@ void bf_i_mainmenu(void) {
 }
 
 int main(void) {
+    // Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+    // so a required stdlib call reads the same way as a built-in method call
+    // (docs/language/functions-and-procedures.html#built-in-methods). The
+    // ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+    // implicit first parameter, so ordinary-call syntax resolves straight to
+    // this same declaration, with no separate function needed (and no longer
+    // allowed: a function and a method sharing one name is a duplicate
+    // declaration, since they'd both claim the same callable identity).
+
+    // Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
+    // and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
+    // works via ordinary-call syntax resolving to this same declaration.
+
     // Card Catalog — a flagship example for the record/file DSL + procedures
     //
     // Adapted from CLERK.BAS, a menu-driven card-catalog manager written by
@@ -553,7 +563,6 @@ int main(void) {
     // (LPRINT) output. This example keeps one catalog file and the two
     // named searches, and drops the rest, to stay focused on what the
     // record/file DSL and procedures are actually demonstrating here.
-
 
     // The header occupies slot 1 of the same file, sized to match Entry's
     // width (20+20+20 = 60 bytes) so both record types agree on where every
@@ -689,15 +698,6 @@ static void bcc_mkl(char* out, int value) {
     memcpy(out, &v, 4);
 }
 
-static void bcc_mks(char* out, double value) {
-    float v = (float)value;
-    memcpy(out, &v, 4);
-}
-
-static void bcc_mkd(char* out, double value) {
-    memcpy(out, &value, 8);
-}
-
 static int bcc_cvi(const char* s) {
     int16_t v;
     memcpy(&v, s, 2);
@@ -708,18 +708,6 @@ static int bcc_cvl(const char* s) {
     int32_t v;
     memcpy(&v, s, 4);
     return (int)v;
-}
-
-static float bcc_cvs(const char* s) {
-    float v;
-    memcpy(&v, s, 4);
-    return v;
-}
-
-static double bcc_cvd(const char* s) {
-    double v;
-    memcpy(&v, s, 8);
-    return v;
 }
 
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
@@ -776,6 +764,67 @@ static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* fi
     return 1;
 }
 
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_eof(FILE* file) {
+    int c = fgetc(file);
+    if (c == EOF) return -1;
+    ungetc(c, file);
+    return 0;
+}
+
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {
+    if (fgets(buf, (int)bufsize, file) == NULL) {
+        buf[0] = 0;
+        return;
+    }
+    buf[strcspn(buf, "\r\n")] = 0;
+}
+
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
+    int c = fgetc(file);
+    while (c == ' ') c = fgetc(file);
+    size_t len = 0;
+    if (c == '"') {
+        c = fgetc(file);
+        while (c != EOF && c != '"') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        c = fgetc(file);
+        while (c != EOF && c != ',' && c != '\n') c = fgetc(file);
+    } else {
+        while (c != EOF && c != ',' && c != '\n' && c != '\r') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        if (c == '\r') {
+            int c2 = fgetc(file);
+            if (c2 != '\n' && c2 != EOF) ungetc(c2, file);
+        }
+    }
+    buf[len] = 0;
+}
+
 static void bcc_read_line(void) {
     if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {
         bcc_input_buf[0] = 0;
@@ -783,3 +832,4 @@ static void bcc_read_line(void) {
     }
     bcc_input_buf[strcspn(bcc_input_buf, "\r\n")] = 0;
 }
+

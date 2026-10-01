@@ -23,29 +23,23 @@
 210 ' copy, and changes never reach the caller.  Write byref to copy the
 220 ' result back out after the call -- insertionSort% below needs it, since
 230 ' its whole job is to mutate the caller's array in place.
-
 240 ' Declare and populate
-250 n% = 6
-260 DIM data%(n%)
-270 BCCT1% = n%
-
+250 CONSTN% = 6
+260 DIM data%(CONSTN%)
+270 BCCT1% = CONSTN%
 280 data%(0) = 64
 290 data%(1) = 25
 300 data%(2) = 12
 310 data%(3) = 22
 320 data%(4) = 3
 330 data%(5) = 11
-
 340 ' Insertion sort — sorts data%() in place
 350 ' arr% -- array to sort; byref because it's mutated in place
-
 360 ' Linear search — returns index or -1
 370 ' arr%    -- array to search; byval, since indexOf% only reads it
 380 ' target% -- value to search for
-
 390 ' Print the array on one line as  [ a b c ... ]
 400 ' arr% -- array to print; byval, since printArray% only reads it
-
 410 ' Before sort
 420 PRINT "Before: "
 430 printarrayArrDim00% = BCCT1%
@@ -58,7 +52,6 @@
 
 490 GOSUB 1310
 500 dummy% = printarrayResult0%
-
 510 ' Sort and show
 520 insertionsortArrDim00% = BCCT1%
 530 IF insertionsortArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `insertionSort%` needs "; insertionsortArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
@@ -87,7 +80,6 @@
 
 710 GOSUB 1310
 720 dummy% = printarrayResult0%
-
 730 ' Search
 740 target% = 22
 750 indexofTarget0% = target%
@@ -103,27 +95,24 @@
 830 idx% = indexofResult0%
 840 IF (idx% >= 0) = 0 THEN GOTO 870
 850     PRINT (STR$(target%) + " found at index ") + STR$(idx%)
-860     GOTO 880
+860 GOTO 880
 870     PRINT STR$(target%) + " not found"
 880 REM END IF
-
 890 ' 2-D array — 3×3 identity matrix
 900 DIM identity%(2, 2)
 910 FOR r% = 0 TO 2
 920     FOR c% = 0 TO 2
 930         IF (r% = c%) = 0 THEN GOTO 960
 940             identity%(r%, c%) = 1
-950             GOTO 970
+950         GOTO 970
 960             identity%(r%, c%) = 0
 970         REM END IF
 980     NEXT c%
 990 NEXT r%
-
 1000 PRINT "Identity matrix:"
 1010 FOR r% = 0 TO 2
 1020     PRINT identity%(r%, 0); identity%(r%, 1); identity%(r%, 2)
 1030 NEXT r%
-
 1040 END
 
 1050 ' function insertionsort%(arr%)
@@ -134,7 +123,7 @@
 1100         IF (insertionsortArr0%(insertionsortJ0%) > insertionsortKey0%) = 0 THEN GOTO 1140
 1110             insertionsortArr0%(insertionsortJ0% + 1) = insertionsortArr0%(insertionsortJ0%)
 1120             insertionsortJ0% = insertionsortJ0% - 1
-1130             GOTO 1090
+1130         GOTO 1090
 1140         REM END WHILE
 1150         insertionsortArr0%(insertionsortJ0% + 1) = insertionsortKey0%
 1160     NEXT insertionsortI0%

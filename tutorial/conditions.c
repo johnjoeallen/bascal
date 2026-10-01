@@ -51,6 +51,7 @@ int main(void) {
     } else {
         if ((-(bv_i_points >= 80))) {
             snprintf(bv_s_grade, sizeof(bv_s_grade), "%s", "B");
+            // points% = 85 lands here
         } else {
             if ((-(bv_i_points >= 70))) {
                 snprintf(bv_s_grade, sizeof(bv_s_grade), "%s", "C");

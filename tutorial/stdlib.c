@@ -12,6 +12,40 @@ static const char* bcc_chr(int code);
 static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 
+static int bv_i_err_bad_file_mode = 0;
+static int bv_i_err_bad_file_name = 0;
+static int bv_i_err_bad_file_number = 0;
+static int bv_i_err_bad_record_number = 0;
+static int bv_i_err_device_fault = 0;
+static int bv_i_err_device_io = 0;
+static int bv_i_err_device_timeout = 0;
+static int bv_i_err_device_unavailable = 0;
+static int bv_i_err_disk_full = 0;
+static int bv_i_err_disk_media_error = 0;
+static int bv_i_err_disk_not_ready = 0;
+static int bv_i_err_disk_write_protected = 0;
+static int bv_i_err_division_by_zero = 0;
+static int bv_i_err_duplicate_definition = 0;
+static int bv_i_err_file_already_exists = 0;
+static int bv_i_err_file_already_open = 0;
+static int bv_i_err_file_not_found = 0;
+static int bv_i_err_illegal_function_call = 0;
+static int bv_i_err_input_past_end = 0;
+static int bv_i_err_no_resume = 0;
+static int bv_i_err_out_of_data = 0;
+static int bv_i_err_out_of_memory = 0;
+static int bv_i_err_out_of_paper = 0;
+static int bv_i_err_out_of_string_space = 0;
+static int bv_i_err_overflow = 0;
+static int bv_i_err_path_file_access = 0;
+static int bv_i_err_path_not_found = 0;
+static int bv_i_err_resume_without_error = 0;
+static int bv_i_err_return_without_gosub = 0;
+static int bv_i_err_subscript_out_of_range = 0;
+static int bv_i_err_syntax = 0;
+static int bv_i_err_too_many_files = 0;
+static int bv_i_err_type_mismatch = 0;
+
 void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out);
@@ -24,7 +58,7 @@ void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out) {
     int bv_i_i = 0;
 
     bv_i_i = 1;
-    while (((-(bv_i_i <= ((int)strlen(bv_s_self)))) && (-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0)))) {
+    while ((-(((-(bv_i_i <= ((int)strlen(bv_s_self))))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
         bv_i_i = (bv_i_i + 1);
     }
     snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, bv_i_i, 2147483647));
@@ -37,7 +71,7 @@ void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out) {
     int bv_i_i = 0;
 
     bv_i_i = ((int)strlen(bv_s_self));
-    while (((-(bv_i_i > 0)) && (-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0)))) {
+    while ((-(((-(bv_i_i > 0))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
         bv_i_i = (bv_i_i - 1);
     }
     snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, 1, bv_i_i));
@@ -52,11 +86,12 @@ void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
+    int bt_start_0 = 1;
     int bt_lim_0 = ((int)strlen(bv_s_self));
     int bt_step_0 = 1;
-    for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bt_start_0; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
-        if (((-(bv_i_c >= 97)) && (-(bv_i_c <= 122)))) {
+        if ((-(((-(bv_i_c >= 97))) != 0 && ((-(bv_i_c <= 122))) != 0))) {
             bv_i_c = (bv_i_c - 32);
         }
         char bt_s_1[256];
@@ -75,11 +110,12 @@ void bf_s_lcase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
+    int bt_start_2 = 1;
     int bt_lim_2 = ((int)strlen(bv_s_self));
     int bt_step_2 = 1;
-    for (bv_i_i = 1; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
+    for (bv_i_i = bt_start_2; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
         bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
-        if (((-(bv_i_c >= 65)) && (-(bv_i_c <= 90)))) {
+        if ((-(((-(bv_i_c >= 65))) != 0 && ((-(bv_i_c <= 90))) != 0))) {
             bv_i_c = (bv_i_c + 32);
         }
         char bt_s_3[256];
@@ -95,231 +131,231 @@ void bf_s_error(int bv_i_code, char* bcc_out) {
         int bt_sel_4 = bv_i_code;
         int bt_sel_match_5 = 0;
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 2)) {
+            if ((bt_sel_4 == bv_i_err_syntax)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Syntax error");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 3)) {
+            if ((bt_sel_4 == bv_i_err_return_without_gosub)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "RETURN without GOSUB");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 4)) {
+            if ((bt_sel_4 == bv_i_err_out_of_data)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of DATA");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 5)) {
+            if ((bt_sel_4 == bv_i_err_illegal_function_call)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Illegal function call");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 6)) {
+            if ((bt_sel_4 == bv_i_err_overflow)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Overflow");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 7)) {
+            if ((bt_sel_4 == bv_i_err_out_of_memory)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of memory");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 9)) {
+            if ((bt_sel_4 == bv_i_err_subscript_out_of_range)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Subscript out of range");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 10)) {
+            if ((bt_sel_4 == bv_i_err_duplicate_definition)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Duplicate Definition");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 11)) {
+            if ((bt_sel_4 == bv_i_err_division_by_zero)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Division by zero");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 13)) {
+            if ((bt_sel_4 == bv_i_err_type_mismatch)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Type mismatch");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 14)) {
+            if ((bt_sel_4 == bv_i_err_out_of_string_space)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of string space");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 19)) {
+            if ((bt_sel_4 == bv_i_err_no_resume)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "No RESUME");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 20)) {
+            if ((bt_sel_4 == bv_i_err_resume_without_error)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "RESUME without error");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 24)) {
+            if ((bt_sel_4 == bv_i_err_device_timeout)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Device timeout");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 25)) {
+            if ((bt_sel_4 == bv_i_err_device_fault)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Device fault");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 27)) {
+            if ((bt_sel_4 == bv_i_err_out_of_paper)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of paper");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 52)) {
+            if ((bt_sel_4 == bv_i_err_bad_file_number)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file number");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 53)) {
+            if ((bt_sel_4 == bv_i_err_file_not_found)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "File not found");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 54)) {
+            if ((bt_sel_4 == bv_i_err_bad_file_mode)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file mode");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 55)) {
+            if ((bt_sel_4 == bv_i_err_file_already_open)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "File already open");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 57)) {
+            if ((bt_sel_4 == bv_i_err_device_io)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Device I/O error");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 58)) {
+            if ((bt_sel_4 == bv_i_err_file_already_exists)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "File already exists");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 61)) {
+            if ((bt_sel_4 == bv_i_err_disk_full)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk full");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 62)) {
+            if ((bt_sel_4 == bv_i_err_input_past_end)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Input past end");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 63)) {
+            if ((bt_sel_4 == bv_i_err_bad_record_number)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad record number");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 64)) {
+            if ((bt_sel_4 == bv_i_err_bad_file_name)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file name");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 67)) {
+            if ((bt_sel_4 == bv_i_err_too_many_files)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Too many files");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 68)) {
+            if ((bt_sel_4 == bv_i_err_device_unavailable)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Device unavailable");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 70)) {
+            if ((bt_sel_4 == bv_i_err_disk_write_protected)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk write protected");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 71)) {
+            if ((bt_sel_4 == bv_i_err_disk_not_ready)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk not ready");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 72)) {
+            if ((bt_sel_4 == bv_i_err_disk_media_error)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk media error");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 75)) {
+            if ((bt_sel_4 == bv_i_err_path_file_access)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Path/File access error");
                 return;
             }
         }
         if (!bt_sel_match_5) {
-            if ((bt_sel_4 == 76)) {
+            if ((bt_sel_4 == bv_i_err_path_not_found)) {
                 bt_sel_match_5 = 1;
                 snprintf(bcc_out, 256, "%s", "Path not found");
                 return;
@@ -369,10 +405,10 @@ int main(void) {
     // returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
     // ships a working implementation.
     //
-    // Covers the classic error codes an ON ERROR GOTO + ERR handler is
-    // realistically going to hit -- not the full table, but every code common
-    // enough to be worth a real message instead of falling through to the
-    // generic one.
+    // The named constants below are the complete common subset supported by
+    // ERROR$: use them in THROW and filtered CATCH clauses instead of magic
+    // numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
+    // BASCOM subset still fall through to ERROR$'s generic message.
     //
     // Deliberately NOT a scalar method (see GitHub issue #41, which asked for
     // this decision to be recorded either way): code% is an opaque lookup key,
@@ -380,6 +416,40 @@ int main(void) {
     // ucase$/lcase$ operate on their string -- code%.error() would read as if
     // the *error code itself* has a message, when really this is a lookup
     // table keyed by that code. Stays an ordinary function.
+
+    bv_i_err_syntax = 2;
+    bv_i_err_return_without_gosub = 3;
+    bv_i_err_out_of_data = 4;
+    bv_i_err_illegal_function_call = 5;
+    bv_i_err_overflow = 6;
+    bv_i_err_out_of_memory = 7;
+    bv_i_err_subscript_out_of_range = 9;
+    bv_i_err_duplicate_definition = 10;
+    bv_i_err_division_by_zero = 11;
+    bv_i_err_type_mismatch = 13;
+    bv_i_err_out_of_string_space = 14;
+    bv_i_err_no_resume = 19;
+    bv_i_err_resume_without_error = 20;
+    bv_i_err_device_timeout = 24;
+    bv_i_err_device_fault = 25;
+    bv_i_err_out_of_paper = 27;
+    bv_i_err_bad_file_number = 52;
+    bv_i_err_file_not_found = 53;
+    bv_i_err_bad_file_mode = 54;
+    bv_i_err_file_already_open = 55;
+    bv_i_err_device_io = 57;
+    bv_i_err_file_already_exists = 58;
+    bv_i_err_disk_full = 61;
+    bv_i_err_input_past_end = 62;
+    bv_i_err_bad_record_number = 63;
+    bv_i_err_bad_file_name = 64;
+    bv_i_err_too_many_files = 67;
+    bv_i_err_device_unavailable = 68;
+    bv_i_err_disk_write_protected = 70;
+    bv_i_err_disk_not_ready = 71;
+    bv_i_err_disk_media_error = 72;
+    bv_i_err_path_file_access = 75;
+    bv_i_err_path_not_found = 76;
 
     // Tutorial — Standard library functions
     //
@@ -393,20 +463,19 @@ int main(void) {
     // section (https://johnjoeallen.github.io/bascal/manual/) for the full
     // story.
     //
-    // ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
-    // end method), using self$ in place of an explicit s$ parameter -- see
+    // ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
+    // receiver type, using self$ in place of an explicit s$ parameter -- see
     // the "Declare and call a method" chapter. A method's receiver is really
-    // just an implicit first parameter, so the ordinary call form below
+    // just an implicit first parameter, so the ordinary call form
     // (ltrim$("...")) keeps working exactly as before: it resolves straight to
     // the same method declaration, with the first argument filling self$. The
-    // method-call form (below, chained) is the same declaration too -- just
-    // written as "...".ltrim() instead. error$ stays an ordinary function: an
+    // examples below prefer the method-call form, written as "...".ltrim().
+    // error$ stays an ordinary function: an
     // error code is a lookup key, not a value the call is naturally "operating
     // on" the way the others operate on their string.
     //
     // Run with:
     // bcc tutorial/stdlib.bcl
-
 
     char bt_s_7[256];
     bf_s_ltrim_s("   padded left", bt_s_7);

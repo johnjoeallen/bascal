@@ -28,6 +28,8 @@ static const char *bcc_err_file = "";
 #define BCC_MAX_CHANNELS 32
 static FILE* bcc_files[BCC_MAX_CHANNELS];
 
+static char bcc_file_field_buf[256];
+
 static char bcc_input_buf[256];
 
 static char* bcc_strbuf_take(void);
@@ -41,17 +43,20 @@ static const char* bcc_date(void);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
-static void bcc_mks(char* out, double value);
-static void bcc_mkd(char* out, double value);
 static int bcc_cvi(const char* s);
 static int bcc_cvl(const char* s);
-static float bcc_cvs(const char* s);
-static double bcc_cvd(const char* s);
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
 static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
 static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
 static int bcc_put_record_part(FILE* file, long record, const char* field_0, const char* field_1, const int16_t* field_2, const int16_t* field_3, const float* field_4);
 static int bcc_get_record_part(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3, char* field_4);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_eof(FILE* file);
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
 static void bcc_color(int fg, int bg);
 static void bcc_read_line(void);
 
@@ -99,6 +104,8 @@ static char bv_s_invqtybuf[256] = {0};
 static char bv_s_invreorderbuf[256] = {0};
 static char bv_s_kp[256] = {0};
 
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out);
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_error(int bv_i_code, char* bcc_out);
 int bf_i_isempty(const char* bv_s_flag_in);
 int bf_i_partinrange(int bv_i_n);
@@ -127,6 +134,32 @@ void bf_i_subtractstock(void);
 void bf_i_reorderreport(void);
 void bf_i_initializeinventoryfileifnew(void);
 void bf_i_reportinventoryerror(int bv_i_err, int bv_i_erl);
+
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = 1;
+    while ((-(((-(bv_i_i <= ((int)strlen(bv_s_self))))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i + 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, bv_i_i, 2147483647));
+    return;
+}
+
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = ((int)strlen(bv_s_self));
+    while ((-(((-(bv_i_i > 0))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i - 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, 1, bv_i_i));
+    return;
+}
 
 void bf_s_error(int bv_i_code, char* bcc_out) {
     {
@@ -380,7 +413,7 @@ int bf_i_isempty(const char* bv_s_flag_in) {
 }
 
 int bf_i_partinrange(int bv_i_n) {
-    if (((-(bv_i_n >= 1)) && (-(bv_i_n <= bv_i_part_count)))) {
+    if ((-(((-(bv_i_n >= 1))) != 0 && ((-(bv_i_n <= bv_i_part_count))) != 0))) {
         return 1;
     }
     return 0;
@@ -402,6 +435,7 @@ void bf_s_readkey(char* bcc_out) {
 
     while (1) {
         snprintf(bv_s_k, sizeof(bv_s_k), "%s", bcc_inkey());
+        bcc_semantic_continue_3: ;
         if ((-(strcmp(bv_s_k, "") != 0))) break;
     }
     snprintf(bcc_out, 256, "%s", bv_s_k);
@@ -416,6 +450,7 @@ void bf_i_waitanykey(void) {
     fflush(stdout);
     while (1) {
         snprintf(bv_s_k, sizeof(bv_s_k), "%s", bcc_inkey());
+        bcc_semantic_continue_4: ;
         if ((-(strcmp(bv_s_k, "") != 0))) break;
     }
 }
@@ -437,11 +472,11 @@ void bf_i_showmainmenu(void) {
     printf("\n");
     printf("\x1b[%dG1......C)heck a part\n", bv_i_tab_col);
     printf("\x1b[%dG2......E)dit/overwrite/add a part\n", bv_i_tab_col);
-    char bt_s_3[256];
-    snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", "3......L)ist all", bcc_stri(bv_i_part_count));
-    char bt_s_4[256];
-    snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", bt_s_3, "parts");
-    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_4);
+    char bt_s_5[256];
+    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", "3......L)ist all", bcc_stri(bv_i_part_count));
+    char bt_s_6[256];
+    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bt_s_5, "parts");
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_6);
     printf("\x1b[%dG4......A)dd stock\n", bv_i_tab_col);
     printf("\x1b[%dG5......S)ubtract stock\n", bv_i_tab_col);
     printf("\x1b[%dG6......R)eorder Report\n", bv_i_tab_col);
@@ -452,16 +487,16 @@ void bf_i_showmainmenu(void) {
 void bf_i_showbadpartnumber(void) {
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 10, 10);
-    char bt_s_5[256];
-    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", "Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
-    printf("%s\n", bt_s_5);
+    char bt_s_7[256];
+    snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", "Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
+    printf("%s\n", bt_s_7);
 }
 
 void bf_i_showrangeretrymessage(void) {
     printf("\x1b[%d;%dH", 10, 15);
-    char bt_s_6[256];
-    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "The Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
-    printf("%s\n", bt_s_6);
+    char bt_s_8[256];
+    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", "The Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
+    printf("%s\n", bt_s_8);
     printf("\x1b[%d;%dH", 25, 15);
     printf("Press the Anykey to reenter part number...");
     fflush(stdout);
@@ -472,11 +507,11 @@ void bf_i_shownullentrymessage(const char* bv_s_partstr_in) {
     snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bv_s_partstr_in);
 
     printf("\x1b[%d;%dH", 10, bv_i_tab_col);
-    char bt_s_7[256];
-    snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", "Part number ", bv_s_partstr);
-    char bt_s_8[256];
-    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bt_s_7, " is a null entry");
-    printf("%s\n", bt_s_8);
+    char bt_s_9[256];
+    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", "Part number ", bv_s_partstr);
+    char bt_s_10[256];
+    snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", bt_s_9, " is a null entry");
+    printf("%s\n", bt_s_10);
 }
 
 void bf_i_showpartstatus(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_qty, int bv_i_reorder, float bv_f_price) {
@@ -489,29 +524,29 @@ void bf_i_showpartstatus(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_qt
     printf("\x1b[%dG===========================================\n", bv_i_tab_col);
     printf("\n");
     printf("\n");
-    char bt_s_9[256];
-    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", "     Part number:  ", bcc_stri(bv_i_partnum));
-    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_9);
-    printf("\n");
-    char bt_s_10[256];
-    snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", "       Item name:  ", bv_s_desc);
-    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_10);
     char bt_s_11[256];
-    snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", "Quantity on hand:  ", bcc_stri(bv_i_qty));
+    snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", "     Part number:  ", bcc_stri(bv_i_partnum));
     printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_11);
+    printf("\n");
     char bt_s_12[256];
-    snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", "   Reorder level:  ", bcc_stri(bv_i_reorder));
+    snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", "       Item name:  ", bv_s_desc);
     printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_12);
     char bt_s_13[256];
-    snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", "      Unit price:  ", bcc_strd(bv_f_price));
+    snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", "Quantity on hand:  ", bcc_stri(bv_i_qty));
     printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_13);
+    char bt_s_14[256];
+    snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", "   Reorder level:  ", bcc_stri(bv_i_reorder));
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_14);
+    char bt_s_15[256];
+    snprintf(bt_s_15, sizeof(bt_s_15), "%s%s", "      Unit price:  ", bcc_strd(bv_f_price));
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_15);
 }
 
 void bf_i_printlistheader(void) {
     printf("\x1b[2J\x1b[H");
-    char bt_s_14[256];
-    snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", bcc_stri(bv_i_part_count), "items");
-    printf("\x1b[%dGI N V E N T O R Y   L I S T I N G\x1b[%dG%s\n", 25, 65, bt_s_14);
+    char bt_s_16[256];
+    snprintf(bt_s_16, sizeof(bt_s_16), "%s%s", bcc_stri(bv_i_part_count), "items");
+    printf("\x1b[%dGI N V E N T O R Y   L I S T I N G\x1b[%dG%s\n", 25, 65, bt_s_16);
     printf("                                          Quantity       Reorder\n");
     printf(" Partno           Description             on hand         level\n");
 }
@@ -520,19 +555,19 @@ void bf_i_printinventoryline(int bv_i_partnum, const char* bv_s_desc_in, int bv_
     char bv_s_desc[256];
     snprintf(bv_s_desc, sizeof(bv_s_desc), "%s", bv_s_desc_in);
 
-    char bt_s_15[256];
-    snprintf(bt_s_15, sizeof(bt_s_15), "%s%s", bcc_stri(bv_i_partnum), "  ");
-    char bt_s_16[256];
-    snprintf(bt_s_16, sizeof(bt_s_16), "%s%s", bt_s_15, bv_s_desc);
     char bt_s_17[256];
-    snprintf(bt_s_17, sizeof(bt_s_17), "%s%s", bt_s_16, "   ");
+    snprintf(bt_s_17, sizeof(bt_s_17), "%s%s", bcc_stri(bv_i_partnum), "  ");
     char bt_s_18[256];
-    snprintf(bt_s_18, sizeof(bt_s_18), "%s%s", bt_s_17, bcc_stri(bv_i_qty));
+    snprintf(bt_s_18, sizeof(bt_s_18), "%s%s", bt_s_17, bv_s_desc);
     char bt_s_19[256];
-    snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", bt_s_18, "          ");
+    snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", bt_s_18, "   ");
     char bt_s_20[256];
-    snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, bcc_stri(bv_i_reorder));
-    printf("%s\n", bt_s_20);
+    snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, bcc_stri(bv_i_qty));
+    char bt_s_21[256];
+    snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", bt_s_20, "          ");
+    char bt_s_22[256];
+    snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, bcc_stri(bv_i_reorder));
+    printf("%s\n", bt_s_22);
 }
 
 void bf_i_printreorderheader(void) {
@@ -549,21 +584,21 @@ void bf_i_printreorderline(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_
     char bv_s_desc[256];
     snprintf(bv_s_desc, sizeof(bv_s_desc), "%s", bv_s_desc_in);
 
-    char bt_s_21[256];
-    snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", "  ", bcc_stri(bv_i_partnum));
-    char bt_s_22[256];
-    snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, "  ");
     char bt_s_23[256];
-    snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", bt_s_22, bv_s_desc);
+    snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", "  ", bcc_stri(bv_i_partnum));
     char bt_s_24[256];
-    snprintf(bt_s_24, sizeof(bt_s_24), "%s%s", bt_s_23, "   ");
+    snprintf(bt_s_24, sizeof(bt_s_24), "%s%s", bt_s_23, "  ");
     char bt_s_25[256];
-    snprintf(bt_s_25, sizeof(bt_s_25), "%s%s", bt_s_24, bcc_stri(bv_i_qty));
+    snprintf(bt_s_25, sizeof(bt_s_25), "%s%s", bt_s_24, bv_s_desc);
     char bt_s_26[256];
-    snprintf(bt_s_26, sizeof(bt_s_26), "%s%s", bt_s_25, "          ");
+    snprintf(bt_s_26, sizeof(bt_s_26), "%s%s", bt_s_25, "   ");
     char bt_s_27[256];
-    snprintf(bt_s_27, sizeof(bt_s_27), "%s%s", bt_s_26, bcc_stri(bv_i_reorder));
-    printf("%s\n", bt_s_27);
+    snprintf(bt_s_27, sizeof(bt_s_27), "%s%s", bt_s_26, bcc_stri(bv_i_qty));
+    char bt_s_28[256];
+    snprintf(bt_s_28, sizeof(bt_s_28), "%s%s", bt_s_27, "          ");
+    char bt_s_29[256];
+    snprintf(bt_s_29, sizeof(bt_s_29), "%s%s", bt_s_28, bcc_stri(bv_i_reorder));
+    printf("%s\n", bt_s_29);
 }
 
 void bf_i_gatherpartdetails(int bv_i_partnum, char* bv_s_desc_in, int* bv_i_qty_in, int* bv_i_reorder_in, float* bv_f_price_in) {
@@ -577,9 +612,9 @@ void bf_i_gatherpartdetails(int bv_i_partnum, char* bv_s_desc_in, int* bv_i_qty_
     printf("\x1b[%d;%dH", 4, bv_i_tab_col);
     printf("Adding or Overwriting a Record\n");
     printf("\x1b[%d;%dH", 8, bv_i_tab_col);
-    char bt_s_28[256];
-    snprintf(bt_s_28, sizeof(bt_s_28), "%s%s", "Record/Partno", bcc_stri(bv_i_partnum));
-    printf("%s\n", bt_s_28);
+    char bt_s_30[256];
+    snprintf(bt_s_30, sizeof(bt_s_30), "%s%s", "Record/Partno", bcc_stri(bv_i_partnum));
+    printf("%s\n", bt_s_30);
     printf("\x1b[%d;%dH", 11, 39);
     printf("------------------------------\n");
     printf("\x1b[%d;%dH", 10, bv_i_tab_col);
@@ -620,21 +655,21 @@ void bf_i_showaddstockscreen(int bv_i_partnum, const char* bv_s_desc_in, int bv_
     printf("\x1b[%d;%dH", 5, 25);
     printf("===============================\n");
     printf("\x1b[%d;%dH", 8, bv_i_tab_col);
-    char bt_s_29[256];
-    snprintf(bt_s_29, sizeof(bt_s_29), "%s%s", "     Part number: ", bcc_stri(bv_i_partnum));
-    printf("%s\n", bt_s_29);
-    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
-    char bt_s_30[256];
-    snprintf(bt_s_30, sizeof(bt_s_30), "%s%s", "Item description: ", bv_s_desc);
-    printf("%s\n", bt_s_30);
-    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_31[256];
-    snprintf(bt_s_31, sizeof(bt_s_31), "%s%s", "Quantity on hand: ", bcc_stri(bv_i_qty));
+    snprintf(bt_s_31, sizeof(bt_s_31), "%s%s", "     Part number: ", bcc_stri(bv_i_partnum));
     printf("%s\n", bt_s_31);
-    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
+    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
     char bt_s_32[256];
-    snprintf(bt_s_32, sizeof(bt_s_32), "%s%s", "   Reorder Level: ", bcc_stri(bv_i_reorder));
+    snprintf(bt_s_32, sizeof(bt_s_32), "%s%s", "Item description: ", bv_s_desc);
     printf("%s\n", bt_s_32);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
+    char bt_s_33[256];
+    snprintf(bt_s_33, sizeof(bt_s_33), "%s%s", "Quantity on hand: ", bcc_stri(bv_i_qty));
+    printf("%s\n", bt_s_33);
+    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
+    char bt_s_34[256];
+    snprintf(bt_s_34, sizeof(bt_s_34), "%s%s", "   Reorder Level: ", bcc_stri(bv_i_reorder));
+    printf("%s\n", bt_s_34);
 }
 
 void bf_i_shownegativeqtywarning(void) {
@@ -655,32 +690,32 @@ void bf_i_showsubtractstockscreen(int bv_i_partnum, const char* bv_s_desc_in, in
     printf("\x1b[%d;%dH", 5, bv_i_tab_col);
     printf("=================================\n");
     printf("\x1b[%d;%dH", 8, bv_i_tab_col);
-    char bt_s_33[256];
-    snprintf(bt_s_33, sizeof(bt_s_33), "%s%s", "         Part number: ", bcc_stri(bv_i_partnum));
-    printf("%s\n", bt_s_33);
-    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
-    char bt_s_34[256];
-    snprintf(bt_s_34, sizeof(bt_s_34), "%s%s", "    Item description: ", bv_s_desc);
-    printf("%s\n", bt_s_34);
-    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_35[256];
-    snprintf(bt_s_35, sizeof(bt_s_35), "%s%s", "    Quantity on hand: ", bcc_stri(bv_i_qty));
+    snprintf(bt_s_35, sizeof(bt_s_35), "%s%s", "         Part number: ", bcc_stri(bv_i_partnum));
     printf("%s\n", bt_s_35);
-    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
+    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
     char bt_s_36[256];
-    snprintf(bt_s_36, sizeof(bt_s_36), "%s%s", "       Reorder Level: ", bcc_stri(bv_i_reorder));
+    snprintf(bt_s_36, sizeof(bt_s_36), "%s%s", "    Item description: ", bv_s_desc);
     printf("%s\n", bt_s_36);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
+    char bt_s_37[256];
+    snprintf(bt_s_37, sizeof(bt_s_37), "%s%s", "    Quantity on hand: ", bcc_stri(bv_i_qty));
+    printf("%s\n", bt_s_37);
+    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
+    char bt_s_38[256];
+    snprintf(bt_s_38, sizeof(bt_s_38), "%s%s", "       Reorder Level: ", bcc_stri(bv_i_reorder));
+    printf("%s\n", bt_s_38);
 }
 
 void bf_i_showoversubtractwarning(int bv_i_onhand) {
     printf("\x1b[%d;%dH", 17, 5);
     printf("The quantity to SUBTRACT must NOT result in NEGATIVE inventory\n");
     printf("\x1b[%d;%dH", 18, 5);
-    char bt_s_37[256];
-    snprintf(bt_s_37, sizeof(bt_s_37), "%s%s", "Only", bcc_stri(bv_i_onhand));
-    char bt_s_38[256];
-    snprintf(bt_s_38, sizeof(bt_s_38), "%s%s", bt_s_37, " IN STOCK");
-    printf("%s\n", bt_s_38);
+    char bt_s_39[256];
+    snprintf(bt_s_39, sizeof(bt_s_39), "%s%s", "Only", bcc_stri(bv_i_onhand));
+    char bt_s_40[256];
+    snprintf(bt_s_40, sizeof(bt_s_40), "%s%s", bt_s_39, " IN STOCK");
+    printf("%s\n", bt_s_40);
     printf("\x1b[%d;%dH", 25, 1);
     printf("Please press the Anykey to reenter quantity to subtract...");
     fflush(stdout);
@@ -689,8 +724,6 @@ void bf_i_showoversubtractwarning(int bv_i_onhand) {
 void bf_i_checkpart(void) {
     float bv_f_pprice = 0;
     int bv_i_part = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     char bv_s_invdescbuf[256] = {0};
@@ -703,9 +736,9 @@ void bf_i_checkpart(void) {
     char bv_s_pflag[256] = {0};
 
     // global inv
-    char bt_s_39[256];
-    bf_s_readpartnumberinput(bt_s_39);
-    snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_39);
+    char bt_s_41[256];
+    bf_s_readpartnumberinput(bt_s_41);
+    snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_41);
     bv_i_part = ((int)round((double)(atof(bv_s_partstr))));
     if ((-(bf_i_partinrange(bv_i_part) == 0))) {
         bf_i_showbadpartnumber();
@@ -720,31 +753,33 @@ void bf_i_checkpart(void) {
     // same sugar for PUT plus the LSET/MKx$ packing it replaces.
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], bv_i_part, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-    bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-    while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-        bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-    }
-    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-    bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-    while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-        bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-    }
-    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+    char bt_s_42[256];
+    bf_s_rtrim_s(bv_s_invflagbuf, bt_s_42);
+    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_42);
+    char bt_s_43[256];
+    bf_s_rtrim_s(bv_s_invdescbuf, bt_s_43);
+    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_43);
     bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if (bf_i_isempty(bv_s_pflag)) {
         printf("\x1b[2J\x1b[H");
         printf("\x1b[%d;%dH", 10, 18);
-        char bt_s_40[256];
-        snprintf(bt_s_40, sizeof(bt_s_40), "%s%s", "Part number", bcc_stri(bv_i_part));
-        char bt_s_41[256];
-        snprintf(bt_s_41, sizeof(bt_s_41), "%s%s", bt_s_40, "is still a null entry at this time");
-        printf("%s\n", bt_s_41);
+        char bt_s_44[256];
+        snprintf(bt_s_44, sizeof(bt_s_44), "%s%s", "Part number", bcc_stri(bv_i_part));
+        char bt_s_45[256];
+        snprintf(bt_s_45, sizeof(bt_s_45), "%s%s", bt_s_44, "is still a null entry at this time");
+        printf("%s\n", bt_s_45);
         bf_i_waitanykey();
         return;
     }
-    bf_i_showpartstatus(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder, bv_f_pprice);
+    int bt_arg_46 = bv_i_part;
+    char bt_arg_47[256];
+    snprintf(bt_arg_47, sizeof(bt_arg_47), "%s", bv_s_pdesc);
+    int bt_arg_48 = bv_i_pqty;
+    int bt_arg_49 = bv_i_preorder;
+    float bt_arg_50 = bv_f_pprice;
+    bf_i_showpartstatus(bt_arg_46, bt_arg_47, bt_arg_48, bt_arg_49, bt_arg_50);
     bf_i_waitanykey();
 }
 
@@ -754,8 +789,6 @@ void bf_i_editrecord(void) {
     int bv_i_editqty = 0;
     int bv_i_editreorder = 0;
     int bv_i_part = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     char bv_s_editdesc[256] = {0};
@@ -772,9 +805,9 @@ void bf_i_editrecord(void) {
     // global inv
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 10, bv_i_tab_col);
-    char bt_s_42[256];
-    bf_s_readpartnumberinput(bt_s_42);
-    snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_42);
+    char bt_s_51[256];
+    bf_s_readpartnumberinput(bt_s_51);
+    snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_51);
     bv_i_part = ((int)round((double)(atof(bv_s_partstr))));
     if ((-(bf_i_partinrange(bv_i_part) == 0))) {
         bf_i_showbadpartnumber();
@@ -783,49 +816,45 @@ void bf_i_editrecord(void) {
     }
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], bv_i_part, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-    bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-    while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-        bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-    }
-    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-    bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-    while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-        bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-    }
-    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+    char bt_s_52[256];
+    bf_s_rtrim_s(bv_s_invflagbuf, bt_s_52);
+    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_52);
+    char bt_s_53[256];
+    bf_s_rtrim_s(bv_s_invdescbuf, bt_s_53);
+    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_53);
     bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if ((-(bf_i_isempty(bv_s_pflag) == 0))) {
         printf("\x1b[%d;%dH", 12, bv_i_tab_col);
         printf("Overwrite existing part data?\n");
-        char bt_s_43[256];
-        bf_s_readkey(bt_s_43);
-        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_43);
-        if (((-(strcmp(bv_s_kp, "Y") != 0)) && (-(strcmp(bv_s_kp, "y") != 0)))) {
+        char bt_s_54[256];
+        bf_s_readkey(bt_s_54);
+        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_54);
+        if ((-(((-(strcmp(bv_s_kp, "Y") != 0))) != 0 && ((-(strcmp(bv_s_kp, "y") != 0))) != 0))) {
             return;
         }
     }
 
     while (1) {
-        bf_i_gatherpartdetails(bv_i_part, bv_s_editdesc, &bv_i_editqty, &bv_i_editreorder, &bv_f_editprice);
-        char bt_s_44[256];
-        bf_s_readkey(bt_s_44);
-        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_44);
-        if (((-(strcmp(bv_s_kp, "Y") == 0)) || (-(strcmp(bv_s_kp, "y") == 0)))) break;
+        int bt_arg_56 = bv_i_part;
+        bf_i_gatherpartdetails(bt_arg_56, bv_s_editdesc, &bv_i_editqty, &bv_i_editreorder, &bv_f_editprice);
+        char bt_s_57[256];
+        bf_s_readkey(bt_s_57);
+        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_57);
+        bcc_semantic_continue_55: ;
+        if ((-(((-(strcmp(bv_s_kp, "Y") == 0))) != 0 || ((-(strcmp(bv_s_kp, "y") == 0))) != 0))) break;
     }
     // inv[...] = { ... }  (whole-record write)
-    int16_t bcc_tmp_45 = bv_i_editqty;
-    int16_t bcc_tmp_46 = bv_i_editreorder;
-    float bcc_tmp_47 = bv_f_editprice;
-    bcc_put_record_part(bcc_files[0], bv_i_part, "1", bv_s_editdesc, &bcc_tmp_45, &bcc_tmp_46, &bcc_tmp_47);
+    int16_t bcc_tmp_58 = bv_i_editqty;
+    int16_t bcc_tmp_59 = bv_i_editreorder;
+    float bcc_tmp_60 = bv_f_editprice;
+    bcc_put_record_part(bcc_files[0], bv_i_part, "1", bv_s_editdesc, &bcc_tmp_58, &bcc_tmp_59, &bcc_tmp_60);
 }
 
 void bf_i_listall(void) {
     float bv_f_pprice = 0;
     int bv_i_i = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     int bv_i_scrollcount = 0;
@@ -840,25 +869,26 @@ void bf_i_listall(void) {
     // global inv
     bf_i_printlistheader();
     bv_i_scrollcount = 0;
-    int bt_lim_48 = bv_i_part_count;
-    int bt_step_48 = 1;
-    for (bv_i_i = 1; bt_step_48 >= 0 ? bv_i_i <= bt_lim_48 : bv_i_i >= bt_lim_48; bv_i_i += bt_step_48) {
+    int bt_lim_61 = bv_i_part_count;
+    int bt_step_61 = 1;
+    for (bv_i_i = 1; bt_step_61 >= 0 ? bv_i_i <= bt_lim_61 : bv_i_i >= bt_lim_61; bv_i_i += bt_step_61) {
         // let p = inv[...]  (whole-record read)
         bcc_get_record_part(bcc_files[0], bv_i_i, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-        bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-        while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-            bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-        }
-        snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-        bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-        while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-            bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-        }
-        snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+        char bt_s_62[256];
+        bf_s_rtrim_s(bv_s_invflagbuf, bt_s_62);
+        snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_62);
+        char bt_s_63[256];
+        bf_s_rtrim_s(bv_s_invdescbuf, bt_s_63);
+        snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_63);
         bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
         bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
         bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
-        bf_i_printinventoryline(bv_i_i, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
+        int bt_arg_64 = bv_i_i;
+        char bt_arg_65[256];
+        snprintf(bt_arg_65, sizeof(bt_arg_65), "%s", bv_s_pdesc);
+        int bt_arg_66 = bv_i_pqty;
+        int bt_arg_67 = bv_i_preorder;
+        bf_i_printinventoryline(bt_arg_64, bt_arg_65, bt_arg_66, bt_arg_67);
         bv_i_scrollcount = (bv_i_scrollcount + 1);
         if ((-(bv_i_scrollcount == 20))) {
             bf_i_waitanykey();
@@ -877,8 +907,6 @@ void bf_i_addstock(void) {
     float bv_f_pprice = 0;
     int bv_i_addamt = 0;
     int bv_i_part = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     int bv_i_validpart = 0;
@@ -899,43 +927,49 @@ void bf_i_addstock(void) {
 
     while (1) {
         printf("\x1b[%d;%dH", 8, 25);
-        char bt_s_49[256];
-        bf_s_readpartnumberinput(bt_s_49);
-        snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_49);
+        char bt_s_69[256];
+        bf_s_readpartnumberinput(bt_s_69);
+        snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_69);
         bv_i_part = ((int)round((double)(atof(bv_s_partstr))));
         bv_i_validpart = bf_i_partinrange(bv_i_part);
         if ((-(bv_i_validpart == 0))) {
             bf_i_showrangeretrymessage();
-            char bt_s_50[256];
-            bf_s_readkey(bt_s_50);
+            char bt_s_70[256];
+            bf_s_readkey(bt_s_70);
+            (void)(bt_s_70);
         }
+        bcc_semantic_continue_68: ;
         if ((-(bv_i_validpart != 0))) break;
     }
 
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], bv_i_part, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-    bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-    while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-        bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-    }
-    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-    bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-    while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-        bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-    }
-    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+    char bt_s_71[256];
+    bf_s_rtrim_s(bv_s_invflagbuf, bt_s_71);
+    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_71);
+    char bt_s_72[256];
+    bf_s_rtrim_s(bv_s_invdescbuf, bt_s_72);
+    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_72);
     bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if (bf_i_isempty(bv_s_pflag)) {
-        bf_i_shownullentrymessage(bv_s_partstr);
-        char bt_s_51[256];
-        bf_s_readkey(bt_s_51);
+        char bt_arg_73[256];
+        snprintf(bt_arg_73, sizeof(bt_arg_73), "%s", bv_s_partstr);
+        bf_i_shownullentrymessage(bt_arg_73);
+        char bt_s_74[256];
+        bf_s_readkey(bt_s_74);
+        (void)(bt_s_74);
         return;
     }
 
     while (1) {
-        bf_i_showaddstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
+        int bt_arg_76 = bv_i_part;
+        char bt_arg_77[256];
+        snprintf(bt_arg_77, sizeof(bt_arg_77), "%s", bv_s_pdesc);
+        int bt_arg_78 = bv_i_pqty;
+        int bt_arg_79 = bv_i_preorder;
+        bf_i_showaddstockscreen(bt_arg_76, bt_arg_77, bt_arg_78, bt_arg_79);
         printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf(" Quantity to add? ");
         fflush(stdout);
@@ -944,26 +978,26 @@ void bf_i_addstock(void) {
         bv_i_addamt = ((int)round((double)(atof(bv_s_addstr))));
         if ((-(bv_i_addamt < 0))) {
             bf_i_shownegativeqtywarning();
-            char bt_s_52[256];
-            bf_s_readkey(bt_s_52);
+            char bt_s_80[256];
+            bf_s_readkey(bt_s_80);
+            (void)(bt_s_80);
         }
+        bcc_semantic_continue_75: ;
         if ((-(bv_i_addamt >= 0))) break;
     }
 
     bv_i_pqty = (bv_i_pqty + bv_i_addamt);
     // inv[...] = p  (write back a let-bound record)
-    int16_t bcc_tmp_53 = bv_i_pqty;
-    int16_t bcc_tmp_54 = bv_i_preorder;
-    float bcc_tmp_55 = bv_f_pprice;
-    bcc_put_record_part(bcc_files[0], bv_i_part, bv_s_pflag, bv_s_pdesc, &bcc_tmp_53, &bcc_tmp_54, &bcc_tmp_55);
+    int16_t bcc_tmp_81 = bv_i_pqty;
+    int16_t bcc_tmp_82 = bv_i_preorder;
+    float bcc_tmp_83 = bv_f_pprice;
+    bcc_put_record_part(bcc_files[0], bv_i_part, bv_s_pflag, bv_s_pdesc, &bcc_tmp_81, &bcc_tmp_82, &bcc_tmp_83);
 }
 
 void bf_i_subtractstock(void) {
     float bv_f_pprice = 0;
     int bv_i_oversubtract = 0;
     int bv_i_part = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     int bv_i_subamt = 0;
@@ -985,43 +1019,49 @@ void bf_i_subtractstock(void) {
 
     while (1) {
         printf("\x1b[%d;%dH", 8, 25);
-        char bt_s_56[256];
-        bf_s_readpartnumberinput(bt_s_56);
-        snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_56);
+        char bt_s_85[256];
+        bf_s_readpartnumberinput(bt_s_85);
+        snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_85);
         bv_i_part = ((int)round((double)(atof(bv_s_partstr))));
         bv_i_validpart = bf_i_partinrange(bv_i_part);
         if ((-(bv_i_validpart == 0))) {
             bf_i_showrangeretrymessage();
-            char bt_s_57[256];
-            bf_s_readkey(bt_s_57);
+            char bt_s_86[256];
+            bf_s_readkey(bt_s_86);
+            (void)(bt_s_86);
         }
+        bcc_semantic_continue_84: ;
         if ((-(bv_i_validpart != 0))) break;
     }
 
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], bv_i_part, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-    bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-    while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-        bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-    }
-    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-    bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-    while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-        bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-    }
-    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+    char bt_s_87[256];
+    bf_s_rtrim_s(bv_s_invflagbuf, bt_s_87);
+    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_87);
+    char bt_s_88[256];
+    bf_s_rtrim_s(bv_s_invdescbuf, bt_s_88);
+    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_88);
     bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if (bf_i_isempty(bv_s_pflag)) {
-        bf_i_shownullentrymessage(bv_s_partstr);
-        char bt_s_58[256];
-        bf_s_readkey(bt_s_58);
+        char bt_arg_89[256];
+        snprintf(bt_arg_89, sizeof(bt_arg_89), "%s", bv_s_partstr);
+        bf_i_shownullentrymessage(bt_arg_89);
+        char bt_s_90[256];
+        bf_s_readkey(bt_s_90);
+        (void)(bt_s_90);
         return;
     }
 
     while (1) {
-        bf_i_showsubtractstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
+        int bt_arg_92 = bv_i_part;
+        char bt_arg_93[256];
+        snprintf(bt_arg_93, sizeof(bt_arg_93), "%s", bv_s_pdesc);
+        int bt_arg_94 = bv_i_pqty;
+        int bt_arg_95 = bv_i_preorder;
+        bf_i_showsubtractstockscreen(bt_arg_92, bt_arg_93, bt_arg_94, bt_arg_95);
         printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf("Quantity to subtract? ");
         fflush(stdout);
@@ -1029,38 +1069,39 @@ void bf_i_subtractstock(void) {
         snprintf(bv_s_substr, sizeof(bv_s_substr), "%s", bcc_input_buf);
         bv_i_subamt = ((int)round((double)(atof(bv_s_substr))));
         bv_i_oversubtract = 0;
-        if (((-(bv_i_subamt >= 0)) && (-((bv_i_pqty - bv_i_subamt) < 0)))) {
+        if ((-(((-(bv_i_subamt >= 0))) != 0 && ((-((bv_i_pqty - bv_i_subamt) < 0))) != 0))) {
             bv_i_oversubtract = 1;
-            bf_i_showoversubtractwarning(bv_i_pqty);
-            char bt_s_59[256];
-            bf_s_readkey(bt_s_59);
+            int bt_arg_96 = bv_i_pqty;
+            bf_i_showoversubtractwarning(bt_arg_96);
+            char bt_s_97[256];
+            bf_s_readkey(bt_s_97);
+            (void)(bt_s_97);
         }
-        if (((-(bv_i_subamt >= 0)) && (-(bv_i_oversubtract == 0)))) break;
+        bcc_semantic_continue_91: ;
+        if ((-(((-(bv_i_subamt >= 0))) != 0 && ((-(bv_i_oversubtract == 0))) != 0))) break;
     }
 
     bv_i_pqty = (bv_i_pqty - bv_i_subamt);
     if ((-(bv_i_pqty <= bv_i_preorder))) {
         printf("\x1b[%d;%dH", 16, bv_i_tab_col);
     }
-    char bt_s_60[256];
-    snprintf(bt_s_60, sizeof(bt_s_60), "%s%s", "quantity now", bcc_stri(bv_i_pqty));
-    char bt_s_61[256];
-    snprintf(bt_s_61, sizeof(bt_s_61), "%s%s", bt_s_60, " reorder level");
-    char bt_s_62[256];
-    snprintf(bt_s_62, sizeof(bt_s_62), "%s%s", bt_s_61, bcc_stri(bv_i_preorder));
-    printf("%s\n", bt_s_62);
+    char bt_s_98[256];
+    snprintf(bt_s_98, sizeof(bt_s_98), "%s%s", "quantity now", bcc_stri(bv_i_pqty));
+    char bt_s_99[256];
+    snprintf(bt_s_99, sizeof(bt_s_99), "%s%s", bt_s_98, " reorder level");
+    char bt_s_100[256];
+    snprintf(bt_s_100, sizeof(bt_s_100), "%s%s", bt_s_99, bcc_stri(bv_i_preorder));
+    printf("%s\n", bt_s_100);
     // inv[...] = p  (write back a let-bound record)
-    int16_t bcc_tmp_63 = bv_i_pqty;
-    int16_t bcc_tmp_64 = bv_i_preorder;
-    float bcc_tmp_65 = bv_f_pprice;
-    bcc_put_record_part(bcc_files[0], bv_i_part, bv_s_pflag, bv_s_pdesc, &bcc_tmp_63, &bcc_tmp_64, &bcc_tmp_65);
+    int16_t bcc_tmp_101 = bv_i_pqty;
+    int16_t bcc_tmp_102 = bv_i_preorder;
+    float bcc_tmp_103 = bv_f_pprice;
+    bcc_put_record_part(bcc_files[0], bv_i_part, bv_s_pflag, bv_s_pdesc, &bcc_tmp_101, &bcc_tmp_102, &bcc_tmp_103);
 }
 
 void bf_i_reorderreport(void) {
     float bv_f_pprice = 0;
     int bv_i_i = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     int bv_i_reportlinecount = 0;
@@ -1075,26 +1116,27 @@ void bf_i_reorderreport(void) {
     // global inv
     bf_i_printreorderheader();
     bv_i_reportlinecount = 0;
-    int bt_lim_66 = bv_i_part_count;
-    int bt_step_66 = 1;
-    for (bv_i_i = 1; bt_step_66 >= 0 ? bv_i_i <= bt_lim_66 : bv_i_i >= bt_lim_66; bv_i_i += bt_step_66) {
+    int bt_lim_104 = bv_i_part_count;
+    int bt_step_104 = 1;
+    for (bv_i_i = 1; bt_step_104 >= 0 ? bv_i_i <= bt_lim_104 : bv_i_i >= bt_lim_104; bv_i_i += bt_step_104) {
         // let p = inv[...]  (whole-record read)
         bcc_get_record_part(bcc_files[0], bv_i_i, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-        bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-        while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-            bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-        }
-        snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-        bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-        while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-            bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-        }
-        snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+        char bt_s_105[256];
+        bf_s_rtrim_s(bv_s_invflagbuf, bt_s_105);
+        snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_105);
+        char bt_s_106[256];
+        bf_s_rtrim_s(bv_s_invdescbuf, bt_s_106);
+        snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_106);
         bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
         bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
         bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
         if ((-(bv_i_pqty < bv_i_preorder))) {
-            bf_i_printreorderline(bv_i_i, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
+            int bt_arg_107 = bv_i_i;
+            char bt_arg_108[256];
+            snprintf(bt_arg_108, sizeof(bt_arg_108), "%s", bv_s_pdesc);
+            int bt_arg_109 = bv_i_pqty;
+            int bt_arg_110 = bv_i_preorder;
+            bf_i_printreorderline(bt_arg_107, bt_arg_108, bt_arg_109, bt_arg_110);
             bv_i_reportlinecount = (bv_i_reportlinecount + 1);
             if ((-(bv_i_reportlinecount > 15))) {
                 bf_i_waitanykey();
@@ -1115,8 +1157,6 @@ void bf_i_reorderreport(void) {
 void bf_i_initializeinventoryfileifnew(void) {
     float bv_f_pprice = 0;
     int bv_i_i = 0;
-    int bv_i_pdesctrimi = 0;
-    int bv_i_pflagtrimi = 0;
     int bv_i_pqty = 0;
     int bv_i_preorder = 0;
     char bv_s_invdescbuf[256] = {0};
@@ -1130,28 +1170,24 @@ void bf_i_initializeinventoryfileifnew(void) {
     // global inv
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], 1, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
-    bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
-    while (((-(bv_i_pflagtrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invflagbuf, bv_i_pflagtrimi, 1), " ") == 0)))) {
-        bv_i_pflagtrimi = (bv_i_pflagtrimi - 1);
-    }
-    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bcc_mid(bv_s_invflagbuf, 1, bv_i_pflagtrimi));
-    bv_i_pdesctrimi = ((int)strlen(bv_s_invdescbuf));
-    while (((-(bv_i_pdesctrimi > 0)) && (-(strcmp(bcc_mid(bv_s_invdescbuf, bv_i_pdesctrimi, 1), " ") == 0)))) {
-        bv_i_pdesctrimi = (bv_i_pdesctrimi - 1);
-    }
-    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bcc_mid(bv_s_invdescbuf, 1, bv_i_pdesctrimi));
+    char bt_s_111[256];
+    bf_s_rtrim_s(bv_s_invflagbuf, bt_s_111);
+    snprintf(bv_s_pflag, sizeof(bv_s_pflag), "%s", bt_s_111);
+    char bt_s_112[256];
+    bf_s_rtrim_s(bv_s_invdescbuf, bt_s_112);
+    snprintf(bv_s_pdesc, sizeof(bv_s_pdesc), "%s", bt_s_112);
     bv_i_pqty = bcc_cvi(bv_s_invqtybuf);
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if ((-(((int)(unsigned char)bv_s_pflag[0]) == 0))) {
-        int bt_lim_67 = bv_i_part_count;
-        int bt_step_67 = 1;
-        for (bv_i_i = 1; bt_step_67 >= 0 ? bv_i_i <= bt_lim_67 : bv_i_i >= bt_lim_67; bv_i_i += bt_step_67) {
+        int bt_lim_113 = bv_i_part_count;
+        int bt_step_113 = 1;
+        for (bv_i_i = 1; bt_step_113 >= 0 ? bv_i_i <= bt_lim_113 : bv_i_i >= bt_lim_113; bv_i_i += bt_step_113) {
             // inv[...] = { ... }  (whole-record write)
-            int16_t bcc_tmp_68 = 0;
-            int16_t bcc_tmp_69 = 0;
-            float bcc_tmp_70 = 0;
-            bcc_put_record_part(bcc_files[0], bv_i_i, bcc_chr(255), "", &bcc_tmp_68, &bcc_tmp_69, &bcc_tmp_70);
+            int16_t bcc_tmp_114 = 0;
+            int16_t bcc_tmp_115 = 0;
+            float bcc_tmp_116 = 0;
+            bcc_put_record_part(bcc_files[0], bv_i_i, bcc_chr(255), "", &bcc_tmp_114, &bcc_tmp_115, &bcc_tmp_116);
         }
     }
 }
@@ -1160,22 +1196,39 @@ void bf_i_reportinventoryerror(int bv_i_err, int bv_i_erl) {
     char bv_s_k[256] = {0};
 
     printf("\x1b[%d;%dH", 25, 1);
-    char bt_s_71[256];
-    snprintf(bt_s_71, sizeof(bt_s_71), "%s%s", "There has been an error on line", bcc_stri(bv_i_erl));
-    char bt_s_72[256];
-    snprintf(bt_s_72, sizeof(bt_s_72), "%s%s", bt_s_71, ": ");
-    char bt_s_73[256];
-    bf_s_error(bv_i_err, bt_s_73);
-    char bt_s_74[256];
-    snprintf(bt_s_74, sizeof(bt_s_74), "%s%s", bt_s_72, bt_s_73);
-    printf("%s\n", bt_s_74);
-    char bt_s_75[256];
-    bf_s_readkey(bt_s_75);
-    snprintf(bv_s_k, sizeof(bv_s_k), "%s", bt_s_75);
+    char bt_s_117[256];
+    snprintf(bt_s_117, sizeof(bt_s_117), "%s%s", "There has been an error on line", bcc_stri(bv_i_erl));
+    char bt_s_118[256];
+    snprintf(bt_s_118, sizeof(bt_s_118), "%s%s", bt_s_117, ": ");
+    char bt_s_119[256];
+    bf_s_error(bv_i_err, bt_s_119);
+    char bt_s_120[256];
+    snprintf(bt_s_120, sizeof(bt_s_120), "%s%s", bt_s_118, bt_s_119);
+    printf("%s\n", bt_s_120);
+    char bt_s_121[256];
+    bf_s_readkey(bt_s_121);
+    snprintf(bv_s_k, sizeof(bv_s_k), "%s", bt_s_121);
 }
 
 int main(void) {
     setvbuf(stdin, NULL, _IONBF, 0);
+    // Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+    // so a required stdlib call reads the same way as a built-in method call
+    // (docs/language/functions-and-procedures.html#built-in-methods). The
+    // ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+    // implicit first parameter, so ordinary-call syntax resolves straight to
+    // this same declaration, with no separate function needed (and no longer
+    // allowed: a function and a method sharing one name is a duplicate
+    // declaration, since they'd both claim the same callable identity).
+
+    // Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
+    // and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
+    // works via ordinary-call syntax resolving to this same declaration.
+
     // Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
     // and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     // returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
@@ -1280,7 +1333,6 @@ int main(void) {
     // itself been independently re-verified against a real BASCOM compile.
     // ============================================================
 
-
     // BASCAL-ism: the record/file DSL. `record ... end record` plus
     // `file ... as ... = open(...)` below replace fhb's manual
     // FIELD #1,1 AS F$,30 AS D$,2 AS Q$,... buffer layout entirely --
@@ -1325,11 +1377,11 @@ int main(void) {
     bcc_on_error_target = -1;
     bv_i_err = bcc_err;
     bv_i_erl = bcc_erl;
-    char bt_s_76[256];
-    bf_s_error(bv_i_err, bt_s_76);
-    char bt_s_77[256];
-    snprintf(bt_s_77, sizeof(bt_s_77), "%s%s", "could not open inven.dat: ", bt_s_76);
-    printf("%s\n", bt_s_77);
+    char bt_s_122[256];
+    bf_s_error(bv_i_err, bt_s_122);
+    char bt_s_123[256];
+    snprintf(bt_s_123, sizeof(bt_s_123), "%s%s", "could not open inven.dat: ", bt_s_122);
+    printf("%s\n", bt_s_123);
     return 0;
     bcc_on_error_target = -1;
     goto bcc_try_0_finally;
@@ -1359,7 +1411,6 @@ int main(void) {
     // manual's "Short-Circuit && and ||" section
     // (https://johnjoeallen.github.io/bascal/manual/).
 
-
     // -------------------- Keyboard input --------------------
 
     // BASCAL-ism: `do ... loop until` is a structured post-check loop
@@ -1369,13 +1420,7 @@ int main(void) {
     // body like this one -- every menu action below calls
     // readKey$()/waitAnyKey() rather than polling INKEY$ inline.
 
-
     // -------------------- Display procedures --------------------
-
-
-
-
-
 
     // BASCAL-ism: no `VIEW PRINT` (see the header note above), so this
     // deliberately does NOT pin a "press any key" line to a fixed row the way
@@ -1386,23 +1431,10 @@ int main(void) {
     // only right when it actually blocks (see listAll()'s own redraw-per-page
     // structure below).
 
-
-
-
     // byref scalar parameters: gatherPartDetails writes the four editable
     // fields for a part directly back into the caller's variables.
 
-
-
-
-
     // -------------------- Menu actions --------------------
-
-
-
-
-
-
 
     // fhb's own one-time "hidden" datafile initializer PUT-ing 100 blank,
     // CHR$(255)-flagged records (see the header note above) -- reproduced
@@ -1422,9 +1454,9 @@ int main(void) {
 
     while (1) {
         bf_i_showmainmenu();
-        char bt_s_78[256];
-        bf_s_readkey(bt_s_78);
-        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_78);
+        char bt_s_124[256];
+        bf_s_readkey(bt_s_124);
+        snprintf(bv_s_kp, sizeof(bv_s_kp), "%s", bt_s_124);
         if ((-(bcc_instr("1234567cCeElLaAsSrRxX", bv_s_kp) != 0))) {
             // BASCAL-ism: `select case` replaces fhb's chain of eight
             // `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
@@ -1442,48 +1474,48 @@ int main(void) {
             int bcc_try_1_pending = 0;
             bcc_on_error_target = 1;
             {
-                char bt_sel_79[256];
-                snprintf(bt_sel_79, sizeof(bt_sel_79), "%s", bv_s_kp);
-                int bt_sel_match_80 = 0;
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "1") == 0) || (strcmp(bt_sel_79, "c") == 0) || (strcmp(bt_sel_79, "C") == 0)) {
-                        bt_sel_match_80 = 1;
+                char bt_sel_125[256];
+                snprintf(bt_sel_125, sizeof(bt_sel_125), "%s", bv_s_kp);
+                int bt_sel_match_126 = 0;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "1") == 0) || (strcmp(bt_sel_125, "c") == 0) || (strcmp(bt_sel_125, "C") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_checkpart();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "2") == 0) || (strcmp(bt_sel_79, "e") == 0) || (strcmp(bt_sel_79, "E") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "2") == 0) || (strcmp(bt_sel_125, "e") == 0) || (strcmp(bt_sel_125, "E") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_editrecord();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "3") == 0) || (strcmp(bt_sel_79, "l") == 0) || (strcmp(bt_sel_79, "L") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "3") == 0) || (strcmp(bt_sel_125, "l") == 0) || (strcmp(bt_sel_125, "L") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_listall();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "4") == 0) || (strcmp(bt_sel_79, "a") == 0) || (strcmp(bt_sel_79, "A") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "4") == 0) || (strcmp(bt_sel_125, "a") == 0) || (strcmp(bt_sel_125, "A") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_addstock();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "5") == 0) || (strcmp(bt_sel_79, "s") == 0) || (strcmp(bt_sel_79, "S") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "5") == 0) || (strcmp(bt_sel_125, "s") == 0) || (strcmp(bt_sel_125, "S") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_subtractstock();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "6") == 0) || (strcmp(bt_sel_79, "r") == 0) || (strcmp(bt_sel_79, "R") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "6") == 0) || (strcmp(bt_sel_125, "r") == 0) || (strcmp(bt_sel_125, "R") == 0)) {
+                        bt_sel_match_126 = 1;
                         bf_i_reorderreport();
                     }
                 }
-                if (!bt_sel_match_80) {
-                    if ((strcmp(bt_sel_79, "7") == 0) || (strcmp(bt_sel_79, "x") == 0) || (strcmp(bt_sel_79, "X") == 0)) {
-                        bt_sel_match_80 = 1;
+                if (!bt_sel_match_126) {
+                    if ((strcmp(bt_sel_125, "7") == 0) || (strcmp(bt_sel_125, "x") == 0) || (strcmp(bt_sel_125, "X") == 0)) {
+                        bt_sel_match_126 = 1;
                         // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
                         // matching fhb's own `90 CLOSE:SYSTEM`. fhb's original
                         // also had a separate "Quit to BASIC" option (his own
@@ -1508,7 +1540,9 @@ int main(void) {
             bcc_on_error_target = -1;
             bv_i_err = bcc_err;
             bv_i_erl = bcc_erl;
-            bf_i_reportinventoryerror(bv_i_err, bv_i_erl);
+            int bt_arg_127 = bv_i_err;
+            int bt_arg_128 = bv_i_erl;
+            bf_i_reportinventoryerror(bt_arg_127, bt_arg_128);
             bcc_on_error_target = -1;
             goto bcc_try_1_finally;
             bcc_try_1_rethrow: ;
@@ -1649,15 +1683,6 @@ static void bcc_mkl(char* out, int value) {
     memcpy(out, &v, 4);
 }
 
-static void bcc_mks(char* out, double value) {
-    float v = (float)value;
-    memcpy(out, &v, 4);
-}
-
-static void bcc_mkd(char* out, double value) {
-    memcpy(out, &value, 8);
-}
-
 static int bcc_cvi(const char* s) {
     int16_t v;
     memcpy(&v, s, 2);
@@ -1668,18 +1693,6 @@ static int bcc_cvl(const char* s) {
     int32_t v;
     memcpy(&v, s, 4);
     return (int)v;
-}
-
-static float bcc_cvs(const char* s) {
-    float v;
-    memcpy(&v, s, 4);
-    return v;
-}
-
-static double bcc_cvd(const char* s) {
-    double v;
-    memcpy(&v, s, 8);
-    return v;
 }
 
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
@@ -1723,6 +1736,67 @@ static int bcc_get_record_part(FILE* file, long record, char* field_0, char* fie
     memcpy(field_4, buffer + 35, 4);
     field_4[4] = 0;
     return 1;
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_eof(FILE* file) {
+    int c = fgetc(file);
+    if (c == EOF) return -1;
+    ungetc(c, file);
+    return 0;
+}
+
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {
+    if (fgets(buf, (int)bufsize, file) == NULL) {
+        buf[0] = 0;
+        return;
+    }
+    buf[strcspn(buf, "\r\n")] = 0;
+}
+
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
+    int c = fgetc(file);
+    while (c == ' ') c = fgetc(file);
+    size_t len = 0;
+    if (c == '"') {
+        c = fgetc(file);
+        while (c != EOF && c != '"') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        c = fgetc(file);
+        while (c != EOF && c != ',' && c != '\n') c = fgetc(file);
+    } else {
+        while (c != EOF && c != ',' && c != '\n' && c != '\r') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        if (c == '\r') {
+            int c2 = fgetc(file);
+            if (c2 != '\n' && c2 != EOF) ungetc(c2, file);
+        }
+    }
+    buf[len] = 0;
 }
 
 static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};

@@ -30,12 +30,13 @@ int bf_i_insertionsort(int bv_i_arr_len0, int* bv_i_arr) {
     int bv_i_j = 0;
     int bv_i_key = 0;
 
+    int bt_start_0 = 1;
     int bt_lim_0 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_0 = 1;
-    for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bt_start_0; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_key = bv_i_arr[(bv_i_i)];
         bv_i_j = (bv_i_i - 1);
-        while (((-(bv_i_j >= 0)) && (-(bv_i_arr[(bv_i_j)] > bv_i_key)))) {
+        while ((-(((-(bv_i_j >= 0))) != 0 && ((-(bv_i_arr[(bv_i_j)] > bv_i_key))) != 0))) {
             bv_i_arr[((bv_i_j + 1))] = bv_i_arr[(bv_i_j)];
             bv_i_j = (bv_i_j - 1);
         }
@@ -49,9 +50,10 @@ int bf_i_indexof(int bv_i_arr_len0, int* bv_i_arr_in, int bv_i_target) {
     for (int bcc_i = 0; bcc_i < bv_i_arr_len0; bcc_i++) { bv_i_arr[bcc_i] = bv_i_arr_in[bcc_i]; }
     int bv_i_i = 0;
 
+    int bt_start_1 = 0;
     int bt_lim_1 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_1 = 1;
-    for (bv_i_i = 0; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
+    for (bv_i_i = bt_start_1; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
         if ((-(bv_i_arr[(bv_i_i)] == bv_i_target))) {
             return bv_i_i;
         }
@@ -66,9 +68,10 @@ int bf_i_printarray(int bv_i_arr_len0, int* bv_i_arr_in) {
     char bv_s_line[256] = {0};
 
     snprintf(bv_s_line, sizeof(bv_s_line), "%s", "[");
+    int bt_start_2 = 0;
     int bt_lim_2 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_2 = 1;
-    for (bv_i_i = 0; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
+    for (bv_i_i = bt_start_2; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
         char bt_s_3[256];
         snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bv_s_line, " ");
         char bt_s_4[256];

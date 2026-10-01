@@ -43,6 +43,7 @@ int main(void) {
             if ((bt_sel_0 >= 80 && bt_sel_0 <= 89)) {
                 bt_sel_match_1 = 1;
                 printf("B  — Good\n");
+                // score% = 85 matches here
             }
         }
         if (!bt_sel_match_1) {
@@ -89,6 +90,7 @@ int main(void) {
                 char bt_s_5[256];
                 snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bv_s_day, " is a weekend");
                 printf("%s\n", bt_s_5);
+                // matches here
             }
         }
         if (!bt_sel_match_3) {
@@ -108,6 +110,7 @@ int main(void) {
             if ((bt_sel_7 < 0)) {
                 bt_sel_match_8 = 1;
                 printf("Below freezing (%d°)\n", bv_i_temp);
+                // matches here
             }
         }
         if (!bt_sel_match_8) {
@@ -149,6 +152,7 @@ int main(void) {
             if ((bt_sel_9 == 2) || (bt_sel_9 == 3)) {
                 bt_sel_match_10 = 1;
                 printf("Load game\n");
+                // choice% = 2 matches
             }
         }
         if (!bt_sel_match_10) {
