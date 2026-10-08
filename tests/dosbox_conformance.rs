@@ -217,6 +217,26 @@ fn const_and_print_matches_real_bascom() {
 }
 
 #[test]
+fn control_loops_select_matches_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("control_loops_select");
+
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/control_loops_select.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's output for control_loops_select.bcl no longer matches \
+         the golden expectation at {}",
+        expected_path.display()
+    );
+}
+
+#[test]
 fn mid_assign_matches_real_bascom() {
     require_fixture!();
 
