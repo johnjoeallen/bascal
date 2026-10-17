@@ -1,0 +1,1 @@
+all: duplicate const `A` -- a const name must be unique regardless of type suffix

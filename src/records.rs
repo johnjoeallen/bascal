@@ -60,7 +60,14 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// lowercase, same as every other identifier).
 pub fn lower(
     program: Program,
-) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
+) -> Result<
+    (
+        Program,
+        std::collections::HashSet<String>,
+        Vec<crate::semantic_ir::LoweredRecordFile>,
+    ),
+    Vec<Diagnostic>,
+> {
     let mut lowerer = Lowerer::new();
     lowerer.build_record_table(&program.records);
 
@@ -115,9 +122,9 @@ pub fn lower(
             functions,
             records: Vec::new(),
             typed_arrays: program.typed_arrays,
-            typed_array_refs: program.typed_array_refs,
         },
         lowerer.synthesized_buffer_names,
+        lowerer.lowered_record_files,
     ))
 }
 
@@ -246,6 +253,7 @@ struct Lowerer {
     current_function: Option<String>,
     current_file_globals: HashSet<String>,
     current_statement_pos: Option<SourcePos>,
+    lowered_record_files: Vec<crate::semantic_ir::LoweredRecordFile>,
 }
 
 impl Lowerer {
@@ -263,6 +271,7 @@ impl Lowerer {
             current_function: None,
             current_file_globals: HashSet::new(),
             current_statement_pos: None,
+            lowered_record_files: Vec::new(),
         }
     }
 
@@ -1053,6 +1062,7 @@ impl Lowerer {
             | Statement::Clear
             | Statement::System
             | Statement::Exit
+            | Statement::Continue
             | Statement::ReturnVoid
             | Statement::GlobalDecl(_)
             | Statement::Raw(_)
@@ -1171,7 +1181,7 @@ impl Lowerer {
             len: Some(Expr::Integer(rec.width as i64)),
         });
 
-        let fields = rec
+        let fields: Vec<(Expr, BasicIdent)> = rec
             .fields
             .iter()
             .map(|f| {
@@ -1181,6 +1191,49 @@ impl Lowerer {
                 )
             })
             .collect();
+        let lowered_fields = fields
+            .iter()
+            .zip(&rec.fields)
+            .scan(0u32, |offset, ((width, buffer), field)| {
+                let kind = match field.ty {
+                    RecordFieldType::Int16 => crate::semantic_ir::LoweredRecordFieldKind::Int16,
+                    RecordFieldType::Int32 => crate::semantic_ir::LoweredRecordFieldKind::Int32,
+                    RecordFieldType::Float32 => crate::semantic_ir::LoweredRecordFieldKind::Float32,
+                    RecordFieldType::Float64 => crate::semantic_ir::LoweredRecordFieldKind::Float64,
+                    RecordFieldType::Str(_, alignment) => {
+                        crate::semantic_ir::LoweredRecordFieldKind::String {
+                            right_aligned: matches!(alignment, RecordStringAlignment::Right),
+                        }
+                    }
+                    RecordFieldType::StrDynamic | RecordFieldType::Named(_) => {
+                        unreachable!(
+                            "invalid random-access record types are rejected before file lowering"
+                        )
+                    }
+                };
+                let Expr::Integer(width) = width else {
+                    unreachable!("record FIELD widths are synthesized as integer literals")
+                };
+                let field_offset = *offset;
+                *offset += *width as u32;
+                Some(crate::semantic_ir::LoweredRecordField {
+                    buffer_name: buffer.as_basic(),
+                    width: *width as u32,
+                    offset: field_offset,
+                    kind,
+                })
+            })
+            .collect();
+        self.lowered_record_files
+            .push(crate::semantic_ir::LoweredRecordFile {
+                name: var.name.clone(),
+                channel,
+                record_type: record_type.clone(),
+                record_length: rec.width,
+                owner: self.current_function.clone(),
+                fields: lowered_fields,
+                record_locals: Vec::new(),
+            });
         out.push(Statement::Field {
             channel: Expr::Integer(channel),
             fields,
@@ -1606,13 +1659,27 @@ impl Lowerer {
             record_length: None,
         });
 
+        let file_owner = self.current_function.clone();
+        let mut record_locals = Vec::new();
+
         for f in &rec.fields {
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let scalar_name = camel_join(&[&target.name, &f.name]);
             let scalar_ident = BasicIdent {
-                name: scalar_name,
+                name: scalar_name.clone(),
                 suffix: Some(field_suffix(&f.ty)),
             };
+            record_locals.push(crate::semantic_ir::LoweredRecordLocal {
+                name: scalar_name,
+                value_type: match field_suffix(&f.ty) {
+                    TypeSuffix::Integer => crate::semantic_ir::SemanticValueType::Integer,
+                    TypeSuffix::Long => crate::semantic_ir::SemanticValueType::Long,
+                    TypeSuffix::Single => crate::semantic_ir::SemanticValueType::Single,
+                    TypeSuffix::Double => crate::semantic_ir::SemanticValueType::Double,
+                    TypeSuffix::String => crate::semantic_ir::SemanticValueType::String,
+                },
+                owner: file_owner.clone(),
+            });
             if field_is_numeric(&f.ty) {
                 let unpacked = Expr::Call {
                     name: BasicIdent::parse(unpack_fn_name(&f.ty)),
@@ -1623,15 +1690,35 @@ impl Lowerer {
                     value: unpacked,
                 });
             } else {
-                // Real MBASIC/BASCOM has no RTRIM$ builtin -- strip the
-                // trailing space padding LSET left in the fixed-width
-                // buffer with an inline scan instead, built directly out
-                // of LEN/MID$/LEFT$, which every target actually has.
-                let counter_ident = BasicIdent {
-                    name: camel_join(&[&target.name, &f.name, "trimI"]),
-                    suffix: Some(TypeSuffix::Integer),
+                // A field LSET left-aligned is padded on the right, an RSET
+                // one on the left: strip that padding with the matching
+                // com.bascal.stdlib.strings method (MBASIC/BASCOM has no
+                // RTRIM$/LTRIM$ of its own).
+                let trim = match &f.ty {
+                    RecordFieldType::Str(_, RecordStringAlignment::Right) => "ltrim$",
+                    _ => "rtrim$",
                 };
-                out.extend(trim_statements(&buf_ident, &counter_ident, &scalar_ident));
+                out.push(Statement::Assignment {
+                    target: Expr::Ident(scalar_ident),
+                    value: Expr::Call {
+                        name: BasicIdent::parse(trim),
+                        args: vec![Expr::Ident(buf_ident)],
+                    },
+                });
+            }
+        }
+
+        if let Some(record_file) = self
+            .lowered_record_files
+            .iter_mut()
+            .find(|file| file.channel == channel && file.name.eq_ignore_ascii_case(&var.name))
+        {
+            for local in record_locals {
+                if !record_file.record_locals.iter().any(|existing| {
+                    existing.name.eq_ignore_ascii_case(&local.name) && existing.owner == local.owner
+                }) {
+                    record_file.record_locals.push(local);
+                }
             }
         }
 
@@ -2441,73 +2528,6 @@ fn pack_expr(ty: &RecordFieldType, value: Expr) -> Expr {
     } else {
         value
     }
-}
-
-/// Builds `i% = LEN(buf$) : WHILE i% > 0 AND MID$(buf$,i%,1) = " " : i% = i%
-/// - 1 : WEND : target$ = LEFT$(buf$, i%)` -- a right-trim, done inline
-/// with LEN/MID$/LEFT$, since real MBASIC/BASCOM has no RTRIM$ builtin.
-/// The `AND` here has to be the short-circuit `AndAnd` form: once `i% =
-/// 0`, evaluating `MID$(buf$, 0, 1)` is itself a runtime error, so the
-/// second operand must never be reached once the first is false.
-fn trim_statements(
-    buf_ident: &BasicIdent,
-    counter_ident: &BasicIdent,
-    target_ident: &BasicIdent,
-) -> Vec<Statement> {
-    let buf = || Expr::Ident(buf_ident.clone());
-    let counter = || Expr::Ident(counter_ident.clone());
-
-    let init = Statement::Assignment {
-        target: counter(),
-        value: Expr::Call {
-            name: BasicIdent::parse("len"),
-            args: vec![buf()],
-        },
-    };
-
-    let condition = Expr::Binary {
-        left: Box::new(Expr::Binary {
-            left: Box::new(counter()),
-            op: BinaryOp::Gt,
-            right: Box::new(Expr::Integer(0)),
-        }),
-        op: BinaryOp::AndAnd,
-        right: Box::new(Expr::Binary {
-            left: Box::new(Expr::Call {
-                name: BasicIdent::parse("mid$"),
-                args: vec![buf(), counter(), Expr::Integer(1)],
-            }),
-            op: BinaryOp::Eq,
-            right: Box::new(Expr::String(" ".to_string())),
-        }),
-    };
-
-    let decrement = Statement::Assignment {
-        target: counter(),
-        value: Expr::Binary {
-            left: Box::new(counter()),
-            op: BinaryOp::Sub,
-            right: Box::new(Expr::Integer(1)),
-        },
-    };
-
-    let while_loop = Statement::While {
-        condition,
-        // Synthesized bookkeeping, never user-written source -- no real
-        // position to report, so this inner statement gets the same
-        // placeholder `generated_pos()` records.rs's own diagnostics use.
-        body: vec![Stmt::new(decrement, generated_pos())],
-    };
-
-    let finalize = Statement::Assignment {
-        target: Expr::Ident(target_ident.clone()),
-        value: Expr::Call {
-            name: BasicIdent::parse("left$"),
-            args: vec![buf(), counter()],
-        },
-    };
-
-    vec![init, while_loop, finalize]
 }
 
 /// Collects `global` declarations at any nesting depth in a callable body.

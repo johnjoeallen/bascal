@@ -29,10 +29,14 @@ markdown_extensions:
   - pymdownx.superfences
 nav:
   - Home:
-      - Why BASCAL exists: index.md
+      - What is BASCAL: index.md
+      - Why was it created: home/why.md
+      - How has it evolved: home/evolution.md
       - What BASCAL adds: home/features.md
       - Structured control flow: home/control-flow.md
       - Record files: home/record-files.md
+      - A built-in source formatter: home/formatter.md
+      - Built-in linting: home/linting.md
       - Tutorials and examples: home/tutorials.md
   - Language Book:
       - Overview: language/index.md
@@ -100,10 +104,12 @@ nav:
       - Portable Structured Error Handling: tutorials/portable_error_handling.md
       - RESTORE and DATA: tutorials/restore_data.md
   - Examples:
+      - Overview: examples/index.md
       - Sort Driver: examples/sort-driver.md
       - REMLINE: examples/remline.md
       - Card Catalog: examples/card-catalog.md
       - Adventure Game: examples/adventure.md
+      - "ADVENTURE/3000 Port": examples/adventure3000.md
   - Conformance results:
       - Core language: conformance.md
       - Tutorials: conformance/tutorials.md

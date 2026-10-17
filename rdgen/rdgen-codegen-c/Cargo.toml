@@ -1,0 +1,13 @@
+[package]
+name = "rdgen-codegen-c"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "C tagged-union AST emitter for rdgen"
+
+[dependencies]
+rdgen-ir = { path = "../rdgen-ir" }
+
+[dev-dependencies]
+rdgen-grammar = { path = "../rdgen-grammar" }
+tempfile = "3"

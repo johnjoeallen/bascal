@@ -13,20 +13,57 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// AST scans that produce them still live in `codegen_basic` (they have
 /// other callers there); `resolve` just runs them once, up front, so no
 /// backend re-derives them.
+#[derive(Clone)]
 pub struct ResolvedProgram {
-    pub program: Program,
+    pub(crate) program: Program,
+    /// Generated semantic frontend output retained during backend migration.
+    /// `Some` is the normal driver path and is the authoritative typed-IR
+    /// input for migrated backend facts; `None` is an explicit compatibility
+    /// mode used by legacy callers and tests until every entry point is
+    /// routed through the generated frontend.
+    pub semantic_module: Option<crate::semantic_ir::SemanticModule>,
+    /// Generated semantic name-visibility facts used by backend allocators.
+    pub semantic_name_scopes: Option<crate::semantic_ir::SemanticNameScopes>,
+    /// Typed top-level array declarations preserved for backends that need
+    /// element type and dimension expressions after resolution.
+    pub typed_array_declarations: Vec<TypedArrayDecl>,
+    /// COMMON blocks loaded by the driver before resolution, retained as
+    /// backend input rather than read from the mutable legacy program.
+    pub common_blocks: Vec<CommonBlock>,
     /// Lowercase BASIC names of every record/file `FIELD` buffer variable.
     /// Structurally global — the per-procedure name allocator must never
     /// localize one (this is the fact the "FIELD buffer re-namespaced per
     /// procedure" bug got wrong).
     pub record_buffer_names: HashSet<String>,
-    /// Lowercase BASIC names of every `const` declaration anywhere.
-    pub const_names: HashSet<String>,
+    /// Every `const` declaration anywhere, keyed by lowercase base name
+    /// (never including its type suffix -- `const` declarations may not
+    /// carry an explicit one at all, see `Parser::parse_const`, and a
+    /// reference is always written bare too, so name alone is a const's
+    /// whole identity). `reject_duplicate_consts` (part of `validate`)
+    /// guarantees this key is unique program-wide before `resolve` ever
+    /// builds this map, so whichever declaration is found first/last here
+    /// doesn't matter. This is resolver compatibility metadata for callers
+    /// that resolve an AST without the semantic module; semantic backends
+    /// read constant names, types, and values from the typed IR instead.
+    pub const_info: HashMap<String, ConstInfo>,
+    /// AST-only compatibility cache of integer-valued top-level `const`
+    /// declarations, keyed by the same case-insensitive name/suffix identity
+    /// an array-bound expression uses. Semantic compilation reads this fact
+    /// from the typed IR instead.
+    pub top_level_integer_constants: HashMap<(String, Option<TypeSuffix>), i64>,
+    /// AST-only compatibility cache of C identifiers for top-level constants.
+    /// Semantic C emission derives this set from the typed IR.
+    pub top_level_const_c_names: BTreeSet<String>,
+    /// AST-only compatibility cache of procedure globals. Semantic backends
+    /// use `semantic_name_scopes` when the typed IR is available.
+    pub function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
-    /// Lowercase names of every procedure named as an `on error goto`
-    /// target — proven by [`validate`] to never fall through, so codegen
-    /// must not append an implicit trailing RETURN for one.
+    /// AST-only compatibility cache of lowercase names of every procedure
+    /// named as an `on error goto` target. Semantic backends use the typed
+    /// IR's error-handler target facts; the validation invariant is that
+    /// these procedures never fall through, so codegen must not append an
+    /// implicit trailing RETURN for one.
     pub error_handler_procedures: HashSet<String>,
     /// Whether any `catch` binds the optional third (source-filename)
     /// variable — gates all of codegen_basic's per-statement source-file
@@ -34,45 +71,340 @@ pub struct ResolvedProgram {
     pub uses_catch_source_var: bool,
 }
 
+impl ResolvedProgram {
+    pub(crate) fn callable_globals(&self, function: &BasicIdent) -> Vec<BasicIdent> {
+        let key = function.as_basic().to_ascii_lowercase();
+        if let Some(names) = self
+            .semantic_name_scopes
+            .as_ref()
+            .and_then(|scopes| scopes.callable_globals.get(&key))
+        {
+            return names.iter().map(|name| BasicIdent::parse(name)).collect();
+        }
+        self.function_global_declarations
+            .get(&(function.name.to_ascii_lowercase(), function.suffix))
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+/// Resolver compatibility metadata for one AST `const` declaration.
+///
+/// Semantic compilation keeps the resolved constant facts in the typed IR;
+/// this structure remains for AST-only callers and resolver diagnostics.
+/// The keying convention is documented on `ResolvedProgram::const_info`.
+#[derive(Clone)]
+pub struct ConstInfo {
+    pub suffix: TypeSuffix,
+    pub value: Expr,
+}
+
 /// Validate `program`, then compute the whole-program facts codegen needs.
 /// Returns the owned program wrapped in a [`ResolvedProgram`].
 pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
-    validate(&program)?;
+    resolve_with_semantic(program, None)
+}
 
-    let error_handler_procedures = error_handler_targets(&program)
-        .iter()
-        .map(|ident| ident.name.to_ascii_lowercase())
-        .collect();
-    let record_buffer_names = crate::codegen_basic::collect_record_buffer_names(&program);
-    let const_names = {
-        let mut consts = HashMap::new();
-        crate::codegen_basic::collect_consts(&program.statements, &mut consts);
-        consts.keys().map(|k| k.to_ascii_lowercase()).collect()
+/// Resolve a legacy AST while retaining the generated semantic frontend module.
+pub fn resolve_with_semantic(
+    program: Program,
+    mut semantic_module: Option<crate::semantic_ir::SemanticModule>,
+) -> Result<ResolvedProgram, Vec<Diagnostic>> {
+    validate_with_semantic(&program, semantic_module.as_ref())?;
+    if let Some(module) = semantic_module.as_mut() {
+        module.resolve_dim_value_types();
+        module.resolve_for_variable_types();
+    }
+
+    // AST-derived caches are compatibility data for `resolve(program)`.
+    // When the generated typed IR is present, populate the corresponding
+    // semantic facts from it and leave legacy-only caches empty.
+    let error_handler_procedures = semantic_module
+        .as_ref()
+        .map(|module| {
+            module
+                .top_level_error_handler_targets()
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            error_handler_targets(&program)
+                .iter()
+                .map(|ident| ident.name.to_ascii_lowercase())
+                .collect()
+        });
+    let record_buffer_names = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::record_buffer_names)
+        .unwrap_or_else(|| crate::codegen_basic::collect_record_buffer_names(&program));
+    let const_info = if semantic_module.is_some() {
+        HashMap::new()
+    } else {
+        let mut decls = Vec::new();
+        collect_const_decls(&program.statements, &mut decls);
+        for f in &program.functions {
+            collect_const_decls(&f.body, &mut decls);
+        }
+        decls
+            .into_iter()
+            .map(|(_pos, name, value)| {
+                let suffix = name
+                    .suffix
+                    .expect("Parser::parse_const always infers a const's suffix");
+                (name.name.to_ascii_lowercase(), ConstInfo { suffix, value })
+            })
+            .collect()
     };
-    let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
-    let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
+    let top_level_array_ranks = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::top_level_array_ranks)
+        .unwrap_or_else(|| crate::codegen_basic::dim_ranks_in_body(&program.statements));
+    let top_level_integer_constants = semantic_module
+        .as_ref()
+        .map(|module| {
+            module
+                .top_level_integer_constants()
+                .into_iter()
+                .map(|(name, value)| {
+                    let ident = BasicIdent::parse(&name);
+                    ((ident.name.to_ascii_lowercase(), ident.suffix), value)
+                })
+                .collect()
+        })
+        .unwrap_or_else(|| collect_top_level_integer_constants(&program.statements));
+    let top_level_const_c_names = if semantic_module.is_some() {
+        BTreeSet::new()
+    } else {
+        crate::codegen_c::collect_top_level_const_c_names(&program.statements)
+    };
+    let function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>> =
+        if let Some(scopes) = semantic_module
+            .as_ref()
+            .map(crate::semantic_ir::SemanticModule::name_scopes)
+        {
+            scopes
+                .callable_globals
+                .into_iter()
+                .map(|(callable, names)| {
+                    let ident = BasicIdent::parse(&callable);
+                    (
+                        (ident.name.to_ascii_lowercase(), ident.suffix),
+                        names.iter().map(|name| BasicIdent::parse(name)).collect(),
+                    )
+                })
+                .collect()
+        } else {
+            program
+                .functions
+                .iter()
+                .map(|function| {
+                    let mut declarations = Vec::new();
+                    collect_global_declarations(&function.body, &mut declarations);
+                    (
+                        (
+                            function.name.name.to_ascii_lowercase(),
+                            function.name.suffix,
+                        ),
+                        declarations,
+                    )
+                })
+                .collect()
+        };
+    let uses_catch_source_var = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::uses_catch_source_var)
+        .unwrap_or_else(|| crate::codegen_basic::program_uses_catch_source_var(&program));
 
+    let semantic_name_scopes = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::name_scopes);
     Ok(ResolvedProgram {
+        typed_array_declarations: program.typed_arrays.clone(),
+        common_blocks: program.common.clone(),
         program,
+        semantic_module,
+        semantic_name_scopes,
         record_buffer_names,
-        const_names,
+        const_info,
+        top_level_integer_constants,
+        top_level_const_c_names,
+        function_global_declarations,
         top_level_array_ranks,
         error_handler_procedures,
         uses_catch_source_var,
     })
 }
 
+fn collect_global_declarations(statements: &[Stmt], out: &mut Vec<BasicIdent>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::GlobalDecl(name) => out.push(name.clone()),
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_global_declarations(then_body, out);
+                collect_global_declarations(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_global_declarations(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_global_declarations(&case.body, out);
+                }
+                collect_global_declarations(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_global_declarations(try_body, out);
+                if let Some(catch) = catch {
+                    collect_global_declarations(&catch.body, out);
+                }
+                collect_global_declarations(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Integer literal values of direct top-level `const` declarations.  The C
+/// backend uses these only when resolving fixed array bounds: a C array
+/// declaration cannot use a runtime value.  Nested declarations deliberately
+/// stay out of this map because they are not global constants.
+fn collect_top_level_integer_constants(
+    statements: &[Stmt],
+) -> HashMap<(String, Option<TypeSuffix>), i64> {
+    statements
+        .iter()
+        .filter_map(|statement| {
+            let Statement::Const { name, value } = &statement.kind else {
+                return None;
+            };
+            let value = match value {
+                Expr::Integer(value) => *value,
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                } => match expr.as_ref() {
+                    Expr::Integer(value) => -*value,
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            Some(((name.name.to_ascii_lowercase(), name.suffix), value))
+        })
+        .collect()
+}
+
+/// Every `const NAME = value` declaration reachable in `statements` --
+/// top-level control-flow bodies (`if`/`for`/`while`/`do`/`select case`/
+/// `try`/`catch`/`finally`) included, since a `const` is legal (if
+/// unusual) inside any of them and still resolves globally either way
+/// (see `ConstInfo`'s own doc comment) -- paired with its source position,
+/// for `reject_duplicate_consts`'s own diagnostics. Shared by that
+/// function and `resolve`'s own `const_info` construction so the two
+/// can never see a different set of declarations from each other.
+fn collect_const_decls(statements: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent, Expr)>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Const { name, value } => {
+                out.push((statement.pos.clone(), name.clone(), value.clone()));
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_const_decls(then_body, out);
+                collect_const_decls(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_const_decls(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_const_decls(&case.body, out);
+                }
+                collect_const_decls(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_const_decls(try_body, out);
+                if let Some(catch) = catch {
+                    collect_const_decls(&catch.body, out);
+                }
+                collect_const_decls(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// A const name must be unique program-wide regardless of type suffix --
+/// there's no such thing as two different consts sharing a name but
+/// differing only by suffix, since a const reference is always written
+/// bare (see `Parser::parse_const`'s suffix rejection) and always resolves
+/// globally (see `ConstInfo`'s own doc comment).
+fn reject_duplicate_consts(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let mut decls = Vec::new();
+    collect_const_decls(&program.statements, &mut decls);
+    for f in &program.functions {
+        collect_const_decls(&f.body, &mut decls);
+    }
+    let mut seen = HashSet::new();
+    for (pos, name, _) in &decls {
+        if !seen.insert(name.name.to_ascii_lowercase()) {
+            diagnostics.push(Diagnostic::error(
+                pos.clone(),
+                format!(
+                    "duplicate const `{}` -- a const name must be unique regardless of type \
+                     suffix",
+                    name.name
+                ),
+            ));
+        }
+    }
+}
+
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
+    validate_with_semantic(program, None)
+}
+
+fn validate_with_semantic(
+    program: &Program,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     reject_functions_shadowing_builtins(program, &mut diagnostics);
     reject_duplicate_functions(program, &mut diagnostics);
     reject_scalar_methods(program, &mut diagnostics);
     reject_call_cycles(program, &mut diagnostics);
-    reject_missing_returns(program, &mut diagnostics);
+    reject_missing_returns(program, semantic_module, &mut diagnostics);
     reject_invalid_parameter_defaults(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
     reject_option_base(program, &mut diagnostics);
+    reject_cross_scope_branch_targets(program, &mut diagnostics);
+    reject_duplicate_consts(program, &mut diagnostics);
+    if let Some(module) = semantic_module {
+        reject_unknown_callable_parameter_annotations(module, &mut diagnostics);
+        reject_invalid_typed_calls(module, &mut diagnostics);
+        diagnostics.extend(reject_unknown_calls(module));
+        reject_invalid_typed_semantics(module, &mut diagnostics);
+    }
 
     if diagnostics.is_empty() {
         Ok(())
@@ -81,42 +413,808 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
-/// Reports advisory naming/type-suffix findings for constants. Constants are
-/// type-inferred from their value; suffixes remain accepted for migration but
-/// are discouraged, and names conventionally use upper snake case.
-pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
-    let mut findings = Vec::new();
-    for statement in &program.statements {
-        if let Statement::Const { name, .. } = &statement.kind {
-            // Parser-inferred suffixes are also stored on the IR node so
-            // backends retain the constant's type. Do not report those as
-            // source suffixes when the declaration already follows the
-            // canonical uppercase-snake convention.
-            if name.suffix.is_some() && !is_upper_snake_case(&name.name) {
-                findings.push(Diagnostic::warning(
-                    SourcePos::new("<validation>", 1, 1),
-                    format!("constant `{name}` has a type suffix; constant types are inferred from their values"),
-                ));
+/// Semantic rules that hold for every target and that the typed IR can check
+/// on its own: a `for` variable is numeric,
+/// `swap` and assignment keep string and numeric apart, `mid$` assigns into a
+/// string, and arithmetic, comparisons and array subscripts do not mix the two
+/// kinds. A value whose type is unknown is never reported.
+fn reject_invalid_typed_semantics(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use crate::semantic_ir::{
+        AssignmentOperator, ExpressionKind, SemanticModule, SemanticStatement,
+        SemanticStatementKind as Kind, SemanticValueType as Type,
+    };
+
+    fn is_string(value_type: Type) -> Option<bool> {
+        match value_type {
+            Type::String => Some(true),
+            Type::Integer | Type::Long | Type::Single | Type::Double | Type::Boolean => {
+                Some(false)
             }
-            if !is_upper_snake_case(&name.name) {
-                findings.push(Diagnostic::warning(
-                    SourcePos::new("<validation>", 1, 1),
-                    format!("constant `{name}` is not uppercase snake case; use names such as `MAX_COUNT`"),
-                ));
+            Type::Unknown => None,
+        }
+    }
+
+    fn statements(
+        list: &[SemanticStatement],
+        depth: usize,
+        consts: &HashSet<String>,
+        callable_names: &HashSet<String>,
+        position: &dyn Fn(crate::rdgen_frontend::SourceSpan) -> SourcePos,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for statement in list {
+            match &statement.kind {
+                Kind::Expression(expression) if matches!(expression.kind, ExpressionKind::Name(_)) => {
+                    let ExpressionKind::Name(name) = &expression.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("`{name}` is not a statement"),
+                    ));
+                }
+                Kind::Assignment { target, .. }
+                    if matches!(&target.kind, ExpressionKind::Call { name, .. }
+                        if callable_names.contains(&name.to_ascii_lowercase())) =>
+                {
+                    let ExpressionKind::Call { name, .. } = &target.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("cannot assign to the result of a call to `{name}`"),
+                    ));
+                }
+                Kind::Assignment { target, .. }
+                    if matches!(&target.kind, ExpressionKind::Name(name)
+                        if consts.contains(name.trim_end_matches(['%', '&', '!', '#', '$']).to_ascii_lowercase().as_str())) =>
+                {
+                    let ExpressionKind::Name(name) = &target.kind else {
+                        unreachable!("guarded above");
+                    };
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        format!("cannot assign to `{name}`: it is a const"),
+                    ));
+                }
+                Kind::Assignment {
+                    target,
+                    operator: AssignmentOperator::Assign,
+                    value,
+                } => {
+                    if let (Some(target_is_string), Some(value_is_string)) =
+                        (is_string(target.value_type), is_string(value.value_type))
+                    {
+                        if target_is_string != value_is_string {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                if target_is_string {
+                                    "type mismatch: cannot assign a numeric value to a string variable"
+                                } else {
+                                    "type mismatch: cannot assign a string value to a numeric variable"
+                                },
+                            ));
+                        }
+                    }
+                }
+                Kind::For {
+                    variable,
+                    variable_type: Type::String,
+                    ..
+                } => diagnostics.push(Diagnostic::error(
+                    position(statement.span),
+                    format!("`for` loop variable `{variable}` must be numeric"),
+                )),
+                Kind::Swap { left, right } => {
+                    if let (Some(a), Some(b)) =
+                        (is_string(left.value_type), is_string(right.value_type))
+                    {
+                        if a != b {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                "SWAP's two operands must be the same kind (both string, or both numeric)",
+                            ));
+                        }
+                    }
+                }
+                Kind::SelectCase {
+                    selector, cases, ..
+                } => {
+                    if let Some(selector_is_string) = is_string(selector.value_type) {
+                        let mismatched = cases.iter().flat_map(|case| &case.values).any(|value| {
+                            let types: Vec<Type> = match value {
+                                crate::semantic_ir::CaseValue::Comparison { value, .. } => {
+                                    vec![value.value_type]
+                                }
+                                crate::semantic_ir::CaseValue::Value {
+                                    first, range_end, ..
+                                } => std::iter::once(first.value_type)
+                                    .chain(range_end.iter().map(|end| end.value_type))
+                                    .collect(),
+                            };
+                            types
+                                .into_iter()
+                                .filter_map(is_string)
+                                .any(|value_is_string| value_is_string != selector_is_string)
+                        });
+                        if mismatched {
+                            diagnostics.push(Diagnostic::error(
+                                position(statement.span),
+                                "type mismatch: a `case` value must be the same kind (string or numeric) as the `select case` expression",
+                            ));
+                        }
+                    }
+                }
+                Kind::LineInput { target, .. } if is_string(target.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "LINE INPUT # requires a string (`$`-suffixed) target",
+                    ));
+                }
+                Kind::Print {
+                    destination: crate::semantic_ir::PrintDestination::Using { format, .. },
+                    ..
+                } if is_string(format.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "`print using` needs a string format",
+                    ));
+                }
+                Kind::MidAssign { target, .. } if is_string(target.value_type) == Some(false) => {
+                    diagnostics.push(Diagnostic::error(
+                        position(statement.span),
+                        "`mid$` assignment needs a string variable as its target",
+                    ));
+                }
+                _ => {}
+            }
+            let inner = |body: &[SemanticStatement], depth, diagnostics: &mut Vec<Diagnostic>| {
+                statements(body, depth, consts, callable_names, position, diagnostics)
+            };
+            match &statement.kind {
+                Kind::Line(body) => inner(body, depth, diagnostics),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    inner(then_body, depth, diagnostics);
+                    inner(else_body, depth, diagnostics);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    inner(body, depth + 1, diagnostics)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        inner(&case.body, depth, diagnostics);
+                    }
+                    inner(else_body, depth, diagnostics);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    inner(body, depth, diagnostics);
+                    if let Some(catch) = catch {
+                        inner(&catch.body, depth, diagnostics);
+                    }
+                    inner(finally_body, depth, diagnostics);
+                }
+                _ => {}
             }
         }
     }
-    findings
+
+    fn expressions(
+        list: &[SemanticStatement],
+        position: &dyn Fn(crate::rdgen_frontend::SourceSpan) -> SourcePos,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for expression in SemanticModule::expressions_in(list) {
+            match &expression.kind {
+                ExpressionKind::Binary {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    let (Some(left_string), Some(right_string)) =
+                        (is_string(left.value_type), is_string(right.value_type))
+                    else {
+                        continue;
+                    };
+                    let operator = operator.trim().to_ascii_uppercase();
+                    let mixes = left_string != right_string;
+                    let bad = match operator.as_str() {
+                        "+" | "=" | "<>" | "<" | ">" | "<=" | ">=" => mixes,
+                        "-" | "*" | "/" | "^" | "\\" | "MOD" | "AND" | "OR" | "XOR" | "EQV"
+                        | "IMP" => left_string || right_string,
+                        _ => false,
+                    };
+                    if bad {
+                        diagnostics.push(Diagnostic::error(
+                            position(expression.span),
+                            format!(
+                                "type mismatch: `{}` cannot combine a string and a number this way",
+                                operator.to_ascii_lowercase()
+                            ),
+                        ));
+                    }
+                }
+                ExpressionKind::Call { name, arguments } if !arguments.is_empty() => {
+                    let base = name
+                        .trim_end_matches(['$', '%', '&', '!', '#'])
+                        .to_ascii_lowercase();
+                    let wants_numeric = matches!(
+                        base.as_str(),
+                        "chr" | "str" | "hex" | "oct" | "space" | "sqr" | "sin" | "cos" | "tan"
+                            | "atn" | "log" | "exp" | "abs" | "int" | "fix" | "sgn" | "cint"
+                            | "clng" | "csng" | "cdbl"
+                    );
+                    let wants_string = matches!(
+                        base.as_str(),
+                        "len" | "asc" | "val" | "left" | "right" | "mid" | "cvi" | "cvl" | "cvs"
+                            | "cvd"
+                    );
+                    let first = is_string(arguments[0].value_type);
+                    if (wants_numeric && first == Some(true)) || (wants_string && first == Some(false)) {
+                        diagnostics.push(Diagnostic::error(
+                            position(expression.span),
+                            format!(
+                                "type mismatch: `{}` needs a {} argument",
+                                name,
+                                if wants_numeric { "numeric" } else { "string" }
+                            ),
+                        ));
+                    }
+                }
+                ExpressionKind::Index { index, .. } if index.value_type == Type::String => {
+                    diagnostics.push(Diagnostic::error(
+                        position(index.span),
+                        "an array subscript must be numeric",
+                    ));
+                }
+                ExpressionKind::MultiIndex { indices, .. } => {
+                    for index in indices.iter().filter(|index| index.value_type == Type::String) {
+                        diagnostics.push(Diagnostic::error(
+                            position(index.span),
+                            "an array subscript must be numeric",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let callable_names: HashSet<String> = module
+        .callables
+        .iter()
+        .filter(|callable| callable.receiver.is_none())
+        .map(|callable| callable.name.to_ascii_lowercase())
+        .collect();
+    let top_level_consts: HashSet<String> = module
+        .top_level_const_names()
+        .into_iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    let position_in = |source_index: usize| {
+        move |span: crate::rdgen_frontend::SourceSpan| {
+            module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1))
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let position = position_in(*source_index);
+        statements(
+            std::slice::from_ref(statement),
+            0,
+            &top_level_consts,
+            &callable_names,
+            &position,
+            diagnostics,
+        );
+        expressions(std::slice::from_ref(statement), &position, diagnostics);
+    }
+    for callable in &module.callables {
+        let position = position_in(callable.source_index);
+        let mut consts = top_level_consts.clone();
+        consts.extend(callable.const_initializers().into_keys());
+        statements(&callable.body, 0, &consts, &callable_names, &position, diagnostics);
+        expressions(&callable.body, &position, diagnostics);
+    }
 }
 
-fn is_upper_snake_case(name: &str) -> bool {
-    let mut chars = name.chars();
-    matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
-        && name
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
-        && !name.contains("__")
-        && !name.ends_with('_')
+/// Limits of the C and JVM targets that classic BASIC does not share, reported
+/// before code generation with one clear message instead of a backend's
+/// generic "not supported": `exit`/`continue` outside a loop, `input` with
+/// several variables, `GET`/`PUT` with no record number, `LSET`/`RSET` on a
+/// variable no `FIELD` declared, and, on the JVM, `on error goto`, `resume`
+/// and `return` outside a function.
+pub fn reject_target_limits(
+    module: &crate::semantic_ir::SemanticModule,
+    target: &str,
+    jvm: bool,
+) -> Vec<Diagnostic> {
+    use crate::semantic_ir::{InputSource, SemanticStatement, SemanticStatementKind as Kind};
+
+    fn visit(
+        list: &[SemanticStatement],
+        depth: usize,
+        in_callable: bool,
+        f: &mut dyn FnMut(&SemanticStatement, usize, bool),
+    ) {
+        for statement in list {
+            f(statement, depth, in_callable);
+            match &statement.kind {
+                Kind::Line(body) => visit(body, depth, in_callable, f),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, depth, in_callable, f);
+                    visit(else_body, depth, in_callable, f);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    visit(body, depth + 1, in_callable, f)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        visit(&case.body, depth, in_callable, f);
+                    }
+                    visit(else_body, depth, in_callable, f);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    visit(body, depth, in_callable, f);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, depth, in_callable, f);
+                    }
+                    visit(finally_body, depth, in_callable, f);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let base = |name: &str| {
+        name.trim_end_matches(['$', '%', '&', '!', '#'])
+            .to_ascii_lowercase()
+    };
+    // Every variable a FIELD statement binds, anywhere.
+    let mut fielded: HashSet<String> = HashSet::new();
+    {
+        let mut note = |statement: &SemanticStatement, _: usize, _: bool| {
+            if let Kind::Field { bindings, .. } = &statement.kind {
+                fielded.extend(bindings.iter().map(|binding| base(&binding.name)));
+            }
+        };
+        visit(&module.statements, 0, false, &mut note);
+        for callable in &module.callables {
+            visit(&callable.body, 0, true, &mut note);
+        }
+    }
+
+    // A bare `return` in a program that uses `gosub` returns from the gosub,
+    // and the JVM already rejects `gosub` itself.
+    let has_gosub = module.top_level_gosub_count() > 0;
+    let mut diagnostics = Vec::new();
+    let mut check = |source_index: usize, list: &[SemanticStatement], in_callable: bool| {
+        let position = |span| {
+            module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1))
+        };
+        let mut found: Vec<Diagnostic> = Vec::new();
+        visit(list, 0, in_callable, &mut |statement, depth, in_callable| {
+            let mut report = |message: String| {
+                found.push(Diagnostic::error(position(statement.span), message));
+            };
+            match &statement.kind {
+                Kind::Exit if depth == 0 => {
+                    report(format!("`exit` outside of a loop isn't supported with --target {target}"));
+                }
+                Kind::Continue if depth == 0 => {
+                    report(format!("`continue` outside of a loop isn't supported with --target {target}"));
+                }
+                Kind::Input {
+                    source: InputSource::Console(_),
+                    targets,
+                } if targets.len() > 1 => report(format!(
+                    "`input` with more than one variable isn't supported with --target {target} -- give each variable its own `input` statement"
+                )),
+                Kind::Get { position: at, .. } | Kind::Put { position: at, .. }
+                    if at.as_ref().is_none_or(|at| at.position.is_none()) =>
+                {
+                    report(format!(
+                        "GET/PUT with no record number (\"next sequential record\") isn't supported with --target {target} -- always pass an explicit record number"
+                    ));
+                }
+                Kind::Lset { target: variable, .. } | Kind::Rset { target: variable, .. }
+                    if !fielded.contains(&base(&variable.name)) =>
+                {
+                    report(format!(
+                        "LSET/RSET on `{}` isn't supported with --target {target} -- only a variable declared by a FIELD is",
+                        variable.name
+                    ));
+                }
+                Kind::OnErrorGoto(_) if jvm => report(
+                    "`on error goto` is not supported with --target jvm; use `try`/`catch`/`finally` for portable error handling".to_string(),
+                ),
+                Kind::Resume(_) if jvm => report(
+                    "`resume` is not supported with --target jvm; use `try`/`catch`/`finally` for portable error handling".to_string(),
+                ),
+                Kind::Return(_) if jvm && !in_callable && !has_gosub => report(
+                    "`return` outside of a function isn't supported with --target jvm".to_string(),
+                ),
+                _ => {}
+            }
+        });
+        diagnostics.extend(found);
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement), false);
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body, true);
+    }
+    diagnostics
+}
+
+/// Calls to names that are neither a user callable, a built-in, a declared
+/// array (or array parameter) nor a method are errors on every target.
+fn reject_unknown_calls(module: &crate::semantic_ir::SemanticModule) -> Vec<Diagnostic> {
+    use crate::semantic_ir::{ExpressionKind, SemanticModule};
+    let mut diagnostics = Vec::new();
+    let mut declared_arrays: HashSet<String> = HashSet::new();
+    let base_name = |name: &str| {
+        name.trim_end_matches(['$', '%', '&', '!', '#'])
+            .to_ascii_lowercase()
+    };
+    declared_arrays.extend(
+        module
+            .top_level_dim_declarations()
+            .keys()
+            .map(|name| base_name(name)),
+    );
+    for callable in &module.callables {
+        declared_arrays.extend(callable.dim_declarations().keys().map(|name| base_name(name)));
+        declared_arrays.extend(
+            callable
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.array_axes > 0)
+                .map(|parameter| base_name(&parameter.name)),
+        );
+    }
+    // A parameter is a local name; how it is used is checked with more
+    // context (array rank and so on) later, so it is never reported here.
+    for callable in &module.callables {
+        declared_arrays.extend(callable.parameters.iter().map(|parameter| {
+            parameter
+                .name
+                .trim_end_matches(['$', '%', '&', '!', '#'])
+                .to_ascii_lowercase()
+        }));
+    }
+    let check = |source_index: usize,
+                 statements: &[crate::semantic_ir::SemanticStatement],
+                 diagnostics: &mut Vec<Diagnostic>| {
+        for call in SemanticModule::calls_in(statements) {
+            let ExpressionKind::Call { name, .. } = &call.kind else {
+                continue;
+            };
+            if module
+                .callables
+                .iter()
+                .any(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
+            {
+                continue;
+            }
+            let base = name
+                .trim_end_matches(['$', '%', '&', '!', '#'])
+                .to_ascii_lowercase();
+            let known = crate::codegen_basic::BASIC_BUILTINS.contains(&base.as_str())
+                || ["sizeof", "lbound", "ubound"].contains(&base.as_str())
+                || declared_arrays.contains(&base)
+                || name.contains('.');
+            if !known {
+                let position = module
+                    .sources
+                    .get(source_index)
+                    .map(|source| source.source_position(call.span))
+                    .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+                diagnostics.push(Diagnostic::error(
+                    position,
+                    format!("unknown function or array `{name}`"),
+                ));
+            }
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement), &mut diagnostics);
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body, &mut diagnostics);
+    }
+    diagnostics
+}
+
+/// Checks every call to a user callable against its declaration: the argument
+/// count must fit the parameters (defaults make trailing ones optional), and
+/// a `byref` scalar parameter needs a plain variable to write back to.
+fn reject_invalid_typed_calls(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use crate::semantic_ir::{ExpressionKind, Passing, SemanticModule};
+
+    // The spans of calls that are statements in their own right: only those
+    // may call a procedure.
+    fn statement_calls(
+        list: &[crate::semantic_ir::SemanticStatement],
+        spans: &mut HashSet<(usize, usize)>,
+    ) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in list {
+            match &statement.kind {
+                Kind::Expression(expression)
+                    if matches!(expression.kind, ExpressionKind::Call { .. }) =>
+                {
+                    spans.insert((expression.span.start, expression.span.end));
+                }
+                Kind::Line(body) => statement_calls(body, spans),
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    statement_calls(then_body, spans);
+                    statement_calls(else_body, spans);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    statement_calls(body, spans)
+                }
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        statement_calls(&case.body, spans);
+                    }
+                    statement_calls(else_body, spans);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    statement_calls(body, spans);
+                    if let Some(catch) = catch {
+                        statement_calls(&catch.body, spans);
+                    }
+                    statement_calls(finally_body, spans);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // The rank of a declared array, looking in the callable's own scope
+    // (its dims and array parameters) before the program's.
+    let array_rank = |callable: Option<&crate::semantic_ir::CallableSignature>, name: &str| {
+        let key = name.to_ascii_lowercase();
+        let base = key.trim_end_matches(['$', '%', '&', '!', '#']).to_string();
+        let matches = |declared: &str| {
+            let declared = declared.to_ascii_lowercase();
+            declared == key || declared.trim_end_matches(['$', '%', '&', '!', '#']) == base
+        };
+        if let Some(callable) = callable {
+            if let Some(parameter) = callable
+                .parameters
+                .iter()
+                .find(|parameter| parameter.array_axes > 0 && matches(&parameter.name))
+            {
+                return Some(parameter.array_axes);
+            }
+            if let Some(declaration) = callable
+                .dim_declarations()
+                .into_values()
+                .find(|declaration| declaration.array_axes > 0 && matches(&declaration.name))
+            {
+                return Some(declaration.array_axes);
+            }
+        }
+        module
+            .top_level_dim_declarations()
+            .into_values()
+            .find(|declaration| declaration.array_axes > 0 && matches(&declaration.name))
+            .map(|declaration| declaration.array_axes)
+    };
+
+    let mut check = |source_index: usize,
+                     statements: &[crate::semantic_ir::SemanticStatement],
+                     scope: Option<&crate::semantic_ir::CallableSignature>| {
+        let mut statement_spans = HashSet::new();
+        statement_calls(statements, &mut statement_spans);
+        for call in SemanticModule::calls_in(statements) {
+            let ExpressionKind::Call { name, arguments } = &call.kind else {
+                continue;
+            };
+            let position = module
+                .sources
+                .get(source_index)
+                .map(|source| source.source_position(call.span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+            let lower = name.to_ascii_lowercase();
+            if ["sizeof", "lbound", "ubound"].contains(&lower.as_str()) {
+                let builtin = lower.as_str();
+                match arguments.first().map(|argument| &argument.kind) {
+                    Some(ExpressionKind::Name(array)) => match array_rank(scope, array) {
+                        None => diagnostics.push(Diagnostic::error(
+                            position,
+                            format!(
+                                "`{array}` isn't a known array, so `{builtin}` can't determine its size"
+                            ),
+                        )),
+                        Some(rank) => match arguments.get(1).map(|axis| &axis.kind) {
+                            None if rank > 1 => diagnostics.push(Diagnostic::error(
+                                position,
+                                format!(
+                                    "`{array}` has {rank} dimensions -- {builtin} needs an axis argument, e.g. `{builtin}({array}, 0)`"
+                                ),
+                            )),
+                            Some(ExpressionKind::Literal(axis))
+                                if axis.parse::<usize>().is_ok_and(|axis| axis >= rank) =>
+                            {
+                                diagnostics.push(Diagnostic::error(
+                                    position,
+                                    format!(
+                                        "`{array}` only has {rank} dimension{} -- axis {axis} doesn't exist",
+                                        if rank == 1 { "" } else { "s" }
+                                    ),
+                                ));
+                            }
+                            _ => {}
+                        },
+                    },
+                    _ => diagnostics.push(Diagnostic::error(
+                        position,
+                        format!(
+                            "`{builtin}` expects an array name, e.g. `{builtin}(arr%)` or `{builtin}(grid%, 1)`"
+                        ),
+                    )),
+                }
+                continue;
+            }
+            let Some(callable) = module
+                .callables
+                .iter()
+                .find(|callable| callable.receiver.is_none() && callable.name.eq_ignore_ascii_case(name))
+            else {
+                // Array parameters have their own, more specific rank diagnostics
+                // in the backends; this covers arrays declared with `dim`.
+                let is_parameter = scope.is_some_and(|callable| {
+                    let base = name.trim_end_matches(['$', '%', '&', '!', '#']).to_ascii_lowercase();
+                    callable.parameters.iter().any(|parameter| {
+                        parameter
+                            .name
+                            .trim_end_matches(['$', '%', '&', '!', '#'])
+                            .eq_ignore_ascii_case(&base)
+                    })
+                });
+                if let Some(rank) = array_rank(scope, name).filter(|_| !is_parameter) {
+                    // `arr%()` is the whole-array reference, not an element access.
+                    if !arguments.is_empty() && rank != arguments.len() {
+                        diagnostics.push(Diagnostic::error(
+                            position,
+                            format!(
+                                "`{name}` has {rank} dimension{} but is indexed with {}",
+                                if rank == 1 { "" } else { "s" },
+                                arguments.len()
+                            ),
+                        ));
+                    }
+                }
+                continue;
+            };
+            if callable.kind == crate::semantic_ir::CallableKind::Procedure
+                && !statement_spans.contains(&(call.span.start, call.span.end))
+            {
+                diagnostics.push(Diagnostic::error(
+                    position.clone(),
+                    format!("`{name}` is a procedure and returns no value, so it cannot be used in an expression"),
+                ));
+                continue;
+            }
+            let required = callable
+                .parameters
+                .iter()
+                .filter(|parameter| parameter.default.is_none())
+                .count();
+            if arguments.len() < required || arguments.len() > callable.parameters.len() {
+                diagnostics.push(Diagnostic::error(
+                    position,
+                    format!(
+                        "`{name}` expects {} argument(s), got {}",
+                        callable.parameters.len(),
+                        arguments.len()
+                    ),
+                ));
+                continue;
+            }
+            for (parameter, argument) in callable.parameters.iter().zip(arguments) {
+                if parameter.passing == Some(Passing::ByRef)
+                    && parameter.array_axes == 0
+                    && !matches!(argument.kind, ExpressionKind::Name(_))
+                {
+                    diagnostics.push(Diagnostic::error(
+                        position.clone(),
+                        format!(
+                            "`byref` parameter `{}` of `{name}` was called with an argument that \
+                             isn't a plain variable -- byref requires somewhere to write the \
+                             result back to",
+                            parameter.name
+                        ),
+                    ));
+                }
+            }
+        }
+    };
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        check(*source_index, std::slice::from_ref(statement), None);
+    }
+    for callable in &module.callables {
+        check(callable.source_index, &callable.body, Some(callable));
+    }
+}
+
+fn reject_unknown_callable_parameter_annotations(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for callable in &module.callables {
+        for parameter in &callable.parameters {
+            let Some(annotation) = parameter.type_annotation.as_deref() else {
+                continue;
+            };
+            if parameter.value_type != crate::semantic_ir::SemanticValueType::Unknown
+                || module
+                    .records
+                    .iter()
+                    .any(|record| record.name.eq_ignore_ascii_case(annotation))
+            {
+                continue;
+            }
+            let pos = module
+                .sources
+                .get(callable.source_index)
+                .map(|source| source.source_position(parameter.span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+            diagnostics.push(Diagnostic::error(
+                pos,
+                format!(
+                    "unknown type annotation `{annotation}` for parameter `{}` of `{}`",
+                    parameter.name, callable.name
+                ),
+            ));
+        }
+    }
 }
 
 fn reject_invalid_parameter_defaults(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
@@ -331,6 +1429,227 @@ fn reject_option_base(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     walk(&program.statements, diagnostics);
     for function in &program.functions {
         walk(&function.body, diagnostics);
+    }
+}
+
+/// Two related rules, both from GitHub issue #149, on where a `goto`/
+/// `gosub`/`on ... goto`/`on ... gosub`/`resume <label>` target may live
+/// (`on error goto` is deliberately exempt from both -- see the exclusion
+/// at its match arm below):
+///
+/// - `goto`/`on ... goto`/`resume <label>` must target a label declared in
+///   the *same* scope as the statement itself -- the top-level program
+///   body, or the one function/procedure body it's written inside -- in
+///   both directions: a top-level `goto` can't reach into a
+///   function/procedure, and a `goto` inside one can't reach out to
+///   top-level or into a *different* function/procedure. Transpiling a
+///   violation produces a real, silently broken program: a plain `GOTO`
+///   landing inside a function/procedure body lands on code whose block
+///   ends in a bare `RETURN` with no matching `GOSUB` call frame.
+/// - `gosub`/`on ... gosub` must target a label declared in the top-level
+///   program body -- *never* one inside a function/procedure body, even
+///   the very one the `gosub` itself is written inside. A function/
+///   procedure body is meant to be entered exactly one way: the compiler's
+///   own generated call sequence (assign params, `GOSUB` its one true
+///   entry label, assign the result). A raw user `GOSUB` reaching any
+///   *other* label inside that body enters it a second, uncontrolled way,
+///   with none of the parameter/local setup the real call path performs.
+fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    fn collect_labels(body: &[Stmt], out: &mut HashSet<String>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Label(name) => {
+                    out.insert(name.to_ascii_lowercase());
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_labels(then_body, out);
+                    collect_labels(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_labels(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_labels(&case.body, out);
+                    }
+                    collect_labels(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_labels(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_labels(&handler.body, out);
+                    }
+                    collect_labels(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // `None` when the target isn't a plain label reference at all -- a raw
+    // line number is already rejected elsewhere by each of these
+    // statements' own parser (see `parse_label_target`/
+    // `parse_on_error_goto_target`), except `on error goto 0`'s `0`
+    // sentinel, which disables the trap rather than naming a label.
+    fn target_name(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Ident(ident) => Some(ident.name.to_ascii_lowercase()),
+            _ => None,
+        }
+    }
+
+    fn collect_targets(body: &[Stmt], out: &mut Vec<(SourcePos, &'static str, String)>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Goto(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "goto", name));
+                    }
+                }
+                Statement::Gosub(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "gosub", name));
+                    }
+                }
+                // `on error goto` is deliberately excluded: unlike a plain
+                // `goto`/`gosub`, its target may legitimately be a
+                // *procedure* name declared anywhere in the program (see
+                // `error_handler_targets`/`reject_unsafe_error_handler_procedures`,
+                // which already validate that case on its own terms), and
+                // real BASIC's `ON ERROR GOTO` is itself a global trap, not
+                // scoped to wherever it was installed -- an error anywhere
+                // in the program can fire a handler installed elsewhere.
+                Statement::OnBranch {
+                    targets, is_gosub, ..
+                } => {
+                    let keyword = if *is_gosub {
+                        "on ... gosub"
+                    } else {
+                        "on ... goto"
+                    };
+                    for t in targets {
+                        if let Some(name) = target_name(t) {
+                            out.push((stmt.pos.clone(), keyword, name));
+                        }
+                    }
+                }
+                Statement::Resume(ResumeTarget::Line(expr)) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "resume", name));
+                    }
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_targets(then_body, out);
+                    collect_targets(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_targets(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_targets(&case.body, out);
+                    }
+                    collect_targets(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_targets(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_targets(&handler.body, out);
+                    }
+                    collect_targets(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn is_gosub_family(keyword: &str) -> bool {
+        matches!(keyword, "gosub" | "on ... gosub")
+    }
+
+    // `gosub`/`on ... gosub` may only ever reach a top-level label,
+    // regardless of where the statement itself lives -- computed once,
+    // rather than per scope, since the rule doesn't depend on the caller's
+    // own scope at all.
+    let mut top_labels = HashSet::new();
+    collect_labels(&program.statements, &mut top_labels);
+
+    fn check(
+        body: &[Stmt],
+        scope: &str,
+        own_labels: &HashSet<String>,
+        top_labels: &HashSet<String>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let mut targets = Vec::new();
+        collect_targets(body, &mut targets);
+        for (pos, keyword, name) in targets {
+            if is_gosub_family(keyword) {
+                if !top_labels.contains(&name) {
+                    diagnostics.push(Diagnostic::error(
+                        pos,
+                        format!(
+                            "`{keyword} {name}` doesn't name a top-level label -- a `gosub`/\
+                             `on ... gosub` target must be a label declared in the top-level \
+                             program body; it can never reach a label declared inside a \
+                             function/procedure body (even the one the `{keyword}` itself is \
+                             written inside), since that body is meant to be entered only \
+                             through the compiler's own generated call sequence"
+                        ),
+                    ));
+                }
+            } else if !own_labels.contains(&name) {
+                diagnostics.push(Diagnostic::error(
+                    pos,
+                    format!(
+                        "`{keyword} {name}` doesn't name a label in {scope} -- a `goto`/\
+                         `on ... goto`/`resume` target must be a label declared in the same \
+                         procedure/function (or, from top-level code, in the top-level program \
+                         body); it can never reach a label declared inside a different \
+                         procedure or function"
+                    ),
+                ));
+            }
+        }
+    }
+
+    check(
+        &program.statements,
+        "the top-level program body",
+        &top_labels,
+        &top_labels,
+        diagnostics,
+    );
+    for function in &program.functions {
+        let mut own_labels = HashSet::new();
+        collect_labels(&function.body, &mut own_labels);
+        check(
+            &function.body,
+            &format!("`{}`", function.name),
+            &own_labels,
+            &top_labels,
+            diagnostics,
+        );
     }
 }
 
@@ -597,12 +1916,61 @@ fn reject_call_cycles(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+fn reject_missing_returns(
+    program: &Program,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for function in &program.functions {
         if function.is_procedure {
             continue;
         }
-        if !contains_return(&function.body) {
+        let semantic_callable = semantic_module.and_then(|module| {
+            module.callables.iter().find(|callable| {
+                if !callable
+                    .name
+                    .eq_ignore_ascii_case(&function.name.as_basic())
+                    || callable.receiver.is_some() != function.receiver.is_some()
+                {
+                    return false;
+                }
+                let receiver_matches = match (function.receiver, callable.receiver.as_deref()) {
+                    (None, None) => true,
+                    (Some(suffix), Some(receiver)) => {
+                        let expected = match suffix {
+                            TypeSuffix::Integer => "integer",
+                            TypeSuffix::Long => "long",
+                            TypeSuffix::Single => "single",
+                            TypeSuffix::Double => "double",
+                            TypeSuffix::String => "string",
+                        };
+                        receiver.eq_ignore_ascii_case(expected)
+                    }
+                    _ => false,
+                };
+                if !receiver_matches {
+                    return false;
+                }
+                use crate::semantic_ir::CallableKind as Kind;
+                matches!(
+                    (
+                        function.receiver.is_some(),
+                        function.is_procedure,
+                        callable.kind
+                    ),
+                    (
+                        true,
+                        false,
+                        Kind::Method | Kind::FluentMethod | Kind::InlineMethod
+                    ) | (false, true, Kind::Procedure)
+                        | (false, false, Kind::Function)
+                )
+            })
+        });
+        let returns = semantic_callable
+            .map(|callable| semantic_body_contains_return(&callable.body))
+            .unwrap_or_else(|| contains_return(&function.body));
+        if !returns {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
                 format!(
@@ -612,6 +1980,42 @@ fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) 
             ));
         }
     }
+}
+
+fn semantic_body_contains_return(statements: &[crate::semantic_ir::SemanticStatement]) -> bool {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    statements.iter().any(|statement| match &statement.kind {
+        Kind::Return(_) => true,
+        Kind::Line(body)
+        | Kind::While { body, .. }
+        | Kind::For { body, .. }
+        | Kind::Do { body, .. } => semantic_body_contains_return(body),
+        Kind::If {
+            then_body,
+            else_body,
+            ..
+        } => semantic_body_contains_return(then_body) || semantic_body_contains_return(else_body),
+        Kind::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases
+                .iter()
+                .any(|case| semantic_body_contains_return(&case.body))
+                || semantic_body_contains_return(else_body)
+        }
+        Kind::Try {
+            body,
+            catch,
+            finally_body,
+        } => {
+            semantic_body_contains_return(body)
+                || catch
+                    .as_ref()
+                    .is_some_and(|binding| semantic_body_contains_return(&binding.body))
+                || semantic_body_contains_return(finally_body)
+        }
+        _ => false,
+    })
 }
 
 /// A procedure named as an `on error goto` target is entered via a raw
@@ -1004,6 +2408,7 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)
@@ -1249,6 +2654,15 @@ fn check_var_uses(
         let ident = match expr {
             Expr::Ident(ident) => ident,
             Expr::ArrayRef { name, .. } => name,
+            // A multi-dimensional array reference (`grid%(row%, col%)`)
+            // parses as `Expr::Call`, not `Expr::ArrayRef` -- see
+            // `make_paren_ident_expr`'s own doc comment in parser.rs: a
+            // suffixed identifier only becomes `ArrayRef` when it has
+            // exactly one index argument. A real function call also
+            // parses this way, but `known_callables` below already
+            // exempts those, so checking `Expr::Call`'s own name here
+            // only catches what that single-index special case misses.
+            Expr::Call { name, .. } => name,
             _ => return,
         };
         if known_callables.contains(&ident.name.to_ascii_lowercase()) {
@@ -1273,7 +2687,7 @@ fn check_var_uses(
     walk_statements_exprs(statements, &mut check);
 }
 
-fn walk_statements_exprs(statements: &[Stmt], f: &mut dyn FnMut(&Expr, &SourcePos)) {
+pub(crate) fn walk_statements_exprs(statements: &[Stmt], f: &mut dyn FnMut(&Expr, &SourcePos)) {
     for stmt in statements {
         walk_statement_exprs(stmt, f);
     }
@@ -1330,9 +2744,14 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
                 }
             }
         }
-        Statement::Open { file, channel, .. } => {
+        Statement::Open {
+            file, channel, len, ..
+        } => {
             walk_expr(file, pos, f);
             walk_expr(channel, pos, f);
+            if let Some(len) = len {
+                walk_expr(len, pos, f);
+            }
         }
         Statement::FileDecl { path, .. } => walk_expr(path, pos, f),
         Statement::LineInput { channel, target } => {
@@ -1521,6 +2940,7 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)
@@ -1729,6 +3149,503 @@ fn walk_legacy_forms(
     }
 }
 
+// ── Optional lints (`--lint`) ─────────────────────────────────────────────
+//
+// Five independent, warning-only checks, off by default (unlike
+// `check_legacy_forms` above, which runs on every compile) since they're
+// more heuristic and more likely to surface a false positive on existing,
+// working code -- particularly a program ported from real BASIC, where an
+// unexplained literal or a declaration left over from an earlier revision
+// is common and not necessarily worth fixing right now. See
+// `CompileOptions::lint` / `main.rs`'s own `--lint` flag.
+
+/// Reports an advisory naming finding for constants that don't use the
+/// conventional upper-snake-case style. A const's type suffix is no
+/// longer a source-level concern here at all: `Parser::parse_const`
+/// rejects an explicit one outright (a const's type is always inferred
+/// from its value), so there's nothing left to warn about there.
+pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
+    let mut findings = Vec::new();
+    for statement in &program.statements {
+        if let Statement::Const { name, .. } = &statement.kind {
+            if !is_upper_snake_case(&name.name) {
+                findings.push(Diagnostic::warning(
+                    statement.pos.clone(),
+                    format!("constant `{name}` is not uppercase snake case; use names such as `MAX_COUNT`"),
+                ));
+            }
+        }
+    }
+    findings
+}
+
+fn is_upper_snake_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && !name.contains("__")
+        && !name.ends_with('_')
+}
+
+/// One `dim`/`const` declaration, with its own position -- the detailed
+/// counterpart to `collect_declarations`'s plain `HashSet<VarKey>` above,
+/// used by both `check_unused_declarations` and `check_shadowing` since
+/// both need to report against a specific declaration, not just test
+/// membership. Deliberately excludes a raw `FIELD` buffer variable (unlike
+/// `collect_declarations`): those exist to be `LSET`/read through
+/// record/file operations that don't always look like an ordinary
+/// reference, so flagging one as unused or shadowing risks a real false
+/// positive `collect_declarations`'s narrower, membership-only use case
+/// doesn't share.
+struct Declaration {
+    ident: BasicIdent,
+    pos: SourcePos,
+}
+
+fn collect_declarations_detailed(statements: &[Stmt], out: &mut Vec<Declaration>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::Dim { name, .. } | Statement::Const { name, .. } => {
+                out.push(Declaration {
+                    ident: name.clone(),
+                    pos: stmt.pos.clone(),
+                });
+            }
+            Statement::For { body, .. } => collect_declarations_detailed(body, out),
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_declarations_detailed(then_body, out);
+                collect_declarations_detailed(else_body, out);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_declarations_detailed(body, out);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_declarations_detailed(&case.body, out);
+                }
+                collect_declarations_detailed(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_declarations_detailed(try_body, out);
+                if let Some(catch) = catch {
+                    collect_declarations_detailed(&catch.body, out);
+                }
+                collect_declarations_detailed(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The declared name an expression *references* (reads or writes), if
+/// any -- `Expr::Ident`/`ArrayRef`/`Call` all name something declared
+/// elsewhere; every other expression kind either has no name of its own
+/// or (a record/method call) is out of scope for this pair of checks the
+/// same way declaration-matching casing's own doc comment explains.
+fn referenced_var_key(expr: &Expr) -> Option<VarKey> {
+    match expr {
+        Expr::Ident(ident) => Some(var_key(ident)),
+        Expr::ArrayRef { name, .. } | Expr::Call { name, .. } => Some(var_key(name)),
+        _ => None,
+    }
+}
+
+/// A `for` loop's own counter (`Statement::For`'s `var` field) is never
+/// itself wrapped in an `Expr` -- `walk_statements_exprs` only walks its
+/// `start`/`end`/`step`/`body`, not `var` -- so `referenced_var_key`
+/// alone would never see it as a use. A `dim`'d name later driven by `for
+/// name% = ...` is genuinely being used (as the loop counter), even
+/// though `--strict-vars` doesn't strictly require that `dim` in the
+/// first place (a `for` counter is one of its own exemptions); this just
+/// keeps `check_unused_declarations` from misreading that as dead.
+fn collect_for_loop_var_uses(statements: &[Stmt], used: &mut HashSet<VarKey>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::For { var, body, .. } => {
+                used.insert(var_key(var));
+                collect_for_loop_var_uses(body, used);
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_for_loop_var_uses(then_body, used);
+                collect_for_loop_var_uses(else_body, used);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_for_loop_var_uses(body, used);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_for_loop_var_uses(&case.body, used);
+                }
+                collect_for_loop_var_uses(else_body, used);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_for_loop_var_uses(try_body, used);
+                if let Some(catch) = catch {
+                    collect_for_loop_var_uses(&catch.body, used);
+                }
+                collect_for_loop_var_uses(finally_body, used);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every `dim`/`const` never referenced again after its own declaration --
+/// at the top level, "referenced" means anywhere in the whole program (a
+/// top-level name is visible from every function); for a function-local
+/// declaration, only within that same function's own body, matching
+/// BASCAL's function-local-by-default scoping (see tutorial 14). A name
+/// only ever *assigned*, never read, still counts as used here -- this
+/// only catches a declaration nothing ever touches again at all, not the
+/// harder "written but never read" case.
+pub fn check_unused_declarations(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    let mut used_anywhere: HashSet<VarKey> = HashSet::new();
+    let mut collect_uses = |expr: &Expr, _pos: &SourcePos| {
+        if let Some(key) = referenced_var_key(expr) {
+            used_anywhere.insert(key);
+        }
+    };
+    walk_statements_exprs(&program.statements, &mut collect_uses);
+    for function in &program.functions {
+        walk_statements_exprs(&function.body, &mut collect_uses);
+    }
+    collect_for_loop_var_uses(&program.statements, &mut used_anywhere);
+    for function in &program.functions {
+        collect_for_loop_var_uses(&function.body, &mut used_anywhere);
+    }
+
+    let mut top_decls = Vec::new();
+    collect_declarations_detailed(&program.statements, &mut top_decls);
+    for decl in &top_decls {
+        if !used_anywhere.contains(&var_key(&decl.ident)) {
+            diagnostics.push(Diagnostic::warning(
+                decl.pos.clone(),
+                format!("`{}` is declared but never used", decl.ident),
+            ));
+        }
+    }
+
+    for function in &program.functions {
+        let mut local_used: HashSet<VarKey> = HashSet::new();
+        let mut collect_local = |expr: &Expr, _pos: &SourcePos| {
+            if let Some(key) = referenced_var_key(expr) {
+                local_used.insert(key);
+            }
+        };
+        walk_statements_exprs(&function.body, &mut collect_local);
+        collect_for_loop_var_uses(&function.body, &mut local_used);
+
+        let mut decls = Vec::new();
+        collect_declarations_detailed(&function.body, &mut decls);
+        for decl in &decls {
+            if !local_used.contains(&var_key(&decl.ident)) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!("`{}` is declared but never used", decl.ident),
+                ));
+            }
+        }
+    }
+
+    diagnostics
+}
+
+/// A local `dim`/`const` that shadows -- collides in name with -- either
+/// this function's own parameter, or a name already meaningful at the
+/// whole-program level (a top-level `dim`/`const`, or a name any function
+/// promotes with `global`): confusing either way, since within the
+/// shadowing function that name now silently means something different
+/// from what a reader skimming the rest of the program would expect. Also
+/// flags a `for` loop reusing a still-open enclosing `for` loop's own
+/// counter -- silently overwriting it mid-iteration, a classic real bug.
+pub fn check_shadowing(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    let mut globals: HashSet<VarKey> = HashSet::new();
+    let mut top_decls = Vec::new();
+    collect_declarations_detailed(&program.statements, &mut top_decls);
+    for decl in &top_decls {
+        globals.insert(var_key(&decl.ident));
+    }
+    for function in &program.functions {
+        let mut global_decls = Vec::new();
+        collect_global_decls(&function.body, &mut global_decls);
+        for (_, ident) in &global_decls {
+            globals.insert(var_key(ident));
+        }
+    }
+
+    for function in &program.functions {
+        let param_keys: HashSet<VarKey> =
+            function.params.iter().map(|p| var_key(&p.name)).collect();
+
+        for param in &function.params {
+            if globals.contains(&var_key(&param.name)) {
+                diagnostics.push(Diagnostic::warning(
+                    function.pos.clone(),
+                    format!(
+                        "parameter `{}` of `{}` shadows a global of the same name",
+                        param.name, function.name
+                    ),
+                ));
+            }
+        }
+
+        let mut locals = Vec::new();
+        collect_declarations_detailed(&function.body, &mut locals);
+        for decl in &locals {
+            let key = var_key(&decl.ident);
+            if param_keys.contains(&key) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!(
+                        "`{}` shadows this function's own parameter of the same name",
+                        decl.ident
+                    ),
+                ));
+            } else if globals.contains(&key) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!("`{}` shadows a global of the same name", decl.ident),
+                ));
+            }
+        }
+
+        check_nested_for_shadowing(&function.body, &mut Vec::new(), &mut diagnostics);
+    }
+
+    diagnostics
+}
+
+fn check_nested_for_shadowing(
+    statements: &[Stmt],
+    open_for_vars: &mut Vec<BasicIdent>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::For { var, body, .. } => {
+                if open_for_vars.iter().any(|v| same_ident(v, var)) {
+                    diagnostics.push(Diagnostic::warning(
+                        stmt.pos.clone(),
+                        format!(
+                            "`{var}` shadows an already-open `for` loop variable of the same \
+                             name -- the inner loop silently reuses the outer loop's own counter"
+                        ),
+                    ));
+                }
+                open_for_vars.push(var.clone());
+                check_nested_for_shadowing(body, open_for_vars, diagnostics);
+                open_for_vars.pop();
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                check_nested_for_shadowing(then_body, open_for_vars, diagnostics);
+                check_nested_for_shadowing(else_body, open_for_vars, diagnostics);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                check_nested_for_shadowing(body, open_for_vars, diagnostics);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    check_nested_for_shadowing(&case.body, open_for_vars, diagnostics);
+                }
+                check_nested_for_shadowing(else_body, open_for_vars, diagnostics);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                check_nested_for_shadowing(try_body, open_for_vars, diagnostics);
+                if let Some(catch) = catch {
+                    check_nested_for_shadowing(&catch.body, open_for_vars, diagnostics);
+                }
+                check_nested_for_shadowing(finally_body, open_for_vars, diagnostics);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// True for a statement that unconditionally leaves its own block --
+/// `return`, `goto`, `exit`, `throw`, `end`, `stop` -- so anything after
+/// it in the *same* statement list (until a `label:` resets reachability;
+/// see `walk_unreachable`) never runs.
+fn is_terminal_statement(kind: &Statement) -> bool {
+    matches!(
+        kind,
+        Statement::Return { .. }
+            | Statement::Goto(_)
+            | Statement::Exit
+            | Statement::ThrowStmt { .. }
+            | Statement::End
+            | Statement::Stop
+    )
+}
+
+/// Every statement unreachable because a same-block predecessor
+/// unconditionally leaves it (see `is_terminal_statement`), with no
+/// `label:` in between to reset reachability -- a label might be jumped
+/// to from anywhere else in the program, so it always counts as reachable
+/// regardless of what came right before it; this check has no
+/// whole-program control-flow graph to know otherwise, so it only ever
+/// looks at same-block, no-intervening-label fall-through. Reports only
+/// the first unreachable statement in a run, not every one after it --
+/// the rest follow from the same cause.
+pub fn check_unreachable_code(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    walk_unreachable(&program.statements, &mut diagnostics);
+    for function in &program.functions {
+        walk_unreachable(&function.body, &mut diagnostics);
+    }
+    diagnostics
+}
+
+fn walk_unreachable(statements: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
+    let mut dead = false;
+    let mut reported_this_run = false;
+    for stmt in statements {
+        if matches!(stmt.kind, Statement::Label(_)) {
+            dead = false;
+            reported_this_run = false;
+        } else if dead && !reported_this_run {
+            diagnostics.push(Diagnostic::warning(
+                stmt.pos.clone(),
+                "unreachable code: nothing before this point in the same block can reach it"
+                    .to_string(),
+            ));
+            reported_this_run = true;
+        }
+
+        match &stmt.kind {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                walk_unreachable(then_body, diagnostics);
+                walk_unreachable(else_body, diagnostics);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => walk_unreachable(body, diagnostics),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    walk_unreachable(&case.body, diagnostics);
+                }
+                walk_unreachable(else_body, diagnostics);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                walk_unreachable(try_body, diagnostics);
+                if let Some(catch) = catch {
+                    walk_unreachable(&catch.body, diagnostics);
+                }
+                walk_unreachable(finally_body, diagnostics);
+            }
+            _ => {}
+        }
+
+        if !matches!(stmt.kind, Statement::Label(_)) && is_terminal_statement(&stmt.kind) {
+            dead = true;
+        }
+    }
+}
+
+fn is_comparison_op(op: BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+    )
+}
+
+/// `Some(text)` when `expr` is a bare integer/hex literal outside the
+/// exempt sentinel set (`0`, `1`, `-1`, spelled as a literal or as `-`
+/// applied to one) -- the literal's own text, for the diagnostic message.
+fn magic_number_text(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Integer(n) if *n != 0 && *n != 1 => Some(n.to_string()),
+        Expr::HexLit(text) => Some(text.clone()),
+        Expr::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } => match expr.as_ref() {
+            Expr::Integer(n) if *n != 1 => Some(format!("-{n}")),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A comparison (`=`, `<>`, `<`, `<=`, `>`, `>=`) against a bare numeric
+/// literal with no name explaining what it means -- `if blah% = 34 and
+/// zog% = 65 then` is the motivating shape: nothing about `34`/`65` says
+/// what they represent. `0`, `1`, and `-1` are exempted as near-universal
+/// sentinels (empty/none, first/last, true/false) that read fine
+/// un-named; everything else is flagged as a candidate for a `const`.
+pub fn check_magic_numbers(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut check = |expr: &Expr, pos: &SourcePos| {
+        let Expr::Binary { left, op, right } = expr else {
+            return;
+        };
+        if !is_comparison_op(*op) {
+            return;
+        }
+        for side in [left.as_ref(), right.as_ref()] {
+            if let Some(text) = magic_number_text(side) {
+                diagnostics.push(Diagnostic::warning(
+                    pos.clone(),
+                    format!(
+                        "`{text}` is an unexplained numeric literal in a comparison -- \
+                         consider naming it with a `const`"
+                    ),
+                ));
+            }
+        }
+    };
+    walk_statements_exprs(&program.statements, &mut check);
+    for function in &program.functions {
+        walk_statements_exprs(&function.body, &mut check);
+    }
+    diagnostics
+}
+
 #[cfg(test)]
 mod legacy_form_tests {
     use super::*;
@@ -1758,6 +3675,160 @@ mod legacy_form_tests {
     }
 
     #[test]
+    fn resolve_with_semantic_retains_generated_module() {
+        let source = "print value%\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
+        let resolved =
+            resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
+        assert!(resolved.semantic_module.is_some());
+    }
+
+    #[test]
+    fn resolver_populates_for_variable_types_from_typed_dim_declarations() {
+        let source = "dim globalIndex as long\nprocedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nprocedure shadow(globalIndex as double)\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
+        let resolved = resolve_with_semantic(program, Some(semantic))
+            .expect("typed declarations should resolve");
+        let module = resolved.semantic_module.as_ref().unwrap();
+
+        fn find_for(
+            statements: &[crate::semantic_ir::SemanticStatement],
+            variable: &str,
+        ) -> Option<crate::semantic_ir::SemanticValueType> {
+            for statement in statements {
+                match &statement.kind {
+                    crate::semantic_ir::SemanticStatementKind::For {
+                        variable: name,
+                        variable_type,
+                        ..
+                    } if name.eq_ignore_ascii_case(variable) => return Some(*variable_type),
+                    crate::semantic_ir::SemanticStatementKind::For { body, .. } => {
+                        if let Some(value_type) = find_for(body, variable) {
+                            return Some(value_type);
+                        }
+                    }
+                    crate::semantic_ir::SemanticStatementKind::Line(body)
+                    | crate::semantic_ir::SemanticStatementKind::While { body, .. }
+                    | crate::semantic_ir::SemanticStatementKind::Do { body, .. } => {
+                        if let Some(value_type) = find_for(body, variable) {
+                            return Some(value_type);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+
+        assert_eq!(
+            find_for(&module.statements, "globalIndex"),
+            Some(crate::semantic_ir::SemanticValueType::Long)
+        );
+        assert_eq!(
+            find_for(&module.callables[0].body, "localIndex"),
+            Some(crate::semantic_ir::SemanticValueType::Double)
+        );
+        assert_eq!(
+            find_for(&module.callables[0].body, "globalIndex"),
+            Some(crate::semantic_ir::SemanticValueType::Long)
+        );
+        assert_eq!(
+            find_for(&module.callables[1].body, "globalIndex"),
+            Some(crate::semantic_ir::SemanticValueType::Double)
+        );
+    }
+
+    #[test]
+    fn resolver_rejects_unknown_callable_parameter_annotations() {
+        let source = "function read%(value)\nreturn 1\nend function\nend\n";
+        let program = parse(source);
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_parameter_annotation.bcl",
+            "function read%(value as customtype)\nreturn 1\nend function\nend\n",
+        )
+        .expect("typed source should parse");
+
+        let diagnostics = match resolve_with_semantic(program, Some(semantic)) {
+            Ok(_) => panic!("unknown callable parameter annotation unexpectedly resolved"),
+            Err(diagnostics) => diagnostics,
+        };
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("unknown type annotation `customtype`")
+                    && diagnostic.pos.filename == "unknown_parameter_annotation.bcl"
+            }),
+            "unknown parameter annotation should retain its source diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn resolver_materializes_the_default_type_of_unannotated_dim() {
+        let source = "dim value\ndim values(4)\nfor loopIndex = 1 to 2\nend for\nprocedure work()\ndim localValue\nend procedure\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
+        let resolved = resolve_with_semantic(program, Some(semantic))
+            .expect("implicit DIM types should resolve");
+        let module = resolved.semantic_module.as_ref().unwrap();
+
+        assert_eq!(
+            module.top_level_dim_declarations()["value"].element_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+        assert_eq!(
+            module.top_level_dim_declarations()["values"].element_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &module.statements[2].kind
+        else {
+            panic!("expected top-level statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::For { variable_type, .. } =
+            &statements[0].kind
+        else {
+            panic!("expected FOR statement")
+        };
+        assert_eq!(
+            *variable_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &module.callables[0].body[0].kind
+        else {
+            panic!("expected callable body line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Dim(items) = &statements[0].kind else {
+            panic!("expected callable DIM")
+        };
+        assert_eq!(
+            items[0].element_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+    }
+
+    #[test]
+    fn semantic_resolution_does_not_rebuild_legacy_codegen_caches_from_ast() {
+        let source = "const capacity = 12\ndim values%(capacity)\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
+        let resolved =
+            resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
+
+        assert!(resolved.const_info.is_empty());
+        assert!(resolved.top_level_const_c_names.is_empty());
+        assert_eq!(resolved.top_level_array_ranks.get("values%"), Some(&1));
+        assert!(resolved
+            .top_level_integer_constants
+            .contains_key(&("capacity".to_string(), None)));
+    }
+
+    #[test]
     fn on_gosub_is_flagged() {
         let msgs = messages("on x gosub first, second\nfirst:\nreturn\nsecond:\nreturn\nend\n");
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
@@ -1770,6 +3841,24 @@ mod legacy_form_tests {
             "method capitalize$[string]()\nreturn self$\nend method\nmethod pad$[string](n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n",
         );
         assert!(validate(&program).is_ok(), "{:?}", validate(&program));
+    }
+
+    #[test]
+    fn resolved_program_retains_top_level_integer_constants_for_backends() {
+        let resolved = resolve(parse("const capacity = 12\nconst offset = -3\nend\n"))
+            .expect("constants should resolve");
+        assert_eq!(
+            resolved
+                .top_level_integer_constants
+                .get(&("capacity".to_string(), Some(TypeSuffix::Integer))),
+            Some(&12)
+        );
+        assert_eq!(
+            resolved
+                .top_level_integer_constants
+                .get(&("offset".to_string(), Some(TypeSuffix::Integer))),
+            Some(&-3)
+        );
     }
 
     #[test]
@@ -1871,7 +3960,7 @@ items[1] = { name: "widget" }
 items.close()
 end
 "#;
-        let (lowered, _) = crate::records::lower(parse(source)).expect("should lower");
+        let (lowered, _, _) = crate::records::lower(parse(source)).expect("should lower");
         let msgs: Vec<String> = check_legacy_forms(&lowered)
             .into_iter()
             .map(|d| d.message)
@@ -1879,6 +3968,38 @@ end
         assert!(
             msgs.is_empty(),
             "record/file DSL usage shouldn't be flagged as hand-written FIELD bookkeeping: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn record_file_lowering_exports_typed_channel_and_field_layout() {
+        let source = r#"record Item
+    name: string(10)
+    count: int16
+end record
+
+file items as Item = open("probe.dat")
+end
+"#;
+        let (_, _, layouts) = crate::records::lower(parse(source)).expect("should lower");
+        assert_eq!(layouts.len(), 1);
+        let layout = &layouts[0];
+        assert_eq!(layout.name, "items");
+        assert_eq!(layout.channel, 1);
+        assert_eq!(layout.record_type, "Item");
+        assert_eq!(layout.owner, None);
+        assert_eq!(layout.fields.len(), 2);
+        assert_eq!(layout.fields[0].width, 10);
+        assert_eq!(
+            layout.fields[0].kind,
+            crate::semantic_ir::LoweredRecordFieldKind::String {
+                right_aligned: false
+            }
+        );
+        assert_eq!(layout.fields[1].width, 2);
+        assert_eq!(
+            layout.fields[1].kind,
+            crate::semantic_ir::LoweredRecordFieldKind::Int16
         );
     }
 
@@ -1893,6 +4014,262 @@ end
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
         assert!(msgs[0].contains("FIELD"), "{}", msgs[0]);
         assert!(msgs[0].contains("record"), "{}", msgs[0]);
+    }
+}
+
+#[cfg(test)]
+mod lint_tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse(source: &str) -> Program {
+        let tokens = Lexer::new("test.bcl", source).lex();
+        Parser::new("test.bcl".to_string(), tokens)
+            .parse_program()
+            .expect("source should parse")
+    }
+
+    fn messages(findings: Vec<Diagnostic>) -> Vec<String> {
+        findings.into_iter().map(|d| d.message).collect()
+    }
+
+    #[test]
+    fn unused_top_level_dim_is_flagged() {
+        let msgs = messages(check_unused_declarations(&parse(
+            "dim total%\nprint \"hi\"\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("total%"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_top_level_const_used_only_inside_a_function_is_not_flagged() {
+        let msgs = messages(check_unused_declarations(&parse(
+            "const MAX = 10\nfunction f%()\nreturn MAX\nend function\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn unused_function_local_dim_is_flagged_but_a_same_named_local_elsewhere_is_not_confused() {
+        let source = "\
+function f%()
+dim unused%
+dim used%
+used% = 1
+return used%
+end function
+
+function g%()
+dim unused%
+return unused%
+end function
+";
+        let msgs = messages(check_unused_declarations(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("unused%"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_dim_used_only_as_a_for_loop_counter_is_not_flagged_as_unused() {
+        // A real false positive found via the whole corpus: a `for`
+        // loop's own counter (`Statement::For`'s `var` field) is never
+        // itself wrapped in an `Expr`, so plain expression-walking alone
+        // never sees `for pickCount% = 1 to 5` as a *use* of
+        // `pickCount%` -- even though it obviously is one.
+        // Nothing else references `pickCount%` at all -- the loop header
+        // is its only use, isolating the exact gap the fix closes.
+        let source = "\
+function f%()
+dim pickCount%
+for pickCount% = 1 to 5
+print \"tick\"
+end for
+return 0
+end function
+";
+        let msgs = messages(check_unused_declarations(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_const_used_only_as_an_open_statements_len_is_not_flagged_as_unused() {
+        // Another real false positive found via the whole corpus:
+        // `walk_statement_exprs`'s own `Statement::Open` arm didn't walk
+        // its `len` field at all, so `open ... len = RECLEN` was
+        // invisible to any check built on it -- not just this one; a
+        // fix in the shared walker, not just here.
+        let msgs = messages(check_unused_declarations(&parse(
+            "const RECLEN = 50\nopen \"x\" for random as #1 len = RECLEN\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_local_shadowing_its_own_parameter_is_flagged() {
+        let msgs = messages(check_shadowing(&parse(
+            "function f%(n%)\ndim n%\nreturn n%\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("parameter"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_local_shadowing_a_top_level_const_is_flagged() {
+        // A `const`'s own suffix is inferred from its value even though
+        // none was written (`MAX` here means `MAX%`, since `10` is an
+        // integer) -- the shadowing local must match that inferred
+        // suffix to actually collide with it.
+        let msgs = messages(check_shadowing(&parse(
+            "const MAX = 10\nfunction f%()\ndim MAX%\nreturn MAX%\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("global"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_local_shadowing_a_cross_function_global_is_flagged() {
+        // `total%` promoted to global inside `g%` (not `f%`, where the
+        // shadowing local lives) -- distinct from the resolver's own
+        // existing hard-error check for a `global` colliding with a
+        // parameter *in the same function* (see
+        // `global_shadowed_by_same_named_parameter_is_rejected` in
+        // lib.rs), which this must not trip.
+        let source = "\
+function g%()
+global total%
+total% = 1
+return total%
+end function
+
+function f%()
+dim total%
+return total%
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("global"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_parameter_shadowing_a_cross_function_global_is_flagged() {
+        // Same reasoning as the local case above: `total%` is promoted to
+        // global inside `g%`, and `f%`'s own *parameter* (not its own
+        // `global` declaration) is what collides -- the resolver's
+        // existing same-function hard-error check doesn't cover this.
+        let source = "\
+function g%()
+global total%
+total% = 1
+return total%
+end function
+
+function f%(total%)
+return total%
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("parameter"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_nested_for_loop_reusing_the_outer_loop_variable_is_flagged() {
+        let source = "\
+function f%()
+for i% = 1 to 10
+for i% = 1 to 5
+print i%
+end for
+end for
+return 0
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("for"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn sequential_non_nested_for_loops_reusing_the_same_variable_are_not_flagged() {
+        let source = "\
+function f%()
+for i% = 1 to 10
+print i%
+end for
+for i% = 1 to 5
+print i%
+end for
+return 0
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_return_is_flagged_but_only_the_first_line() {
+        let msgs = messages(check_unreachable_code(&parse(
+            "function f%()\nreturn 1\nprint \"a\"\nprint \"b\"\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_a_label_following_a_return_is_not_flagged() {
+        let source = "\
+function f%()
+return 1
+skip:
+print \"reachable via goto skip\"
+end function
+end
+";
+        let msgs = messages(check_unreachable_code(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_goto_is_flagged() {
+        let msgs = messages(check_unreachable_code(&parse(
+            "goto skip\nprint \"dead\"\nskip:\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn an_unexplained_literal_in_a_comparison_is_flagged() {
+        let msgs = messages(check_magic_numbers(&parse(
+            "if blah% = 34 and zog% = 65 then\nprint \"hit\"\nend if\nend\n",
+        )));
+        assert_eq!(msgs.len(), 2, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("34"), "{}", msgs[0]);
+        assert!(msgs[1].contains("65"), "{}", msgs[1]);
+    }
+
+    #[test]
+    fn sentinel_literals_zero_one_and_negative_one_are_not_flagged() {
+        let msgs = messages(check_magic_numbers(&parse(
+            "if a% = 0 then\nend if\nif b% = 1 then\nend if\nif c% = -1 then\nend if\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_negative_non_sentinel_literal_is_still_flagged() {
+        let msgs = messages(check_magic_numbers(&parse(
+            "if a% = -5 then\nend if\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("-5"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_plain_assignment_is_never_flagged_as_a_magic_number() {
+        let msgs = messages(check_magic_numbers(&parse("x% = 34\nend\n")));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
     }
 }
 
@@ -1975,6 +4352,24 @@ mod position_tests {
     }
 
     #[test]
+    fn semantic_callable_identity_owns_missing_return_validation_across_arity_mismatch() {
+        let program = parse("function calculate%(legacy%)\nprint legacy%\nend function\nend\n");
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "test.bcl",
+            "function calculate%(left%, right%)\nreturn left%+right%\nend function\nend\n",
+        )
+        .expect("typed source should parse");
+
+        let resolved = resolve_with_semantic(program, Some(semantic));
+
+        assert!(
+            resolved.is_ok(),
+            "the matched typed callable returns despite its stale AST body: {:?}",
+            resolved.err()
+        );
+    }
+
+    #[test]
     fn global_shadowing_param_points_at_the_global_statement() {
         let source = "procedure p(x)\n\n\nglobal x\nend procedure\nend\n";
         let program = parse(source);
@@ -2008,6 +4403,24 @@ mod position_tests {
         assert_real_pos(&diags);
         assert_eq!(diags.len(), 1, "diagnostics: {diags:?}");
         assert_eq!(diags[0].pos.line, 3, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn strict_vars_catches_an_undeclared_multi_dimensional_array_read() {
+        // A single-index array reference (`items%(idx%)`) parses as
+        // `Expr::ArrayRef`, which `check_var_uses` already checked; a
+        // multi-index reference (`grid%(row%, col%)`) parses as
+        // `Expr::Call` instead (see `make_paren_ident_expr` in parser.rs),
+        // which `check_var_uses` used to skip entirely -- issue #185.
+        let source = "\nfunction readCell%(row%, col%)\n    return grid%(row%, col%)\nend function\n\nprint readCell%(1, 2)\nend\n";
+        let program = parse(source);
+        let diags = check_strict_vars(&program, false);
+        assert_real_pos(&diags);
+        let undeclared = diags
+            .iter()
+            .find(|d| d.message.contains("`grid%`"))
+            .unwrap_or_else(|| panic!("expected an undeclared-grid% diagnostic: {diags:?}"));
+        assert_eq!(undeclared.pos.line, 3, "diagnostics: {diags:?}");
     }
 
     #[test]

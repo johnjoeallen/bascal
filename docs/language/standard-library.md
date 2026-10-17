@@ -4,7 +4,7 @@ BASCAL recognises the standard functions supplied by classic BASIC. They need no
 
 ### Text and conversion
 
-`len`, `asc`, `chr$`, `left$`, `right$`, `mid$`, `instr`, `str$`, `val`, `string$`, `space$`, `hex$`, `oct$`, `format$`, and `trim$` work with text and values. `cint`, `clng`, `csng`, and `cdbl` explicitly convert numeric values.
+`len`, `asc`, `chr$`, `left$`, `right$`, `mid$`, `instr`, `str$`, `val`, `string$`, `space$`, `hex$`, `oct$`, and `format$` work with text and values. `ltrim$`, `rtrim$`, and `trim$` are not BASIC builtins; `require com.bascal.stdlib.strings` for them. `cint`, `clng`, `csng`, and `cdbl` explicitly convert numeric values.
 
 ### Math and random numbers
 
@@ -43,7 +43,7 @@ print s$.ltrim().rtrim().ucase()
 
 A method is really just a function with its receiver as an implicit first parameter, so the ordinary call form still works too -- `ucase$(rtrim$(ltrim$(s$)))` resolves to the exact same declarations as the chained call above.
 
-`ltrim$(s$)` removes leading spaces and `rtrim$(s$)` removes trailing spaces. `ucase$(s$)` changes `a`–`z` to uppercase, while `lcase$(s$)` changes `A`–`Z` to lowercase; other characters are unchanged. `error$(code%)` turns a classic BASIC error number into a readable message, such as `error$(errFileNotFound%)` returning `"File not found"`.
+`ltrim$(s$)` removes leading spaces, `rtrim$(s$)` removes trailing spaces, and `trim$(s$)` removes both; `require com.bascal.stdlib.strings` for all three. `ucase$(s$)` changes `a`–`z` to uppercase, while `lcase$(s$)` changes `A`–`Z` to lowercase; other characters are unchanged. `error$(code%)` turns a classic BASIC error number into a readable message, such as `error$(errFileNotFound%)` returning `"File not found"`.
 
 The `error` library also exports named constants for its complete shared MBASIC/GW-BASIC/BASCOM error subset. Use these with `throw`, `error$`, and filtered `catch` clauses: `errSyntax%`, `errReturnWithoutGosub%`, `errOutOfData%`, `errIllegalFunctionCall%`, `errOverflow%`, `errOutOfMemory%`, `errSubscriptOutOfRange%`, `errDuplicateDefinition%`, `errDivisionByZero%`, `errTypeMismatch%`, `errOutOfStringSpace%`, `errNoResume%`, `errResumeWithoutError%`, `errDeviceTimeout%`, `errDeviceFault%`, `errOutOfPaper%`, `errBadFileNumber%`, `errFileNotFound%`, `errBadFileMode%`, `errFileAlreadyOpen%`, `errDeviceIo%`, `errFileAlreadyExists%`, `errDiskFull%`, `errInputPastEnd%`, `errBadRecordNumber%`, `errBadFileName%`, `errTooManyFiles%`, `errDeviceUnavailable%`, `errDiskWriteProtected%`, `errDiskNotReady%`, `errDiskMediaError%`, `errPathFileAccess%`, and `errPathNotFound%`.
 

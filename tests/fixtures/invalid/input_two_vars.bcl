@@ -1,0 +1,4 @@
+program p
+dim a%, b%
+input a%, b%
+end

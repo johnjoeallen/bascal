@@ -100,7 +100,7 @@ Nothing in a parameter declaration said whether a parameter was an array at all,
 
 ### Options tested
 
-- **`arr%(,,)`** — one comma per extra dimension after the first, mirroring `dim`'s own bound list shape. Rejected on sight as visually awful and hard to count at a glance.
+- **`arr%(,,)`** — one comma per extra dimension after the first, mirroring `dim`'s own bound list shape. Rejected on sight as visually noisy and hard to count at a glance.
 - **`*`, one per dimension.** Considered and dropped without a strong reason to prefer it over the alternative below.
 - **A bare rank count, `arr%(3)`.** Reads more compactly at high rank, but overloads a bare number to mean two *different* things depending on context — a bound in `dim`, a dimension count in a parameter declaration. Rejected: a number that means different things in adjacent contexts is worse than an unfamiliar syntax that means one thing consistently.
 - **`(?, ?, ...)`, one `?` per dimension.** Chosen — not actually new syntax, since BASCAL already used `?` for "deliberately incomplete, filled in elsewhere" in `?{ field: value }` partial record literals. Reusing that convention for a parameter's shape was more consistent than inventing a second symbol for the same idea.

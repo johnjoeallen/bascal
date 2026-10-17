@@ -59,7 +59,6 @@ pub struct Program {
     /// Typed array declarations preserved for backends that need rank and
     /// element information after source-level lowering.
     pub typed_arrays: Vec<TypedArrayDecl>,
-    pub typed_array_refs: Vec<TypedArrayRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,15 +66,6 @@ pub struct TypedArrayDecl {
     pub name: BasicIdent,
     pub element_suffix: Option<TypeSuffix>,
     pub dimensions: Vec<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TypedArrayRef {
-    pub name: BasicIdent,
-    pub element_suffix: Option<TypeSuffix>,
-    pub dimensions: usize,
-    pub indices: Vec<Expr>,
-    pub sizeof_axis: Option<usize>,
 }
 
 /// A `record ... end record` declaration: a fixed-layout struct that the
@@ -552,6 +542,14 @@ pub enum Statement {
     /// `exit` — leaves the innermost enclosing `for`/`while`/`do` loop.
     /// Unqualified: the transpiler resolves which loop kind it's inside.
     Exit,
+    /// `continue` — skips the rest of the innermost enclosing `for`/
+    /// `while`/`do` loop's current iteration and goes straight to that
+    /// loop's own per-iteration bookkeeping (a `for`'s increment, a
+    /// `while`'s condition re-check, a `do`'s post-condition check if it
+    /// has one) instead of falling through the rest of the body first.
+    /// Unqualified, same as `exit` — the transpiler resolves which loop
+    /// kind it's inside.
+    Continue,
     SelectCase {
         expr: Expr,
         cases: Vec<CaseClause>,

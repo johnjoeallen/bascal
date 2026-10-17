@@ -5,8 +5,8 @@
 library quickSort
 
 function quickSort%(byref data%(?))
-    DIM sLow%(64)
-    DIM sHigh%(64)
+    dim sLow%(64)
+    dim sHigh%(64)
 
     sTop% = 1
     sLow%(1) = 1
@@ -28,7 +28,7 @@ function quickSort%(byref data%(?))
             pivot% = data%(qHigh%)
             wall% = qLow% - 1
 
-            FOR j% = qLow% TO qHigh% - 1
+            for j% = qLow% to qHigh% - 1
                 if data%(j%) <= pivot% then
                     wall% = wall% + 1
                     temp% = data%(wall%)

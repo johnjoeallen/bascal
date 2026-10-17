@@ -1,0 +1,4 @@
+program p
+x$ = "hi"
+lset x$ = "bye"
+end

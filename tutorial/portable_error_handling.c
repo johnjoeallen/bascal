@@ -1,6 +1,5 @@
 // BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
-#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -21,8 +20,6 @@ static const char* bcc_chr(int code);
 static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 
-static float bv_f_err_file_already_open = 0;
-static float bv_f_err_file_not_found = 0;
 static int bv_i_erl = 0;
 static int bv_i_err = 0;
 static int bv_i_err_bad_file_mode = 0;
@@ -366,7 +363,7 @@ int main(void) {
     printf("portable try/catch:\n");
     int bcc_try_0_pending = 0;
     bcc_on_error_target = 0;
-    bcc_err = ((int)round((double)(bv_f_err_file_not_found)));
+    bcc_err = bv_i_err_file_not_found;
     bcc_erl = 10;
     bcc_err_file = "tutorial/portable_error_handling.bcl";
     goto bcc_try_0_catch;
@@ -375,7 +372,7 @@ int main(void) {
     bcc_try_0_catch: ;
     bcc_in_handler = 0;
     bcc_on_error_target = -1;
-    if (!((bcc_err == ((int)round((double)(bv_f_err_file_not_found)))) || (bcc_err == ((int)round((double)(bv_f_err_file_already_open)))))) {
+    if (!((bcc_err == bv_i_err_file_not_found) || (bcc_err == bv_i_err_file_already_open))) {
         bcc_try_0_pending = 1;
         goto bcc_try_0_finally;
     }

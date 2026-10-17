@@ -282,6 +282,14 @@ fn stdlib_functions_match_c_target() {
 }
 
 #[test]
+fn nested_typed_on_gosub_matches_c_target() {
+    let work_dir = std::env::temp_dir().join("bascal-c-target-nested-on-gosub");
+    let _ = fs::remove_dir_all(&work_dir);
+    let actual = compile_run_c_target_in("nested_on_gosub", &work_dir);
+    assert_eq!(normalize(&actual), "first\nsecond\ndone\n");
+}
+
+#[test]
 fn self_referential_string_concatenation_matches_real_bascom() {
     require_fixture!();
 

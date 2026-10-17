@@ -1,0 +1,4 @@
+program p
+dim a%(3)
+print a%("x")
+end

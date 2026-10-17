@@ -12,13 +12,13 @@ require com.bascal.examples.remline.strings
 inputFile$ = "examples/remline/sample/input.bas"
 outputFile$ = "examples/remline/sample/output.bas"
 
-PRINT "BASCAL REMLINE example"
-PRINT "Input: " + inputFile$
-PRINT "Output: " + outputFile$
+print "BASCAL REMLINE example"
+print "Input: " + inputFile$
+print "Output: " + outputFile$
 
 loadLines%()
 collectAllRefs%()
 transformLines%()
 
-PRINT "Done"
-END
+print "Done"
+end

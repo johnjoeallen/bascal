@@ -212,6 +212,27 @@ end for
 
 `exit do`, `exit for`, and `exit while` are not valid — a loop-type keyword after `exit` is a transpile-time error.
 
+### Continue
+
+```bascal
+continue
+```
+
+Same idea as `exit`, unqualified the same way, but for skipping to the *next* iteration instead of leaving the loop: `continue` skips the rest of the innermost enclosing `for`/`while`/`do` loop's current iteration and goes straight to that loop's own per-iteration bookkeeping — a `for`'s increment, a `while`'s condition re-check, or a `do`'s post-condition check if it has one — rather than falling through the rest of the body first.
+
+```bascal
+for i% = 1 to 10
+    if i% mod 2 = 0 then
+        continue      ' skip even numbers, still increments i% normally
+    end if
+    print i%
+end for
+```
+
+`continue for`, `continue while`, and `continue do` are not valid, for the same reason as `exit`'s own qualified forms: a transpile-time error.
+
+`for`/`while` transpile `continue` to a plain `GOTO` (or, on `--target c`, a native `continue;`) that re-checks the loop's own condition or runs its own increment, exactly what falling off the end of the body would have done anyway. A `do` loop with a *post*-condition (`loop while`/`loop until`) is the one case worth knowing about: its post-condition check runs *after* the body, so `continue` targets a label placed there specifically — jumping straight back to the loop's own top instead would skip that check on every `continue`, silently turning the loop into an infinite one.
+
 ### SELECT CASE
 
 ```bascal
@@ -311,15 +332,25 @@ Unlike `AND`/`OR` (bitwise, always evaluate both sides — see [Logical Operator
 
 From `tutorial/short_circuit.bcl`, an `&&` guard transpiles to one guarded `IF` per operand — no bitwise `AND`, no wasted call:
 
+<!-- setup
+function isPositive%(n%)
+    return n%
+end function
+dim scores%(5)
+-->
 ```bascal
 if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
     print "safe to read"
 end if
+```
 
+<!-- generated-basic -->
+```basic
 IF (ptr% >= 0) = 0 THEN GOTO 10
 ispositiveN0% = scores%(ptr%)
 GOSUB 20
-IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
+BCCT1% = ispositiveResult0%
+IF (BCCT1% > 0) = 0 THEN GOTO 10
     PRINT "safe to read"
 10 REM END IF
 ```
@@ -330,11 +361,14 @@ IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
 if a% = 1 || a% = 2 then
     print "one or two"
 end if
+```
 
+<!-- generated-basic -->
+```basic
 IF (a% = 1) <> 0 THEN GOTO 10
 IF (a% = 2) <> 0 THEN GOTO 10
 GOTO 20
-10     PRINT "one or two"
+10 PRINT "one or two"
 20 REM END IF
 ```
 

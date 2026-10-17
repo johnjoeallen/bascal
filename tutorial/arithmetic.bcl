@@ -25,18 +25,18 @@ program arithmetic
 /* Arithmetic — mix labels and numbers with ; */
 a% = 17
 b% = 5
-print a%; "+ "; b%; "="; a% + b%   // 17 + 5 = 22
-print a%; "- "; b%; "="; a% - b%   // 17 - 5 = 12
-print a%; "* "; b%; "="; a% * b%   // 17 * 5 = 85
-print a%; "/ "; b%; "="; a% / b%   // 17 / 5 = 3  (truncates)
+print a%; "+ "; b%; "="; a% + b% // 17 + 5 = 22
+print a%; "- "; b%; "="; a% - b% // 17 - 5 = 12
+print a%; "* "; b%; "="; a% * b% // 17 * 5 = 85
+print a%; "/ "; b%; "="; a% / b% // 17 / 5 = 3  (truncates)
 
 /* Integer division and MOD */
-print a%; "\ "; b%; "="; a% \ b%   // 17 \ 5 = 3  (integer quotient)
-print a%; "MOD "; b%; "="; a% mod b%  // 17 MOD 5 = 2  (remainder)
+print a%; "\ "; b%; "="; a% \ b% // 17 \ 5 = 3  (integer quotient)
+print a%; "MOD "; b%; "="; a% mod b% // 17 MOD 5 = 2  (remainder)
 
 /* Exponentiation — right-associative */
-print "2 ^ 8 ="; 2 ^ 8                   // 256
-print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2          // 512  (= 2 ^ (3^2) = 2^9)
+print "2 ^ 8 ="; 2 ^ 8 // 256
+print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2 // 512  (= 2 ^ (3^2) = 2^9)
 
 /* Precedence */
 print 2 + 3 * 4; " (expect 14 — * before +)"
@@ -45,7 +45,7 @@ print (2 + 3) * 4; " (expect 20 — parens first)"
 /* Comparison — -1 means true, 0 means false */
 print 10 > 3; " (expect -1)"
 print 10 < 3; " (expect  0)"
-print 7 = 7;  " (expect -1)"
+print 7 = 7; " (expect -1)"
 print 7 <> 8; " (expect -1)"
 
 /* Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values */
@@ -60,6 +60,6 @@ print "Hello" + ", " + "World" + "!"
 
 /* Unary negation */
 n% = 42
-print -n%              // -42
+print -n% // -42
 
 end

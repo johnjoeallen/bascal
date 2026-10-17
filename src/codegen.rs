@@ -13,21 +13,57 @@
 
 pub use crate::codegen_basic::CodeGenerator;
 pub(crate) use crate::codegen_basic::{
-    camel_join, check_generated_name_conflicts, MID_ASSIGN_HELPER_NAME,
+    camel_join, check_generated_name_conflicts, check_generated_name_conflicts_semantic,
 };
 
-/// Which backend to generate code for. `Basic` (the default) is BASCAL's
-/// original, complete target: plain BASCOM-compatible BASIC. `C` is a
-/// native-C backend -- see `codegen_c`'s own module doc comment for exactly
-/// what it supports today. `Jvm` is a bootstrap-stage native-JVM backend --
-/// see `codegen_jvm`'s own module doc comment; it currently supports a small
-/// straight-line subset. `main.rs`'s `--target` flag/`BASCAL_TARGET` env var/config files all
-/// accept either spelling case-insensitively (`basic`/`BASIC`/..., `c`/`C`,
+/// Which backend to generate code for. `Basic` (the default, also spelled
+/// `bascom`) is BASCAL's original, complete target: plain BASIC verified
+/// against real IBM/Microsoft BASCOM (see `tests/dosbox_conformance.rs`).
+/// `Fbc` generates the same BASIC (`codegen_basic`, identically) but for
+/// `fbc` (FreeBASIC) specifically, rejecting the handful of constructs real
+/// BASCOM accepts that `fbc`'s own parser does not -- currently just
+/// `try`/`catch`'s generated `RESUME <lineno>`. This is permanent, not a
+/// gap awaiting a fix: fbc's parser rejects `RESUME <lineno>`/`RESUME
+/// <label>` outright under every `-lang` dialect, and the obvious
+/// GOSUB-plus-`RESUME NEXT` workaround crashes at runtime with fbc's own
+/// "illegal resume" error -- fbc's error-resume model simply cannot
+/// express `try`/`catch`'s "always resume right after `end try`, not at
+/// the next statement" guarantee (see GitHub issue #153 for the full
+/// investigation; #100 has the original report, #152 the real-BASCOM-
+/// vs-`fbc` investigation that led to this split). `Basic` and `Fbc` are
+/// otherwise interchangeable output -- BASCAL's actual complete backend
+/// is one thing, this is only about which of its two downstream
+/// verifiers a given program is guaranteed to satisfy. `C` is a native-C backend -- see
+/// `codegen_c`'s own module doc comment for exactly what it supports
+/// today. `Jvm` is a bootstrap-stage native-JVM backend -- see
+/// `codegen_jvm`'s own module doc comment; it currently supports a small
+/// straight-line subset. `main.rs`'s `--target` flag/`BASCAL_TARGET` env
+/// var/config files all accept either spelling case-insensitively
+/// (`basic`/`BASIC`/..., `bascom`/`BASCOM`/..., `fbc`/`FBC`/..., `c`/`C`,
 /// `jvm`/`JVM`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Target {
     #[default]
     Basic,
+    Fbc,
     C,
     Jvm,
+    /// First of a planned family of native 1980s/1990s home-computer
+    /// targets (see `RETRO_BASIC_SUPPORT_PROMPT.md`): reuses `codegen_c`,
+    /// parameterized for `cc65`'s C dialect (see `c_dialect.rs`'s
+    /// `CDialectProfile::c64_cc65`), the same "emit C, shell out to a real
+    /// cross-compiler" pattern `Fbc` and `C` already use. A construct the
+    /// C64/`cc65` dialect can't express (`/`, `^`, `single`/`double`
+    /// variables, `byval` array parameters -- `cc65` has no
+    /// floating-point support and no C99 VLAs) is rejected with a clear
+    /// diagnostic naming the target, before any C is emitted (Phase 3's
+    /// `codegen_c::validate_capabilities`); everything else transpiles
+    /// like `Target::C`. `main.rs`'s `--binary`/`-b` shells out to `cl65`
+    /// to produce a loadable Commodore 64 `PRG` image (needs `cc65` on
+    /// `PATH`); `--run`/`-r` launches it under VICE's `x64sc` (needs a
+    /// display, and `x64sc` on `PATH` -- VICE isn't packaged for
+    /// Debian/Ubuntu, see `main.rs`'s `run_c64_prg` for the from-source
+    /// build steps), since a `PRG`'s 6502 machine code isn't something
+    /// this process can exec directly.
+    C64,
 }

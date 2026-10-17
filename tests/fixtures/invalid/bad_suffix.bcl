@@ -1,0 +1,4 @@
+program p
+x@ = 3
+print x@
+end

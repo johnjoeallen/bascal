@@ -1,0 +1,2 @@
+# valid program kept as a control: every target must accept it.
+all: ok

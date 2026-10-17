@@ -63,11 +63,11 @@ require com.bascal.stdlib.error
 // read/write via `inv[n]` (see checkPart() below) replace fhb's
 // manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
 record Part
-    flag:    string(1) lpad
-    desc:    string(30) lpad
-    qty:     int16
+    flag: string(1) lpad
+    desc: string(30) lpad
+    qty: int16
     reorder: int16
-    price:   float32
+    price: float32
 end record
 
 // BASCAL-ism: `const` is a real compile-time constant, not a plain
@@ -572,7 +572,7 @@ do
             reportInventoryError(err%, erl%)
         end try
     end if
-loop
+end do
 
 // -------------------- Error handling --------------------
 // err%/erl% are ordinary locals scoped to the `catch` block above, not

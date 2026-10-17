@@ -121,7 +121,7 @@ transformed into successive typed forms.
   stage.
 - Several `Program` fields are **populated after parsing by `lib.rs`**, not by
   the parser: `common` (built from a `shared` file's `dim`s — there is no
-  `common` keyword), `typed_arrays` / `typed_array_refs`. The AST is a mutable
+  `common` keyword), and `typed_arrays`. The AST is a mutable
   bag that accretes data across passes.
 - **`resolver::validate(&Program) -> Result<(), Vec<Diagnostic>>` returns `()`.**
   It is a pure checker. It computes name resolution, ranks, strict-var
@@ -289,11 +289,13 @@ Ordered by payoff for isolating the bug classes above.
    `Lowered { program, synthesized_buffer_names }` replaces `records::lower`'s
    bare tuple return, giving that side channel a named home. Both
    `compile_source` and `compile_file` now call the single `lower::lower`.
-   Two things stayed out: `typed_arrays` / `typed_array_refs` are populated by
-   the *parser* (`parser.rs`), not post-parse in `lib.rs` — the original note
-   was inaccurate — so there is nothing to fold; and `Program.common` needs
-   filesystem + `CompileOptions` context to locate the `shared` file, so it
-   stays in the IO-aware driver and runs just before `lower`.
+   `typed_arrays` remain populated by the *parser* (`parser.rs`), not
+   post-parse in `lib.rs` — the original note was inaccurate — so there is
+   nothing to fold. `typed_array_refs` were subsequently removed in Iteration
+   386 after confirming that no backend consumed the parser-derived side
+   channel. `Program.common` needs filesystem + `CompileOptions` context to
+   locate the `shared` file, so it stays in the IO-aware driver and runs just
+   before `lower`.
 
 4. **Name allocation as a pass, not a lazy `RefCell` side effect.**
    `taken_names: RefCell<HashSet<String>>` mutated during the emission recursion

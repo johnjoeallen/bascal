@@ -16,19 +16,25 @@ bcc hello.bcl --target jvm --run    # emit JVM assembly, assemble, and run it
 
 `-L dir` adds a directory `require` searches, beyond the source file’s own directory; repeat it for more than one.
 
-`--target` (or `-t`) chooses `basic`, `c`, or `jvm`; omit it and `bcc` falls
+`--target` (or `-t`) chooses `basic`, `fbc`, `c`, `jvm`, or `c64`; omit it and `bcc` falls
 back to whatever `BASCAL_TARGET` or a config file says, or `basic` failing all
 of that.
 
 `--binary` additionally builds the generated output into something runnable
-(`fbc` for BASIC, `gcc` for C; the JVM target's assembler is built directly
-into `bcc`, so no external toolchain is needed there); `--run` implies
+(real BASCOM under `dosbox-x` for `basic`, `fbc` for `fbc`, `gcc` for C,
+`cl65` for `c64`; the JVM target's assembler is built directly into `bcc`, so
+no external toolchain is needed there); `--run` implies
 `--binary` and then runs it, with the program’s own stdin/stdout/stderr
-connected directly to your terminal.
+connected directly to your terminal. Add `--verbose` to see each step, and each
+external command, `bcc` runs.
 
 `bcc` skips redoing work that’s already up to date — pass `--clean` to force a full retranspile.
 
 `--strict-vars` turns on Pascal-style mandatory declaration: every variable — any scalar or array, any type suffix, not just the arrays introduced in [Arrays and strings](arrays-and-strings.md) — must have a `dim`/`declare` (or be a `const`, a `for` loop’s own counter, or a function/procedure parameter), or the compile is rejected. `--strict-vars-warn` runs the identical check but only prints findings to stderr, without failing the build.
+
+`bcc` also ships its own source formatter, in the same spirit as `gofmt`: `--format-check` reports every line whose indentation, spacing, or casing doesn't match `bcc`'s own canonical style (without touching the file, exiting non-zero if it finds any), and `--format` rewrites the file in place. It never reflows an expression — every fix is pure whitespace, a `wend`/`loop` → `end while`/`end do` rewrite, lowercasing a reserved word or a builtin like `LEN`/`RND` (`IF` → `if`, `RND` → `rnd`), rewriting a variable/function reference to match how its own declaration was written (`MYCOUNT%` → `myCount%`, for a `dim myCount%` elsewhere in the file -- or in a `require`d library, resolved the same way `bcc` itself resolves one), or splitting a `:`-chained multi-statement line into one statement per line (`a = 1 : b = 2`) -- or, when that line is a single-line `if cond then a:b` (real BASIC's own no-`end if` form), exploding it into ordinary block form instead, since it has no closing keyword of its own for a multi-line body to end at — so it's safe to run on a file mid-edit, or across an entire ported-from-BASIC case study in one pass. See the [Command-Line Reference](../manual/command-line-reference.md#source-formatting) for the full rule set.
+
+`--lint` runs four more warning-only checks (stderr, never fails the build, unlike `--strict-vars`): an unused `dim`/`const` nothing ever references again; a local shadowing a parameter, a global, or a still-open enclosing `for` loop's own counter; unreachable code after `return`/`goto`/`exit`/`throw`/`end`/`stop`; and a bare numeric literal (`0`/`1`/`-1` exempted as common sentinels) compared against something, a candidate for a named `const` — `if roomCode% = 34 then` flags `34`. All off by default, since a program ported from real BASIC is more likely to trip one than code written fresh. See the [Command-Line Reference](../manual/command-line-reference.md#lints) for exactly what each one checks.
 
 ## Screen and console output
 
@@ -48,6 +54,7 @@ beep
 
 Classic BASIC has a way for one program to hand off to another without either one going through disk I/O to pass data along: a `COMMON` block of variables, shared by name between programs that agree to declare it the same way, combined with `CHAIN` to actually transfer control. BASCAL structures the shared declaration itself, in its own small file.
 
+<!-- no-compile -->
 ```bascal
 ' state.bcl
 shared state

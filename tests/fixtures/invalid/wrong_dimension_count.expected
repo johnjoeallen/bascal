@@ -1,0 +1,1 @@
+all: `a%` has 1 dimension but is indexed with 2

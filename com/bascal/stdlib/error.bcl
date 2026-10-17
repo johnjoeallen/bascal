@@ -119,6 +119,6 @@ function error$(code%)
         case ERR_PATH_NOT_FOUND
             return "Path not found"
         case else
-            return "Error " + STR$(code%)
+            return "Error " + str$(code%)
     end select
 end function

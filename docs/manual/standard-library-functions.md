@@ -10,7 +10,7 @@ BASCAL recognises the classic BASIC functions below without a declaration or `re
 
 | Group                               | Functions                                                                                                                                                                                      |
 |-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Text and conversion                 | `LEN`, `ASC`, `CHR$`, `LEFT$`, `RIGHT$`, `MID$`, `INSTR`, `STR$`, `VAL`, `STRING$`, `SPACE$`, `HEX$`, `OCT$`, `FORMAT$`, `TRIM$`, `INPUT$`, `CINT`, `CLNG`, `CSNG`, `CDBL`                     |
+| Text and conversion                 | `LEN`, `ASC`, `CHR$`, `LEFT$`, `RIGHT$`, `MID$`, `INSTR`, `STR$`, `VAL`, `STRING$`, `SPACE$`, `HEX$`, `OCT$`, `FORMAT$`, `INPUT$`, `CINT`, `CLNG`, `CSNG`, `CDBL`                     |
 | Math and random numbers             | `SQR`, `ABS`, `INT`, `FIX`, `SGN`, `SIN`, `COS`, `TAN`, `ATN`, `LOG`, `EXP`, `RND`                                                                                                             |
 | Files, system, arrays, and printing | `EOF`, `LOF`, `LOC`, `POS`, `CSRLIN`, `FREEFILE`, `FRE`, `LPOS`, `DATE$`, `TIME$`, `TIMER`, `INKEY$`, `ENVIRON$`, `COMMAND$`, `PEEK`, `INP`, `VARPTR`, `UBOUND`, `LBOUND`, `IIF`, `TAB`, `SPC` |
 | Random-access records               | `MKI$`, `MKL$`, `MKS$`, `MKD$`, `CVI`, `CVL`, `CVS`, `CVD`                                                                                                                                     |
@@ -45,9 +45,10 @@ The two-argument form (`MID$(target$, start) = replacement$`) behaves as if `len
 
 ### String and error-message functions
 
-`LTRIM$`, `RTRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00 builtins, and `ERROR$` compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`), as an ordinary `require`-able library under `com.bascal.stdlib` — the same mechanism as any other BASCAL library (see [Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md#dependencies-require-and-import)), not something auto-injected by call-site detection. `ltrim$`/`rtrim$`/`ucase$`/`lcase$` are declared as scalar methods, so `s$.ltrim()` and `ltrim$(s$)` both call the identical declaration (see [Methods](../language/methods.md)); `error$` stays an ordinary function, since an error code is a lookup key rather than a value the call naturally operates on:
+`LTRIM$`, `RTRIM$`, `TRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00 builtins, and `ERROR$` compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`), as an ordinary `require`-able library under `com.bascal.stdlib` — the same mechanism as any other BASCAL library (see [Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md#dependencies-require-and-import)), not something auto-injected by call-site detection. `ltrim$`/`rtrim$`/`trim$`/`ucase$`/`lcase$` are declared as scalar methods, so `s$.ltrim()` and `ltrim$(s$)` both call the identical declaration (see [Methods](../language/methods.md)); `error$` stays an ordinary function, since an error code is a lookup key rather than a value the call naturally operates on:
 
 ```bascal
+require com.bascal.stdlib.strings
 require com.bascal.stdlib.ltrim
 require com.bascal.stdlib.rtrim
 require com.bascal.stdlib.ucase
@@ -57,6 +58,7 @@ require com.bascal.stdlib.error
 
 | Symbol                    | Signature       | Behavior                                                                                                                                                                                    |
 |---------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `com.bascal.stdlib.strings`| `TRIM$(s$)`     | `ltrim$`, `rtrim$` and `trim$` (both ends) together                                                                                                                                         |
 | `com.bascal.stdlib.ltrim` | `LTRIM$(s$)`    | Strip leading spaces                                                                                                                                                                        |
 | `com.bascal.stdlib.rtrim` | `RTRIM$(s$)`    | Strip trailing spaces                                                                                                                                                                       |
 | `com.bascal.stdlib.ucase` | `UCASE$(s$)`    | Uppercase `a`-`z` only; other characters pass through unchanged                                                                                                                             |

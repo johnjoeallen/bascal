@@ -1,0 +1,1 @@
+all: LINE INPUT # requires a string (`$`-suffixed) target

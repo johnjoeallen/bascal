@@ -23,6 +23,7 @@ Beyond the header, a `.bcl` file consists of optional sections in the following 
 
 ### Program Declaration
 
+<!-- no-compile -->
 ```bascal
 program name
 program name shared sharedname

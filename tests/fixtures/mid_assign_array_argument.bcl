@@ -1,0 +1,15 @@
+program midAssignArrayArgument
+
+dim values%(1)
+values%(0) = 1
+value$ = "abcdef"
+
+function advance%(byref values%(?))
+    values%(0) = values%(0) + 1
+    return values%(0)
+end function
+
+mid$(value$, advance%(values%), 2) = "XY"
+print value$
+print values%(0)
+end

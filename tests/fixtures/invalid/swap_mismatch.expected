@@ -1,0 +1,1 @@
+all: SWAP's two operands must be the same kind (both string, or both numeric)

@@ -18,6 +18,8 @@ static const char *bcc_err_file = "";
 #define BCC_MAX_CHANNELS 32
 static FILE* bcc_files[BCC_MAX_CHANNELS];
 
+static char bcc_file_field_buf[256];
+
 static char* bcc_strbuf_take(void);
 static const char* bcc_mid(const char* s, int start, int length);
 static const char* bcc_chr(int code);
@@ -26,12 +28,8 @@ static const char* bcc_strd(double value);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
-static void bcc_mks(char* out, double value);
-static void bcc_mkd(char* out, double value);
 static int bcc_cvi(const char* s);
 static int bcc_cvl(const char* s);
-static float bcc_cvs(const char* s);
-static double bcc_cvd(const char* s);
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
 static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
 static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
@@ -49,20 +47,23 @@ static int bcc_put_record_fields_1_5(FILE* file, long record, const char* field_
 static int bcc_get_record_fields_1_5(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
 static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3);
 static int bcc_get_record_student(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_eof(FILE* file);
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
 
 static double bv_d_carolscore = 0;
 static double bv_d_score = 0;
 static double bv_d_sscore = 0;
-static int bv_i_carolfacultytrimi = 0;
 static int bv_i_carolid = 0;
-static int bv_i_carolnametrimi = 0;
 static int bv_i_i = 0;
 static int bv_i_id = 0;
 static int bv_i_num_recs = 0;
 static int bv_i_rec_len = 0;
-static int bv_i_sfacultytrimi = 0;
 static int bv_i_sid = 0;
-static int bv_i_snametrimi = 0;
 static char bv_s_carolfaculty[256] = {0};
 static char bv_s_carolname[256] = {0};
 static char bv_s_db_file[256] = {0};
@@ -77,7 +78,35 @@ static char bv_s_scorebuf[256] = {0};
 static char bv_s_sfaculty[256] = {0};
 static char bv_s_sname[256] = {0};
 
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out);
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out);
+
+void bf_s_ltrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = 1;
+    while ((-(((-(bv_i_i <= ((int)strlen(bv_s_self))))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i + 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, bv_i_i, 2147483647));
+    return;
+}
+
+void bf_s_rtrim_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
+    int bv_i_i = 0;
+
+    bv_i_i = ((int)strlen(bv_s_self));
+    while ((-(((-(bv_i_i > 0))) != 0 && ((-(strcmp(bcc_mid(bv_s_self, bv_i_i, 1), " ") == 0))) != 0))) {
+        bv_i_i = (bv_i_i - 1);
+    }
+    snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_self, 1, bv_i_i));
+    return;
+}
 
 void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out) {
     char bv_s_s[256];
@@ -85,7 +114,7 @@ void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out) {
     int bv_i_i = 0;
 
     bv_i_i = ((int)strlen(bv_s_s));
-    while (((-(bv_i_i > 0)) && (-(strcmp(bcc_mid(bv_s_s, bv_i_i, 1), " ") == 0)))) {
+    while ((-(((-(bv_i_i > 0))) != 0 && ((-(strcmp(bcc_mid(bv_s_s, bv_i_i, 1), " ") == 0))) != 0))) {
         bv_i_i = (bv_i_i - 1);
     }
     snprintf(bcc_out, 256, "%s", bcc_mid(bv_s_s, 1, bv_i_i));
@@ -93,6 +122,23 @@ void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out) {
 }
 
 int main(void) {
+    // Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+    // so a required stdlib call reads the same way as a built-in method call
+    // (docs/language/functions-and-procedures.html#built-in-methods). The
+    // ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+    // implicit first parameter, so ordinary-call syntax resolves straight to
+    // this same declaration, with no separate function needed (and no longer
+    // allowed: a function and a method sharing one name is a duplicate
+    // declaration, since they'd both claim the same callable identity).
+
+    // Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+    // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+    // BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
+    // and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
+    // works via ordinary-call syntax resolving to this same declaration.
+
     // Tutorial — Random-Access Files: hand-written, then with the record/file DSL
     //
     // This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
@@ -449,7 +495,6 @@ int main(void) {
     // <file>.close()
     // Closes the file.
 
-
     // file db as Student = open(...)  [50 bytes/record]
     bcc_raise_retry_6: ;
     bcc_files[0] = fopen("tutorial_records.dat", "rb+");
@@ -499,28 +544,24 @@ int main(void) {
         // let s = db[...]  (whole-record read)
         bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
         bv_i_sid = bcc_cvi(bv_s_dbidbuf);
-        bv_i_snametrimi = ((int)strlen(bv_s_dbnamebuf));
-        while (((-(bv_i_snametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_snametrimi, 1), " ") == 0)))) {
-            bv_i_snametrimi = (bv_i_snametrimi - 1);
-        }
-        snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_snametrimi));
-        bv_d_sscore = bcc_cvd(bv_s_dbscorebuf);
-        bv_i_sfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
-        while (((-(bv_i_sfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_sfacultytrimi, 1), " ") == 0)))) {
-            bv_i_sfacultytrimi = (bv_i_sfacultytrimi - 1);
-        }
-        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_sfacultytrimi));
         char bt_s_19[256];
-        snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", "  [", bcc_stri(bv_i_sid));
+        bf_s_rtrim_s(bv_s_dbnamebuf, bt_s_19);
+        snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bt_s_19);
+        bv_d_sscore = bcc_cvd(bv_s_dbscorebuf);
         char bt_s_20[256];
-        snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, "] ");
+        bf_s_rtrim_s(bv_s_dbfacultybuf, bt_s_20);
+        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bt_s_20);
         char bt_s_21[256];
-        snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", bt_s_20, bv_s_sname);
+        snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", "  [", bcc_stri(bv_i_sid));
         char bt_s_22[256];
-        snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, " -- ");
+        snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", bt_s_21, "] ");
         char bt_s_23[256];
-        snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", bt_s_22, bcc_strd(bv_d_sscore));
-        printf("%s\n", bt_s_23);
+        snprintf(bt_s_23, sizeof(bt_s_23), "%s%s", bt_s_22, bv_s_sname);
+        char bt_s_24[256];
+        snprintf(bt_s_24, sizeof(bt_s_24), "%s%s", bt_s_23, " -- ");
+        char bt_s_25[256];
+        snprintf(bt_s_25, sizeof(bt_s_25), "%s%s", bt_s_24, bcc_strd(bv_d_sscore));
+        printf("%s\n", bt_s_25);
     }
 
     // ---- Update one field in place ----
@@ -528,8 +569,8 @@ int main(void) {
     // Bob just scraped a pass on re-mark. Compare to Part 1: no REC_LEN, no
     // idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
     // db[...].score = ...  (partial-field update)
-    double bcc_tmp_24 = 61.5;
-    if (!bcc_put_record_student(bcc_files[0], 2, NULL, NULL, &bcc_tmp_24, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)2); exit(1); }
+    double bcc_tmp_26 = 61.5;
+    if (!bcc_put_record_student(bcc_files[0], 2, NULL, NULL, &bcc_tmp_26, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)2); exit(1); }
 
     // ---- Update two fields at once, still one GET and one PUT ----
 
@@ -541,8 +582,8 @@ int main(void) {
     // the compiler by comparing `name`/`score` against Student's declared
     // fields — not decided at runtime.
     // db[...] = ?{ ... }  (partial-record write)
-    double bcc_tmp_25 = 91.0;
-    if (!bcc_put_record_student(bcc_files[0], 1, NULL, "Alice Smith", &bcc_tmp_25, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)1); exit(1); }
+    double bcc_tmp_27 = 91.0;
+    if (!bcc_put_record_student(bcc_files[0], 1, NULL, "Alice Smith", &bcc_tmp_27, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)1); exit(1); }
 
     // ---- Batched update: read once, mutate twice, write back once ----
 
@@ -552,52 +593,44 @@ int main(void) {
     // let carol = db[...]  (whole-record read)
     bcc_get_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
     bv_i_carolid = bcc_cvi(bv_s_dbidbuf);
-    bv_i_carolnametrimi = ((int)strlen(bv_s_dbnamebuf));
-    while (((-(bv_i_carolnametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_carolnametrimi, 1), " ") == 0)))) {
-        bv_i_carolnametrimi = (bv_i_carolnametrimi - 1);
-    }
-    snprintf(bv_s_carolname, sizeof(bv_s_carolname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_carolnametrimi));
+    char bt_s_28[256];
+    bf_s_rtrim_s(bv_s_dbnamebuf, bt_s_28);
+    snprintf(bv_s_carolname, sizeof(bv_s_carolname), "%s", bt_s_28);
     bv_d_carolscore = bcc_cvd(bv_s_dbscorebuf);
-    bv_i_carolfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
-    while (((-(bv_i_carolfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_carolfacultytrimi, 1), " ") == 0)))) {
-        bv_i_carolfacultytrimi = (bv_i_carolfacultytrimi - 1);
-    }
-    snprintf(bv_s_carolfaculty, sizeof(bv_s_carolfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_carolfacultytrimi));
+    char bt_s_29[256];
+    bf_s_rtrim_s(bv_s_dbfacultybuf, bt_s_29);
+    snprintf(bv_s_carolfaculty, sizeof(bv_s_carolfaculty), "%s", bt_s_29);
     snprintf(bv_s_carolname, sizeof(bv_s_carolname), "%s", "Carol Jones");
     bv_d_carolscore = 88.0;
     // db[...] = carol  (write back a let-bound record)
-    int16_t bcc_tmp_26 = bv_i_carolid;
-    double bcc_tmp_27 = bv_d_carolscore;
-    bcc_put_record_student(bcc_files[0], 3, &bcc_tmp_26, bv_s_carolname, &bcc_tmp_27, bv_s_carolfaculty);
+    int16_t bcc_tmp_30 = bv_i_carolid;
+    double bcc_tmp_31 = bv_d_carolscore;
+    bcc_put_record_student(bcc_files[0], 3, &bcc_tmp_30, bv_s_carolname, &bcc_tmp_31, bv_s_carolfaculty);
 
     // ---- Verify the updates ----
 
     printf("Part 2 (record/file DSL) -- after updates:\n");
 
-    int bt_lim_28 = 3;
-    int bt_step_28 = 1;
-    for (bv_i_i = 1; bt_step_28 >= 0 ? bv_i_i <= bt_lim_28 : bv_i_i >= bt_lim_28; bv_i_i += bt_step_28) {
+    int bt_lim_32 = 3;
+    int bt_step_32 = 1;
+    for (bv_i_i = 1; bt_step_32 >= 0 ? bv_i_i <= bt_lim_32 : bv_i_i >= bt_lim_32; bv_i_i += bt_step_32) {
         // let s = db[...]  (whole-record read)
         bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
         bv_i_sid = bcc_cvi(bv_s_dbidbuf);
-        bv_i_snametrimi = ((int)strlen(bv_s_dbnamebuf));
-        while (((-(bv_i_snametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_snametrimi, 1), " ") == 0)))) {
-            bv_i_snametrimi = (bv_i_snametrimi - 1);
-        }
-        snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_snametrimi));
+        char bt_s_33[256];
+        bf_s_rtrim_s(bv_s_dbnamebuf, bt_s_33);
+        snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bt_s_33);
         bv_d_sscore = bcc_cvd(bv_s_dbscorebuf);
-        bv_i_sfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
-        while (((-(bv_i_sfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_sfacultytrimi, 1), " ") == 0)))) {
-            bv_i_sfacultytrimi = (bv_i_sfacultytrimi - 1);
-        }
-        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_sfacultytrimi));
-        char bt_s_29[256];
-        snprintf(bt_s_29, sizeof(bt_s_29), "%s%s", "  ", bv_s_sname);
-        char bt_s_30[256];
-        snprintf(bt_s_30, sizeof(bt_s_30), "%s%s", bt_s_29, ": ");
-        char bt_s_31[256];
-        snprintf(bt_s_31, sizeof(bt_s_31), "%s%s", bt_s_30, bcc_strd(bv_d_sscore));
-        printf("%s\n", bt_s_31);
+        char bt_s_34[256];
+        bf_s_rtrim_s(bv_s_dbfacultybuf, bt_s_34);
+        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bt_s_34);
+        char bt_s_35[256];
+        snprintf(bt_s_35, sizeof(bt_s_35), "%s%s", "  ", bv_s_sname);
+        char bt_s_36[256];
+        snprintf(bt_s_36, sizeof(bt_s_36), "%s%s", bt_s_35, ": ");
+        char bt_s_37[256];
+        snprintf(bt_s_37, sizeof(bt_s_37), "%s%s", bt_s_36, bcc_strd(bv_d_sscore));
+        printf("%s\n", bt_s_37);
     }
 
     // db.close()
@@ -673,15 +706,6 @@ static void bcc_mkl(char* out, int value) {
     memcpy(out, &v, 4);
 }
 
-static void bcc_mks(char* out, double value) {
-    float v = (float)value;
-    memcpy(out, &v, 4);
-}
-
-static void bcc_mkd(char* out, double value) {
-    memcpy(out, &value, 8);
-}
-
 static int bcc_cvi(const char* s) {
     int16_t v;
     memcpy(&v, s, 2);
@@ -692,18 +716,6 @@ static int bcc_cvl(const char* s) {
     int32_t v;
     memcpy(&v, s, 4);
     return (int)v;
-}
-
-static float bcc_cvs(const char* s) {
-    float v;
-    memcpy(&v, s, 4);
-    return v;
-}
-
-static double bcc_cvd(const char* s) {
-    double v;
-    memcpy(&v, s, 8);
-    return v;
 }
 
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
@@ -876,5 +888,66 @@ static int bcc_get_record_student(FILE* file, long record, char* field_0, char* 
     field_2[8] = 0;
     bcc_read_string_field(field_3, buffer + 30, 20);
     return 1;
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_eof(FILE* file) {
+    int c = fgetc(file);
+    if (c == EOF) return -1;
+    ungetc(c, file);
+    return 0;
+}
+
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {
+    if (fgets(buf, (int)bufsize, file) == NULL) {
+        buf[0] = 0;
+        return;
+    }
+    buf[strcspn(buf, "\r\n")] = 0;
+}
+
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
+    int c = fgetc(file);
+    while (c == ' ') c = fgetc(file);
+    size_t len = 0;
+    if (c == '"') {
+        c = fgetc(file);
+        while (c != EOF && c != '"') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        c = fgetc(file);
+        while (c != EOF && c != ',' && c != '\n') c = fgetc(file);
+    } else {
+        while (c != EOF && c != ',' && c != '\n' && c != '\r') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        if (c == '\r') {
+            int c2 = fgetc(file);
+            if (c2 != '\n' && c2 != EOF) ungetc(c2, file);
+        }
+    }
+    buf[len] = 0;
 }
 

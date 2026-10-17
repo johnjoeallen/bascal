@@ -1,4 +1,4 @@
-[Home](../../) / Examples / Sort Driver
+[Home](../../) / [Examples](index.md) / Sort Driver
 
 # Sort Driver
 
@@ -12,4 +12,4 @@ fbc -lang qb examples/sort_driver/sort_driver.bas -x tmp/sort_driver
 
 Timings vary by machine; each sort reports `OK` when it has produced sorted output.
 
-[Next: REMLINE →](remline.md)
+[← Examples](index.md) [Next: REMLINE →](remline.md)

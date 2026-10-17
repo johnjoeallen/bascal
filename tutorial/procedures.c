@@ -44,6 +44,7 @@ void bf_i_printifpass(const char* bv_s_name_in, int bv_i_score) {
 
     if ((-(bv_i_score < 60))) {
         return;
+        // early exit — nothing printed for failing scores
     }
     char bt_s_2[256];
     snprintf(bt_s_2, sizeof(bt_s_2), "%s%s", bv_s_name, " passed with ");
@@ -55,9 +56,10 @@ void bf_i_printifpass(const char* bv_s_name_in, int bv_i_score) {
 void bf_i_fillrange(int bv_i_arr_len0, int* bv_i_arr, int bv_i_value) {
     int bv_i_i = 0;
 
+    int bt_start_4 = 0;
     int bt_lim_4 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_4 = 1;
-    for (bv_i_i = 0; bt_step_4 >= 0 ? bv_i_i <= bt_lim_4 : bv_i_i >= bt_lim_4; bv_i_i += bt_step_4) {
+    for (bv_i_i = bt_start_4; bt_step_4 >= 0 ? bv_i_i <= bt_lim_4 : bv_i_i >= bt_lim_4; bv_i_i += bt_step_4) {
         bv_i_arr[(bv_i_i)] = bv_i_value;
     }
 }
@@ -100,41 +102,59 @@ int main(void) {
     // Procedure that uses a global variable
     bv_i_globalcount = 0;
 
-
     // --- Drive the procedures ---
 
     bf_i_printseparator();
-    bf_i_printscore("Alice", 91);
-    bf_i_printscore("Bob", 54);
-    bf_i_printscore("Carol", 78);
+    char bt_arg_5[256];
+    snprintf(bt_arg_5, sizeof(bt_arg_5), "%s", "Alice");
+    int bt_arg_6 = 91;
+    bf_i_printscore(bt_arg_5, bt_arg_6);
+    char bt_arg_7[256];
+    snprintf(bt_arg_7, sizeof(bt_arg_7), "%s", "Bob");
+    int bt_arg_8 = 54;
+    bf_i_printscore(bt_arg_7, bt_arg_8);
+    char bt_arg_9[256];
+    snprintf(bt_arg_9, sizeof(bt_arg_9), "%s", "Carol");
+    int bt_arg_10 = 78;
+    bf_i_printscore(bt_arg_9, bt_arg_10);
     bf_i_printseparator();
 
     printf("Passes only:\n");
-    bf_i_printifpass("Alice", 91);
-    bf_i_printifpass("Bob", 54);
-    bf_i_printifpass("Carol", 78);
+    char bt_arg_11[256];
+    snprintf(bt_arg_11, sizeof(bt_arg_11), "%s", "Alice");
+    int bt_arg_12 = 91;
+    bf_i_printifpass(bt_arg_11, bt_arg_12);
+    char bt_arg_13[256];
+    snprintf(bt_arg_13, sizeof(bt_arg_13), "%s", "Bob");
+    int bt_arg_14 = 54;
+    bf_i_printifpass(bt_arg_13, bt_arg_14);
+    char bt_arg_15[256];
+    snprintf(bt_arg_15, sizeof(bt_arg_15), "%s", "Carol");
+    int bt_arg_16 = 78;
+    bf_i_printifpass(bt_arg_15, bt_arg_16);
 
     bv_i_n = 5;
-    bf_i_fillrange(6, bv_i_data, 99);
+    int bt_arg_17 = 99;
+    bf_i_fillrange(6, bv_i_data, bt_arg_17);
     printf("Filled array:\n");
-    int bt_lim_5 = (bv_i_n - 1);
-    int bt_step_5 = 1;
-    for (bv_i_i = 0; bt_step_5 >= 0 ? bv_i_i <= bt_lim_5 : bv_i_i >= bt_lim_5; bv_i_i += bt_step_5) {
-        char bt_s_6[256];
-        snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "  data%(", bcc_stri(bv_i_i));
-        char bt_s_7[256];
-        snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", bt_s_6, ") = ");
-        char bt_s_8[256];
-        snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bt_s_7, bcc_stri(bv_i_data[(bv_i_i)]));
-        printf("%s\n", bt_s_8);
+    int bt_lim_18 = (bv_i_n - 1);
+    int bt_step_18 = 1;
+    for (bv_i_i = 0; bt_step_18 >= 0 ? bv_i_i <= bt_lim_18 : bv_i_i >= bt_lim_18; bv_i_i += bt_step_18) {
+        char bt_s_19[256];
+        snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", "  data%(", bcc_stri(bv_i_i));
+        char bt_s_20[256];
+        snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, ") = ");
+        char bt_s_21[256];
+        snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", bt_s_20, bcc_stri(bv_i_data[(bv_i_i)]));
+        printf("%s\n", bt_s_21);
     }
 
     bf_i_increment();
     bf_i_increment();
     bf_i_increment();
-    char bt_s_9[256];
-    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", "globalCount = ", bcc_stri(bv_i_globalcount));
-    printf("%s\n", bt_s_9);
+    char bt_s_22[256];
+    snprintf(bt_s_22, sizeof(bt_s_22), "%s%s", "globalCount = ", bcc_stri(bv_i_globalcount));
+    printf("%s\n", bt_s_22);
 
     return 0;
 }

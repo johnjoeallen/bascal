@@ -21,6 +21,8 @@ static FILE* bcc_files[BCC_MAX_CHANNELS];
 
 static char bcc_file_field_buf[256];
 
+static char bcc_input_buf[256];
+
 static char* bcc_strbuf_take(void);
 static const char* bcc_mid(const char* s, int start, int length);
 static const char* bcc_chr(int code);
@@ -29,18 +31,19 @@ static const char* bcc_strd(double value);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
-static void bcc_mks(char* out, double value);
-static void bcc_mkd(char* out, double value);
 static int bcc_cvi(const char* s);
 static int bcc_cvl(const char* s);
-static float bcc_cvs(const char* s);
-static double bcc_cvd(const char* s);
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
 static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
 static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
 static int bcc_eof(FILE* file);
 static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
 static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_line(void);
 
 static int bv_i_score = 0;
 static char bv_s_csvfile[256] = {0};
@@ -313,15 +316,6 @@ static void bcc_mkl(char* out, int value) {
     memcpy(out, &v, 4);
 }
 
-static void bcc_mks(char* out, double value) {
-    float v = (float)value;
-    memcpy(out, &v, 4);
-}
-
-static void bcc_mkd(char* out, double value) {
-    memcpy(out, &value, 8);
-}
-
 static int bcc_cvi(const char* s) {
     int16_t v;
     memcpy(&v, s, 2);
@@ -332,18 +326,6 @@ static int bcc_cvl(const char* s) {
     int32_t v;
     memcpy(&v, s, 4);
     return (int)v;
-}
-
-static float bcc_cvs(const char* s) {
-    float v;
-    memcpy(&v, s, 4);
-    return v;
-}
-
-static double bcc_cvd(const char* s) {
-    double v;
-    memcpy(&v, s, 8);
-    return v;
 }
 
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
@@ -361,6 +343,27 @@ static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t 
     if (len > width) len = width;
     memcpy(dest, value, len);
     memset(dest + len, ' ', width - len);
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
 }
 
 static int bcc_eof(FILE* file) {
@@ -401,5 +404,13 @@ static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
         }
     }
     buf[len] = 0;
+}
+
+static void bcc_read_line(void) {
+    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {
+        bcc_input_buf[0] = 0;
+        return;
+    }
+    bcc_input_buf[strcspn(bcc_input_buf, "\r\n")] = 0;
 }
 

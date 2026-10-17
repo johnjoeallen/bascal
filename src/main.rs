@@ -1,17 +1,61 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, ExitStatus};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use bcc::{check_file, compile_file, default_output_path, CompileOptions, Target};
+use bcc::{check_file, compile_file, default_output_path, format, CompileOptions, Target};
 use clap::Parser;
 
 mod jvm_classfile;
 
+/// Set once from `--verbose`; every `verbose!` call checks it.
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+/// Prints one step of what `bcc` is doing to stderr (stdout stays reserved
+/// for `binary: ...` and program output), but only under `--verbose`.
+macro_rules! verbose {
+    ($($arg:tt)*) => {
+        if VERBOSE.load(Ordering::Relaxed) {
+            eprintln!("bcc: {}", format_args!($($arg)*));
+        }
+    };
+}
+
+/// A command line as a shell would show it, for `--verbose`.
+fn command_line(command: &Command) -> String {
+    let mut parts = vec![command.get_program().to_string_lossy().into_owned()];
+    parts.extend(command.get_args().map(|arg| {
+        let arg = arg.to_string_lossy();
+        if arg.contains(' ') {
+            format!("'{arg}'")
+        } else {
+            arg.into_owned()
+        }
+    }));
+    parts.join(" ")
+}
+
+/// Runs `command` to completion with inherited stdio, logging the command
+/// line and its exit status under `--verbose`.
+fn run_logged(command: &mut Command) -> std::io::Result<ExitStatus> {
+    verbose!("running: {}", command_line(command));
+    let status = command.status()?;
+    verbose!("{} exited with {status}", command.get_program().to_string_lossy());
+    Ok(status)
+}
+
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
-/// (the `basic` target, complete), a mostly-complete native-C backend (the
-/// `c` target), or a brand-new, bootstrap-stage native-JVM backend (the
-/// `jvm` target -- just beginning, not yet ready for real programs).
+/// (the `basic`/`bascom` target, complete, verified against real BASCOM;
+/// or `fbc`, identical output but rejecting the handful of constructs real
+/// BASCOM accepts that `fbc` itself does not -- see `Target`'s own doc
+/// comment in codegen.rs), a mostly-complete native-C backend (the `c`
+/// target), a brand-new, bootstrap-stage native-JVM backend (the `jvm`
+/// target -- just beginning, not yet ready for real programs), or a
+/// a Commodore 64 target via `cc65` (the `c64` target -- reuses the `c`
+/// backend, restricted by Phase 3's capability validation to whatever the
+/// C64/`cc65` C dialect can actually express; see `c_dialect.rs`'s own doc
+/// comment and `RETRO_BASIC_SUPPORT_PROMPT.md`).
 /// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
 /// --version`, `bash --version`) for what a copyright/license notice in
 /// `--version` output should look like; the GPL itself recommends exactly
@@ -63,15 +107,23 @@ struct Cli {
     #[arg(long)]
     check: bool,
 
-    /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
+    /// Report every line whose indentation, spacing, or casing doesn't match `bcc`'s own canonical style, without changing the file -- exits non-zero if any are found. Casing includes required-library call/variable sites, resolved the same way `-L` resolves them for a real compile. See the manual's "Source Formatting" section for the full rule set
+    #[arg(long)]
+    format_check: bool,
+
+    /// Rewrites this file in place with corrected formatting. See --format-check for what "corrected" means
+    #[arg(long)]
+    format: bool,
+
+    /// Compile the generated output to a binary in tmp/: for --target basic/bascom, real BASCOM under dosbox-x (needs dosbox-x on PATH plus a local BASCOM fixture -- see CONTRIBUTING.md), producing a DOS .EXE; fbc for --target fbc's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
     binary: bool,
 
-    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For --target basic this always means fbc's binary, run directly -- not real BASCOM, whose own .EXE needs a DOS environment/emulator like dosbox-x to run at all
+    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For --target basic/bascom this means launching the built .EXE in dosbox-x's own window (needs a display; won't work fully headless) since a DOS binary can't be exec'd directly; for --target fbc, fbc's native binary is run directly instead
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (the original, complete backend), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (a Commodore 64 target via cc65 -- reuses the c backend, restricted to a subset (no /, ^, single/double variables, or byval array parameters -- cc65 has no floating-point support and no VLAs) with a clear diagnostic naming the target for anything unsupported; --binary needs cc65 on PATH, --run launches the built PRG under VICE's x64sc -- needs a display, and VICE isn't packaged for Debian/Ubuntu, see run_c64_prg's own doc comment for the from-source build steps). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -82,6 +134,18 @@ struct Cli {
     /// Same check as --strict-vars, but prints findings to stderr as warnings instead of failing the compile. Ignored if --strict-vars is also given
     #[arg(long)]
     strict_vars_warn: bool,
+
+    /// Warn (to stderr, non-fatal) about unused dim/const declarations, a local shadowing a parameter/global/enclosing for-loop variable, unreachable code after return/goto/exit/throw/end/stop, and a bare numeric literal compared against a variable (magic numbers -- 0/1/-1 exempted as common sentinels). Checked only against this program's own source, never a required library's
+    #[arg(long)]
+    lint: bool,
+
+    /// --target jvm only: stack size for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Plain bytes, or suffixed with k/kb, m/mb, g/gb (case-insensitive, powers of 1024 -- e.g. `64mb`, `256M`, `1gb`). Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
+    #[arg(long, value_name = "SIZE", value_parser = parse_byte_count_value)]
+    krak_stack_size: Option<usize>,
+
+    /// Show each step the compiler takes on stderr: the resolved target and output paths, transpiling the .bcl, writing the generated .bas/.c/.j, and every external tool it then runs (fbc, gcc, BASCOM under dosbox-x, the .j to .class assembler, java) with its full command line and exit status
+    #[arg(short = 'v', long)]
+    verbose: bool,
 }
 
 const DEFAULT_TARGET_HELP: &str = "\
@@ -89,7 +153,14 @@ Default target (used when --target isn't given), first match wins:
   1. BASCAL_TARGET environment variable
   2. ~/.config/bascal/config (\"target=c\", one setting per line)
   3. /etc/default/bascal (same format, system-wide)
-  4. basic, if none of the above are set";
+  4. basic, if none of the above are set
+
+KRAK_STACK_SIZE (used when --krak-stack-size isn't given, --target jvm only),
+same first-match-wins order as DEFAULT TARGET above:
+  1. BASCAL_KRAK_STACK_SIZE environment variable
+  2. ~/.config/bascal/config (\"krak_stack_size=64mb\", or a plain byte count)
+  3. /etc/default/bascal (same format, system-wide)
+  4. 33554432 (32 MiB), if none of the above are set";
 
 fn main() -> ExitCode {
     // -V/--version is intercepted here, ahead of clap, because clap 4's
@@ -126,11 +197,24 @@ fn main() -> ExitCode {
 /// flag's `clap` value parser, `BASCAL_TARGET`, and both config files so
 /// all four accept exactly the same spellings (`basic`/`BASIC`/`Basic`/...,
 /// `c`/`C`).
+/// The `--target` spelling for `target`, for `--verbose` messages.
+fn target_name(target: Target) -> &'static str {
+    match target {
+        Target::Basic => "basic",
+        Target::Fbc => "fbc",
+        Target::C => "C",
+        Target::Jvm => "jvm",
+        Target::C64 => "c64",
+    }
+}
+
 fn parse_target_str(value: &str) -> Option<Target> {
     match value.to_ascii_lowercase().as_str() {
-        "basic" => Some(Target::Basic),
+        "basic" | "bascom" => Some(Target::Basic),
+        "fbc" => Some(Target::Fbc),
         "c" => Some(Target::C),
         "jvm" => Some(Target::Jvm),
+        "c64" => Some(Target::C64),
         _ => None,
     }
 }
@@ -139,8 +223,55 @@ fn parse_target_str(value: &str) -> Option<Target> {
 /// `parse_target_str` matching the `Fn(&str) -> Result<Target, String>`
 /// shape `clap` expects.
 fn parse_target_value(value: &str) -> Result<Target, String> {
-    parse_target_str(value)
-        .ok_or_else(|| format!("expected `basic`, `c`, or `jvm` (case-insensitive), got `{value}`"))
+    parse_target_str(value).ok_or_else(|| {
+        format!(
+            "expected `basic` (alias `bascom`), `fbc`, `c`, `jvm`, or `c64` (case-insensitive), \
+             got `{value}`"
+        )
+    })
+}
+
+/// Parses a byte-count value: plain digits (bytes), or digits followed by
+/// a case-insensitive `b`/`k`/`kb`/`m`/`mb`/`g`/`gb` unit (powers of 1024,
+/// not 1000 -- matching every other Unix disk/memory size convention this
+/// gets compared against) -- e.g. `"67108864"`, `"64mb"`, `"64M"`,
+/// `"1gb"`. Optional whitespace between the digits and the unit. Shared
+/// by the `--krak-stack-size` CLI flag's own `value_parser`
+/// (`parse_byte_count_value` below) and `BASCAL_KRAK_STACK_SIZE`/the
+/// config-file value (`resolve_default_krak_stack_size`), so all three
+/// accept exactly the same formats. `None` for anything else, including
+/// empty input, a bare unit with no digits, or a value that overflows
+/// `usize` once the unit's multiplied in.
+fn parse_byte_count(value: &str) -> Option<usize> {
+    let value = value.trim();
+    let split_at = value
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(value.len());
+    let (digits, unit) = value.split_at(split_at);
+    if digits.is_empty() {
+        return None;
+    }
+    let number: usize = digits.parse().ok()?;
+    let multiplier: usize = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "k" | "kb" => 1024,
+        "m" | "mb" => 1024 * 1024,
+        "g" | "gb" => 1024 * 1024 * 1024,
+        _ => return None,
+    };
+    number.checked_mul(multiplier)
+}
+
+/// `clap`'s own `value_parser` for `--krak-stack-size` -- thin wrapper
+/// around `parse_byte_count` matching the `Fn(&str) -> Result<usize,
+/// String>` shape `clap` expects.
+fn parse_byte_count_value(value: &str) -> Result<usize, String> {
+    parse_byte_count(value).ok_or_else(|| {
+        format!(
+            "expected a byte count, optionally suffixed with b/k/kb/m/mb/g/gb (case-insensitive, \
+             e.g. `64mb`), got `{value}`"
+        )
+    })
 }
 
 /// Finds `key`'s value in a simple `key=value` config file's contents --
@@ -164,42 +295,73 @@ fn parse_config_value(contents: &str, key: &str) -> Option<String> {
     None
 }
 
-/// The `--target` value to use when the CLI flag itself isn't given --
-/// lets a user or system set `c` as their working default without typing
-/// `--target c` on every invocation. Checked in order, first match wins:
-/// the `BASCAL_TARGET` environment variable (works the same on every
-/// platform, including Windows, where there's no real equivalent of
-/// `/etc/default/`); `~/.config/bascal/config`, a per-user default;
-/// `/etc/default/bascal`, a system-wide default (the standard Debian
-/// `/etc/default/<pkgname>` convention -- a plain file, not a directory).
-/// Falls back to `Target::Basic` (the original, complete backend) if none
-/// of those are set, or set to something unrecognized. An explicit
-/// `--target`/`-t` flag on the command line always overrides whatever
-/// this returns -- see `run`.
-fn resolve_default_target() -> Target {
-    if let Ok(value) = env::var("BASCAL_TARGET") {
-        if let Some(target) = parse_target_str(&value) {
-            return target;
+/// Looks up `key` (e.g. `"target"`, `"krak_stack_size"`) across the three
+/// places every `--<flag>`-with-a-config-fallback in this file shares,
+/// first match wins: the `BASCAL_<KEY>` environment variable (`key`
+/// upper-cased -- works the same on every platform, including Windows,
+/// where there's no real equivalent of `/etc/default/`); `~/.config/
+/// bascal/config`, a per-user default; `/etc/default/bascal`, a
+/// system-wide default (the standard Debian `/etc/default/<pkgname>`
+/// convention -- a plain file, not a directory). A source whose raw value
+/// doesn't `parse` (e.g. `BASCAL_TARGET=nonsense`) is treated as absent,
+/// not an error -- the next source in line still gets a chance, exactly
+/// as if that source hadn't set the key at all. `None` if no source
+/// yields a value `parse` accepts.
+fn resolve_config_value<T>(key: &str, parse: impl Fn(&str) -> Option<T>) -> Option<T> {
+    let env_key = format!("BASCAL_{}", key.to_ascii_uppercase());
+    if let Ok(value) = env::var(&env_key) {
+        if let Some(parsed) = parse(&value) {
+            return Some(parsed);
         }
     }
     if let Ok(home) = env::var("HOME") {
         let user_config = PathBuf::from(home).join(".config/bascal/config");
         if let Ok(contents) = fs::read_to_string(&user_config) {
-            if let Some(value) = parse_config_value(&contents, "target") {
-                if let Some(target) = parse_target_str(&value) {
-                    return target;
+            if let Some(value) = parse_config_value(&contents, key) {
+                if let Some(parsed) = parse(&value) {
+                    return Some(parsed);
                 }
             }
         }
     }
     if let Ok(contents) = fs::read_to_string("/etc/default/bascal") {
-        if let Some(value) = parse_config_value(&contents, "target") {
-            if let Some(target) = parse_target_str(&value) {
-                return target;
+        if let Some(value) = parse_config_value(&contents, key) {
+            if let Some(parsed) = parse(&value) {
+                return Some(parsed);
             }
         }
     }
-    Target::Basic
+    None
+}
+
+/// The `--target` value to use when the CLI flag itself isn't given --
+/// lets a user or system set `c` as their working default without typing
+/// `--target c` on every invocation. See `resolve_config_value`'s own doc
+/// comment for the precedence order (`BASCAL_TARGET` env var, user
+/// config, system config). Falls back to `Target::Basic` (the original,
+/// complete backend) if none of those are set, or set to something
+/// unrecognized. An explicit `--target`/`-t` flag on the command line
+/// always overrides whatever this returns -- see `run`.
+fn resolve_default_target() -> Target {
+    resolve_config_value("target", parse_target_str).unwrap_or(Target::Basic)
+}
+
+/// The Krakatau assembler's own worker-thread stack size (bytes,
+/// `invoke_krak2`'s thread -- not the JVM's own runtime stack, `java
+/// -Xss`, which this has no connection to at all) to use when
+/// `--krak-stack-size` itself isn't given -- see `invoke_krak2`'s own doc
+/// comment for why `bcc` runs `krakatau2::assemble` on a dedicated thread
+/// with an explicit stack size at all. Same precedence order as
+/// `resolve_default_target` (`BASCAL_KRAK_STACK_SIZE` env var, user
+/// config, system config), via `resolve_config_value`. Falls back to
+/// 32 MiB if none of those are set, or set to something `parse_byte_
+/// count` doesn't accept -- confirmed empirically: even a trivial
+/// generated program can overflow a stack as small as 64 KiB (krak2's
+/// recursive stack-map-frame/control-flow analysis needs real headroom),
+/// so this default deliberately isn't a token/minimal value.
+fn resolve_default_krak_stack_size() -> usize {
+    const DEFAULT_KRAK_STACK_SIZE: usize = 32 * 1024 * 1024;
+    resolve_config_value("krak_stack_size", parse_byte_count).unwrap_or(DEFAULT_KRAK_STACK_SIZE)
 }
 
 /// The `-o` value's *effective* output path. `-o` only ever names a
@@ -239,10 +401,77 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
     Ok(output.join(file_name))
 }
 
+/// Handles `--format-check`/`--format`, both of which operate on `cli.input`
+/// directly and never touch backend/target machinery at all.
+fn run_format(cli: &Cli) -> Result<(), String> {
+    if cli.format_check && cli.format {
+        return Err(
+            "error: --format-check and --format cannot be combined -- --format-check \
+                     only reports what would change, --format rewrites the file; pick one"
+                .to_string(),
+        );
+    }
+    let source = fs::read_to_string(&cli.input)
+        .map_err(|err| format!("error: failed to read {}: {err}", cli.input.display()))?;
+    let filename = cli.input.display().to_string();
+
+    if cli.format_check {
+        let diffs = format::check(&filename, &source, &cli.library_dirs);
+        if diffs.is_empty() {
+            println!("format check passed: {}", cli.input.display());
+            return Ok(());
+        }
+        for diff in &diffs {
+            println!("{}:{}:", cli.input.display(), diff.line);
+            println!("  - {}", diff.before);
+            println!("  + {}", diff.after);
+        }
+        return Err(format!(
+            "format check failed: {} ({} line{} would change -- run `bcc --format {}` to fix)",
+            cli.input.display(),
+            diffs.len(),
+            if diffs.len() == 1 { "" } else { "s" },
+            cli.input.display()
+        ));
+    }
+
+    let formatted = format::reindent(&filename, &source, &cli.library_dirs);
+    if formatted == source {
+        println!("already formatted: {}", cli.input.display());
+        return Ok(());
+    }
+    fs::write(&cli.input, &formatted)
+        .map_err(|err| format!("error: failed to write {}: {err}", cli.input.display()))?;
+    println!("formatted: {}", cli.input.display());
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<(), String> {
+    VERBOSE.store(cli.verbose, Ordering::Relaxed);
+    verbose!("bcc {}", env!("CARGO_PKG_VERSION"));
+
+    if cli.format_check || cli.format {
+        verbose!(
+            "{} {}",
+            if cli.format_check { "checking formatting of" } else { "formatting" },
+            cli.input.display()
+        );
+        return run_format(&cli);
+    }
+
     let target = cli.target.unwrap_or_else(resolve_default_target);
+    verbose!(
+        "input {}, target {}{}",
+        cli.input.display(),
+        target_name(target),
+        if cli.target.is_some() { "" } else { " (default)" }
+    );
+    let krak_stack_size = cli
+        .krak_stack_size
+        .unwrap_or_else(resolve_default_krak_stack_size);
 
     if cli.check {
+        verbose!("--check: parsing and validating only, no output is written");
         if cli.binary || cli.run {
             return Err("error: --check cannot be combined with --binary or --run".to_string());
         }
@@ -253,6 +482,7 @@ fn run(cli: Cli) -> Result<(), String> {
             target,
             strict_vars: false,
             strict_vars_warn: false,
+            lint: false,
         };
         check_file(&cli.input, &options).map_err(|diagnostics| {
             diagnostics
@@ -271,6 +501,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let want_binary = cli.binary || cli.run;
 
     let output_path = resolve_output_path(&cli, target)?;
+    verbose!("generated output will be {}", output_path.display());
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -282,9 +513,14 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
+        verbose!(
+            "{} is newer than {}, skipping transpile (--clean forces it)",
+            output_path.display(),
+            cli.input.display()
+        );
         let binary_path = expected_binary_path(target, &output_path)?;
         if want_binary && !is_up_to_date(&cli.input, &binary_path) {
-            let built = invoke_binary(target, &output_path)?;
+            let built = invoke_binary(target, &output_path, krak_stack_size)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
@@ -302,7 +538,19 @@ fn run(cli: Cli) -> Result<(), String> {
         target,
         strict_vars: cli.strict_vars,
         strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
+        lint: cli.lint,
     };
+    verbose!(
+        "transpiling {} (lexer, parser, resolver, {} code generator)",
+        cli.input.display(),
+        target_name(target)
+    );
+    if !options.library_dirs.is_empty() {
+        verbose!("library search paths: {}", {
+            let dirs: Vec<String> = options.library_dirs.iter().map(|d| d.display().to_string()).collect();
+            dirs.join(", ")
+        });
+    }
     let generated = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
             .into_iter()
@@ -311,11 +559,17 @@ fn run(cli: Cli) -> Result<(), String> {
             .join("\n")
     })?;
 
+    verbose!(
+        "generated {} lines, {} bytes",
+        generated.lines().count(),
+        generated.len()
+    );
     fs::write(&output_path, &generated)
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
+    verbose!("wrote {}", output_path.display());
 
     if want_binary {
-        let built = invoke_binary(target, &output_path)?;
+        let built = invoke_binary(target, &output_path, krak_stack_size)?;
         if cli.run {
             return run_binary(&built);
         }
@@ -338,8 +592,23 @@ fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("class") {
         return run_java_class(binary_path);
     }
-    let status = Command::new(binary_path)
-        .status()
+    // A `--target basic` "binary" (`invoke_bascom`) is a DOS `.EXE`,
+    // likewise not something this process's OS can exec directly -- see
+    // `run_dos_exe`'s own doc comment for why it needs dosbox-x's own
+    // window rather than an inherited-stdio child process.
+    if binary_path.extension().and_then(|ext| ext.to_str()) == Some("EXE") {
+        return run_dos_exe(binary_path);
+    }
+    // A `--target c64` "binary" (`invoke_cl65`) is a Commodore 64 `PRG`
+    // image -- 6502 machine code this process's own (x86/ARM/...) OS can
+    // never exec directly, unlike `Target::Fbc`/`Target::C`'s native
+    // binaries. Same reasoning as the DOS `.EXE` case just above: needs a
+    // real emulator window, not an inherited-stdio child process -- see
+    // `run_c64_prg`'s own doc comment.
+    if binary_path.extension().and_then(|ext| ext.to_str()) == Some("prg") {
+        return run_c64_prg(binary_path);
+    }
+    let status = run_logged(&mut Command::new(binary_path))
         .map_err(|err| format!("error: failed to run {}: {err}", binary_path.display()))?;
     if !status.success() {
         return Err(format!(
@@ -358,12 +627,13 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
     let class_dir = class_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
-    let status = Command::new("java")
-        .arg("-cp")
-        .arg(class_dir)
-        .arg(class_name)
-        .status()
-        .map_err(|err| format!("error: failed to invoke java: {err}"))?;
+    let status = run_logged(
+        Command::new("java")
+            .arg("-cp")
+            .arg(class_dir)
+            .arg(class_name),
+    )
+    .map_err(|err| format!("error: failed to invoke java: {err}"))?;
     if !status.success() {
         return Err(format!("error: {class_name} exited with {status}"));
     }
@@ -386,24 +656,38 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
     out_mtime >= in_mtime
 }
 
-/// Compiles the transpiler's generated output down to a native binary with
+/// Compiles the transpiler's generated output down to a binary with
 /// whatever third-party compiler actually understands that target's
 /// output, and returns the binary's path on success (used by `--run` to
-/// find what to execute next). `Target::Basic`'s `.bas` goes through
-/// `fbc` (FreeBASIC) specifically, not real BASCOM: `fbc` produces a
-/// binary the host can run directly, the same way `gcc` does for
-/// `Target::C`'s `.c` -- real BASCOM (used only by the opt-in
-/// `tests/dosbox_conformance.rs` conformance suite, see CONTRIBUTING.md)
-/// instead produces a DOS `.EXE`, runnable only under a DOS
-/// environment/emulator like dosbox-x, not directly by this process.
-/// That's also why `--run` always means `fbc` for the `basic` target,
-/// not a user-selectable choice between the two: `fbc`'s binary is the
-/// only one of the pair `--run` could actually execute itself.
-fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
+/// find what to execute next). `Target::Fbc`'s `.bas` goes through `fbc`
+/// (FreeBASIC), producing a native binary the host can run directly, the
+/// same way `gcc` does for `Target::C`'s `.c`. `Target::Basic`'s `.bas`
+/// instead goes through real BASCOM under dosbox-x (see `invoke_bascom`),
+/// producing a DOS `.EXE` -- `run_binary` special-cases that extension the
+/// same way it already does JVM's `.class`, launching dosbox-x itself
+/// rather than exec'ing the file directly.
+fn invoke_binary(
+    target: Target,
+    output_path: &PathBuf,
+    krak_stack_size: usize,
+) -> Result<PathBuf, String> {
+    verbose!(
+        "building a binary from {} with {}",
+        output_path.display(),
+        match target {
+            Target::Basic => "real BASCOM under dosbox-x",
+            Target::Fbc => "fbc (FreeBASIC)",
+            Target::C => "gcc",
+            Target::Jvm => "the Krakatau assembler (.j to .class)",
+            Target::C64 => "cl65 (cc65)",
+        }
+    );
     match target {
-        Target::Basic => invoke_fbc(output_path),
+        Target::Basic => invoke_bascom(output_path),
+        Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
-        Target::Jvm => invoke_krak2(output_path),
+        Target::Jvm => invoke_krak2(output_path, krak_stack_size),
+        Target::C64 => invoke_cl65(output_path),
     }
 }
 
@@ -415,14 +699,15 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
-    let status = Command::new("fbc")
-        .arg("-lang")
-        .arg("qb")
-        .arg(bas_path)
-        .arg("-x")
-        .arg(&binary_path)
-        .status()
-        .map_err(|err| format!("error: failed to invoke fbc: {err}"))?;
+    let status = run_logged(
+        Command::new("fbc")
+            .arg("-lang")
+            .arg("qb")
+            .arg(bas_path)
+            .arg("-x")
+            .arg(&binary_path),
+    )
+    .map_err(|err| format!("error: failed to invoke fbc: {err}"))?;
     if !status.success() {
         return Err(format!(
             "error: fbc failed compiling {}",
@@ -431,6 +716,240 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     }
     println!("binary: {}", binary_path.display());
     Ok(binary_path)
+}
+
+/// Where a local, non-redistributed real-BASCOM install lives -- the exact
+/// same directory `tests/dosbox_conformance.rs`'s opt-in conformance suite
+/// uses (see CONTRIBUTING.md/`scripts/fetch-ibm-basic-compiler.sh`), reused
+/// here rather than adding a separate, user-facing config knob: BASCOM is
+/// copyrighted and can't ship with `bcc`, so both the test suite and
+/// `--target basic`'s own `--binary`/`--run` need the same one-time setup
+/// either way. Relative to the current directory, same as `tmp/` below.
+fn bascom_fixture_dir() -> PathBuf {
+    PathBuf::from("test-fixtures/ibm-basic-compiler/c_drive")
+}
+
+fn bascom_available() -> bool {
+    bascom_fixture_dir().join("BASCOM.EXE").is_file()
+}
+
+fn dosbox_x_available() -> bool {
+    // dosbox-x exits non-zero for `--version` (it treats the flag as an
+    // early-exit trigger rather than a clean "print and succeed" query),
+    // matching `tests/dosbox_conformance.rs`'s own `dosbox_x_available`.
+    Command::new("dosbox-x").arg("--version").output().is_ok()
+}
+
+/// A DOS text file needs CRLF line endings and a trailing Ctrl-Z (0x1A) EOF
+/// marker to be read correctly by real DOS-era tools -- identical to
+/// `tests/dosbox_conformance.rs`'s own `to_dos_text`.
+fn to_dos_text(text: &str) -> Vec<u8> {
+    let mut dos = text.replace('\n', "\r\n");
+    if !dos.ends_with("\r\n") {
+        dos.push_str("\r\n");
+    }
+    let mut bytes = dos.into_bytes();
+    bytes.push(0x1A);
+    bytes
+}
+
+fn write_dos_file(path: &Path, contents: &str) -> Result<(), String> {
+    fs::write(path, to_dos_text(contents))
+        .map_err(|err| format!("error: failed to write {}: {err}", path.display()))
+}
+
+/// Every real-BASCOM work directory this process ever builds lives at
+/// `tmp/<stem>_bascom/`, one per compiled program, holding a staged copy of
+/// the whole BASCOM fixture (compiler + linker + libs) plus that program's
+/// own `PROG.BAS`/`PROG.EXE` -- a fixed 8.3-safe DOS name, side-stepping
+/// any concern about a `.bcl` stem too long or containing characters DOS
+/// filenames can't, the same way `tests/dosbox_conformance.rs`'s `TEST`
+/// stem does.
+fn bascom_work_dir(stem: &std::ffi::OsStr) -> PathBuf {
+    let mut dir_name = stem.to_os_string();
+    dir_name.push("_bascom");
+    PathBuf::from("tmp").join(dir_name)
+}
+
+/// Runs `dosbox-x` headlessly against `work_dir` (mounted as `C:`),
+/// executing `batch_file` (a filename inside `work_dir`) and exiting
+/// immediately after -- identical arrangement to
+/// `tests/dosbox_conformance.rs`'s own `run_dosbox_batch`, since this is
+/// exactly the same "compile with a real DOS tool under emulation" step,
+/// just invoked from `bcc` itself instead of a test.
+fn run_dosbox_batch_headless(work_dir: &Path, batch_file: &str) -> Result<(), String> {
+    let mount_arg = format!("MOUNT C: {}", work_dir.display());
+    let status = run_logged(
+        Command::new("dosbox-x")
+            .env("SDL_AUDIODRIVER", "dummy")
+            .arg("-nogui")
+            .arg("-c")
+            .arg(&mount_arg)
+            .arg("-c")
+            .arg("C:")
+            .arg("-c")
+            .arg(batch_file)
+            .arg("-fastlaunch")
+            .arg("-exit"),
+    )
+    .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    if !status.success() {
+        return Err(format!("error: dosbox-x exited with {status}"));
+    }
+    Ok(())
+}
+
+fn missing_bascom_setup_error() -> String {
+    if !dosbox_x_available() {
+        return "error: dosbox-x not found on PATH -- install it to build/run --target \
+                basic/bascom output via real BASCOM (see CONTRIBUTING.md), or use \
+                --target fbc instead"
+            .to_string();
+    }
+    format!(
+        "error: {} not found -- run scripts/fetch-ibm-basic-compiler.sh to populate a \
+         local BASCOM fixture (see test-fixtures/README.md), or use --target fbc instead",
+        bascom_fixture_dir().join("BASCOM.EXE").display()
+    )
+}
+
+/// Compiles `bas_path` with real BASCOM under `dosbox-x`, staged into
+/// `bascom_work_dir`, and returns the resulting DOS `.EXE`'s path.
+/// `/E` (BASCOM's own switch for `ON ERROR`/`RESUME` support) is always
+/// passed: confirmed harmless for a program that doesn't use it, and
+/// required for one that does (real BASCOM otherwise still "compiles" the
+/// program -- nonzero severe-error count, but still produces an EXE -- yet
+/// silently never installs the error trap at runtime).
+fn invoke_bascom(bas_path: &PathBuf) -> Result<PathBuf, String> {
+    if !dosbox_x_available() || !bascom_available() {
+        return Err(missing_bascom_setup_error());
+    }
+
+    let stem = bas_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid BASIC output path {}", bas_path.display()))?;
+    let work_dir = bascom_work_dir(stem);
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", work_dir.display()))?;
+
+    verbose!(
+        "staging the BASCOM fixture into {} and converting {} to DOS text as PROG.BAS",
+        work_dir.display(),
+        bas_path.display()
+    );
+    let fixture_dir = bascom_fixture_dir();
+    for entry in fs::read_dir(&fixture_dir)
+        .map_err(|err| format!("error: failed to read {}: {err}", fixture_dir.display()))?
+    {
+        let entry =
+            entry.map_err(|err| format!("error: failed to read compiler fixture entry: {err}"))?;
+        let dest = work_dir.join(entry.file_name());
+        fs::copy(entry.path(), &dest)
+            .map_err(|err| format!("error: failed to stage {}: {err}", dest.display()))?;
+    }
+
+    let basic_source = fs::read_to_string(bas_path)
+        .map_err(|err| format!("error: failed to read {}: {err}", bas_path.display()))?;
+    write_dos_file(&work_dir.join("PROG.BAS"), &basic_source)?;
+    write_dos_file(
+        &work_dir.join("RUNIT.BAT"),
+        "BASCOM PROG.BAS,,;/E\nLINK PROG.OBJ;\nEXIT\n",
+    )?;
+
+    verbose!("RUNIT.BAT: BASCOM PROG.BAS,,;/E then LINK PROG.OBJ;");
+    run_dosbox_batch_headless(&work_dir, "RUNIT.BAT")?;
+
+    verbose!("checking BASCOM's listing for severe errors");
+    let lst_path = work_dir.join("PROG.LST");
+    let lst = fs::read_to_string(&lst_path).map_err(|err| {
+        format!(
+            "error: expected BASCOM to produce {} (BASCOM failed to run at all?): {err}",
+            lst_path.display()
+        )
+    })?;
+    if !lst.contains("0 Severe  Error(s)") {
+        return Err(format!(
+            "error: real BASCOM rejected the generated BASIC for {}:\n{lst}",
+            bas_path.display()
+        ));
+    }
+
+    let exe_path = work_dir.join("PROG.EXE");
+    if !exe_path.is_file() {
+        return Err(format!(
+            "error: expected BASCOM+LINK to produce {} -- compile succeeded but link must \
+             have failed",
+            exe_path.display()
+        ));
+    }
+    println!("binary: {}", exe_path.display());
+    Ok(exe_path)
+}
+
+/// Runs a real-BASCOM `.EXE` (built by `invoke_bascom`) under `dosbox-x`,
+/// this time non-headlessly: unlike `fbc`'s native binary, a DOS `.EXE`
+/// can't be `exec`'d directly by this process at all, and dosbox-x itself
+/// doesn't forward a host terminal's live stdin/stdout the way a normal
+/// child process does -- an interactive program (`INPUT`, `INKEY$`, ...)
+/// needs dosbox-x's own window, so this opens one rather than trying (and
+/// failing) to run headlessly the way `invoke_bascom`'s own build step
+/// does. Needs a display; won't work over a plain SSH session or other
+/// fully headless environment.
+fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
+    let work_dir = exe_path
+        .parent()
+        .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
+    let exe_name = exe_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
+    write_dos_file(&work_dir.join("RUN.BAT"), &format!("{exe_name}\nEXIT\n"))?;
+    let mount_arg = format!("MOUNT C: {}", work_dir.display());
+    let status = run_logged(
+        Command::new("dosbox-x")
+            .arg("-c")
+            .arg(&mount_arg)
+            .arg("-c")
+            .arg("C:")
+            .arg("-c")
+            .arg("RUN.BAT")
+            .arg("-fastlaunch"),
+    )
+    .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    if !status.success() {
+        return Err(format!("error: dosbox-x exited with {status}"));
+    }
+    Ok(())
+}
+
+/// Runs a C64 `PRG` image (built by `invoke_cl65`) under VICE's `x64sc`,
+/// same reasoning as `run_dos_exe`'s DOS `.EXE` case just above: 6502
+/// machine code can't be `exec`'d by this process's own (x86/ARM/...) OS
+/// at all, so this needs `x64sc`'s own window rather than an
+/// inherited-stdio child process. Needs a display; won't work over a
+/// plain SSH session or other fully headless environment. `-autostart`
+/// loads and runs the `PRG` immediately -- the "insert and go" experience
+/// a real C64 user gets from a cartridge/disk, and the same flag
+/// `RETRO_BASIC_SUPPORT_PROMPT.md`'s own Testing strategy names `x64sc`
+/// for. VICE isn't packaged for Debian/Ubuntu -- see `doc/building/
+/// SDL-Howto.txt` in VICE's own source tree (https://github.com/VICE-
+/// Team/svn-mirror) for the from-source `./autogen.sh && ./configure
+/// --enable-sdl2ui --with-sdlsound --without-png && make && make install`
+/// steps this project's own README doesn't duplicate.
+fn run_c64_prg(prg_path: &Path) -> Result<(), String> {
+    let status = run_logged(Command::new("x64sc").arg("-autostart").arg(prg_path))
+        .map_err(|err| {
+            format!(
+                "error: failed to invoke x64sc: {err} -- install VICE to run --target c64 \
+                 output (not packaged for Debian/Ubuntu -- build from source, see \
+                 https://github.com/VICE-Team/svn-mirror's doc/building/SDL-Howto.txt)"
+            )
+        })?;
+    if !status.success() {
+        return Err(format!("error: x64sc exited with {status}"));
+    }
+    Ok(())
 }
 
 fn native_binary_path(output_path: &Path) -> Result<PathBuf, String> {
@@ -452,6 +971,24 @@ fn expected_binary_path(target: Target, output_path: &Path) -> Result<PathBuf, S
             )
         })?;
         return Ok(PathBuf::from("tmp").join(stem).with_extension("class"));
+    }
+    if target == Target::Basic {
+        let stem = output_path.file_stem().ok_or_else(|| {
+            format!(
+                "error: invalid generated output path {}",
+                output_path.display()
+            )
+        })?;
+        return Ok(bascom_work_dir(stem).join("PROG.EXE"));
+    }
+    if target == Target::C64 {
+        let stem = output_path.file_stem().ok_or_else(|| {
+            format!(
+                "error: invalid generated output path {}",
+                output_path.display()
+            )
+        })?;
+        return Ok(c64_prg_path_from_stem(&PathBuf::from("tmp"), stem));
     }
     native_binary_path(output_path)
 }
@@ -476,21 +1013,89 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
-    let status = Command::new("gcc")
-        .arg(c_path)
-        .arg("-o")
-        .arg(&binary_path)
-        // Always linked, even for programs that don't need it (e.g. `\`'s
-        // round()) -- harmless when unused, and simpler than detecting
-        // per-file whether <math.h> was pulled in.
-        .arg("-lm")
-        .status()
-        .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
+    let status = run_logged(
+        Command::new("gcc")
+            .arg(c_path)
+            .arg("-o")
+            .arg(&binary_path)
+            // Always linked, even for programs that don't need it (e.g. `\`'s
+            // round()) -- harmless when unused, and simpler than detecting
+            // per-file whether <math.h> was pulled in.
+            .arg("-lm"),
+    )
+    .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
     if !status.success() {
         return Err(format!("error: gcc failed compiling {}", c_path.display()));
     }
     println!("binary: {}", binary_path.display());
     Ok(binary_path)
+}
+
+/// `cl65` -- `cc65`'s all-in-one compile+assemble+link driver -- turns
+/// `Target::C64`'s generated C (already restricted to what the C64/`cc65`
+/// `CDialectProfile` supports by Phase 3's `validate_capabilities`, see
+/// `driver.rs`'s own `Target::C64` `transpile` arm) into a loadable
+/// Commodore 64 `PRG` image, the same role `invoke_gcc` plays for
+/// `Target::C`. `-t c64` selects the platform variant (parallel to
+/// `cc65`'s own `-t atari`/`-t apple2`/... for the family-A targets a
+/// later phase may add -- see `RETRO_BASIC_SUPPORT_PROMPT.md`'s Phase 5).
+/// Unlike `gcc`, no `-lm` (or any other link flag) is needed: `cc65`
+/// doesn't have a `<math.h>`/`libm` to link in the first place (see
+/// `c_dialect.rs`'s own doc comment on `supports_float`), and nothing
+/// Phase 3 lets through here could have pulled one in anyway.
+///
+/// `--static-locals`: `cc65` allocates locals on a software-emulated
+/// stack (the 6502 has no real hardware call-frame support), which has
+/// low capacity -- confirmed by hand that most non-trivial BASCAL
+/// functions hit "Error: Too many local variables" without this flag.
+/// `--static-locals` instead puts every local in fixed static storage
+/// (BSS), sidestepping that limit entirely -- at the cost of making the
+/// generated code non-reentrant, which would silently corrupt a
+/// recursive function's locals across nested calls. Safe to pass
+/// unconditionally here because BASCAL itself has no recursive
+/// functions to begin with, on any target: `resolver::validate`'s
+/// `reject_call_cycles` rejects direct or indirect recursion at
+/// resolve time, before any backend (including this one) ever sees the
+/// program -- driven by the *BASIC* backend's own GOSUB-against-shared-
+/// globals calling convention having the identical non-reentrancy
+/// problem, not something specific to `cc65`/C64.
+fn invoke_cl65(c_path: &PathBuf) -> Result<PathBuf, String> {
+    let binary_name = c_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid C output path {}", c_path.display()))?;
+    let binary_dir = PathBuf::from("tmp");
+    fs::create_dir_all(&binary_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
+    let binary_path = c64_prg_path_from_stem(&binary_dir, binary_name);
+    let status = run_logged(
+        Command::new("cl65")
+            .arg("-t")
+            .arg("c64")
+            .arg("--static-locals")
+            .arg(c_path)
+            .arg("-o")
+            .arg(&binary_path),
+    )
+    .map_err(|err| {
+            format!(
+                "error: failed to invoke cl65: {err} -- install cc65 (e.g. `apt install cc65`) \
+                 to build/run --target c64 output"
+            )
+        })?;
+    if !status.success() {
+        return Err(format!("error: cl65 failed compiling {}", c_path.display()));
+    }
+    println!("binary: {}", binary_path.display());
+    Ok(binary_path)
+}
+
+/// A C64 `PRG` image's own filename convention is platform-independent --
+/// unlike `native_binary_path_from_stem` (which appends `.exe` only on a
+/// Windows *host*), a `PRG` always gets a `.prg` extension regardless of
+/// what OS `bcc` itself is running on, since the file is never exec'd by
+/// this process's own OS at all (see `run_binary`'s `Target::C64` case).
+fn c64_prg_path_from_stem(directory: &Path, stem: &std::ffi::OsStr) -> PathBuf {
+    directory.join(stem).with_extension("prg")
 }
 
 /// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` via
@@ -503,7 +1108,7 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
 /// of the `.j` text's `.class public <name>` line -- the same name
 /// `codegen_jvm::class_name_for` chose -- rather than assuming anything
 /// about the input path.
-fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
+fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, String> {
     let source = fs::read_to_string(j_path)
         .map_err(|err| format!("error: failed to read {}: {err}", j_path.display()))?;
     let class_name = source
@@ -522,23 +1127,67 @@ fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let class_path = binary_dir.join(format!("{class_name}.class"));
+    verbose!(
+        "assembling {} into class {class_name} at {}",
+        j_path.display(),
+        class_path.display()
+    );
 
     if let Some(bytes) = jvm_classfile::generate_return_only(&source) {
+        verbose!("program is trivial, writing the class file directly (no assembler)");
         fs::write(&class_path, bytes)
             .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
         println!("binary: {} (generated internally)", class_path.display());
         return Ok(class_path);
     }
 
-    let classes = krakatau2::assemble(&source, krakatau2::AssemblerOptions {}).map_err(|err| {
-        // `Error::display` is krakatau2's own pretty, source-excerpt-aware
-        // printer (writes straight to stderr) -- matches what the old
-        // subprocess's own inherited stdio would have shown; the `Result`
-        // this function returns only ever needs a short top-level summary
-        // on top of that, the same way a nonzero `krak2` exit status used
-        // to.
-        err.display(&j_path.display().to_string(), &source);
-        format!("error: failed to assemble {}", j_path.display())
+    // `krakatau2::assemble` runs on its own worker thread with an
+    // explicit, configurable stack size (`--krak-stack-size`/
+    // `KRAK_STACK_SIZE`, default 32 MiB -- see
+    // `resolve_default_krak_stack_size`) rather than whatever this
+    // process's own thread happens to have: its recursive stack-map-
+    // frame/control-flow analysis needs real headroom for a sufficiently
+    // large generated program (confirmed empirically -- even a trivial
+    // one can overflow a stack as small as 64 KiB), and
+    // upstream Krakatau declined to make this the library's own
+    // responsibility (see Cargo.toml's own comment on the pinned fork;
+    // GitHub PRs #217/#218 against Storyyeller/Krakatau, both closed
+    // unmerged, proposed exactly this inside the library itself). A
+    // genuine stack overflow can't be caught after the fact the way an
+    // ordinary panic can (it aborts the process outright) -- sizing the
+    // thread adequately up front, not catching the overflow, is the
+    // actual fix; `spawn`'s own `io::Result` and `join`'s own panic
+    // result are still handled below for whatever else might go wrong.
+    verbose!("running the Krakatau assembler on a {krak_stack_size}-byte stack");
+    let classes = std::thread::scope(|scope| -> Result<_, String> {
+        let handle = std::thread::Builder::new()
+            .stack_size(krak_stack_size)
+            .spawn_scoped(scope, || {
+                krakatau2::assemble(&source, krakatau2::AssemblerOptions {})
+            })
+            .map_err(|err| {
+                format!(
+                    "error: failed to spawn the assembler's worker thread (stack size \
+                     {krak_stack_size} bytes): {err}"
+                )
+            })?;
+        let result = handle.join().map_err(|_| {
+            format!(
+                "error: the assembler's worker thread panicked while assembling {} (stack \
+                 size {krak_stack_size} bytes) -- try a larger --krak-stack-size",
+                j_path.display()
+            )
+        })?;
+        result.map_err(|err| {
+            // `Error::display` is krakatau2's own pretty, source-excerpt-aware
+            // printer (writes straight to stderr) -- matches what the old
+            // subprocess's own inherited stdio would have shown; the `Result`
+            // this function returns only ever needs a short top-level summary
+            // on top of that, the same way a nonzero `krak2` exit status used
+            // to.
+            err.display(&j_path.display().to_string(), &source);
+            format!("error: failed to assemble {}", j_path.display())
+        })
     })?;
     let (_, bytes) = classes.into_iter().next().ok_or_else(|| {
         format!(
@@ -564,6 +1213,45 @@ mod tests {
         assert_eq!(parse_target_str("c"), Some(Target::C));
         assert_eq!(parse_target_str("C"), Some(Target::C));
         assert_eq!(parse_target_str("bogus"), None);
+    }
+
+    #[test]
+    fn parse_target_str_accepts_bascom_and_fbc() {
+        assert_eq!(parse_target_str("bascom"), Some(Target::Basic));
+        assert_eq!(parse_target_str("BASCOM"), Some(Target::Basic));
+        assert_eq!(parse_target_str("fbc"), Some(Target::Fbc));
+        assert_eq!(parse_target_str("FBC"), Some(Target::Fbc));
+    }
+
+    #[test]
+    fn parse_target_str_accepts_c64() {
+        assert_eq!(parse_target_str("c64"), Some(Target::C64));
+        assert_eq!(parse_target_str("C64"), Some(Target::C64));
+    }
+
+    #[test]
+    fn parse_byte_count_accepts_plain_bytes_and_suffixed_sizes() {
+        assert_eq!(parse_byte_count("67108864"), Some(67108864));
+        assert_eq!(parse_byte_count("64mb"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("64MB"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("64M"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("256mb"), Some(256 * 1024 * 1024));
+        assert_eq!(parse_byte_count("1gb"), Some(1024 * 1024 * 1024));
+        assert_eq!(parse_byte_count("1g"), Some(1024 * 1024 * 1024));
+        assert_eq!(parse_byte_count("32kb"), Some(32 * 1024));
+        assert_eq!(parse_byte_count("32k"), Some(32 * 1024));
+        assert_eq!(parse_byte_count("100b"), Some(100));
+        assert_eq!(parse_byte_count("64 mb"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("  64mb  "), Some(64 * 1024 * 1024));
+    }
+
+    #[test]
+    fn parse_byte_count_rejects_garbage() {
+        assert_eq!(parse_byte_count(""), None);
+        assert_eq!(parse_byte_count("mb"), None);
+        assert_eq!(parse_byte_count("64tb"), None);
+        assert_eq!(parse_byte_count("sixty-four mb"), None);
+        assert_eq!(parse_byte_count("64.5mb"), None);
     }
 
     #[test]
@@ -662,11 +1350,16 @@ mod tests {
             sparse_line_numbers: false,
             clean: false,
             check: false,
+            format_check: false,
+            format: false,
             binary: false,
             run: false,
             target: None,
             strict_vars: false,
             strict_vars_warn: false,
+            lint: false,
+            krak_stack_size: None,
+            verbose: false,
         }
     }
 

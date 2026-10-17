@@ -1,0 +1,4 @@
+program p
+dim g%(3, 3)
+print sizeof(g%)
+end

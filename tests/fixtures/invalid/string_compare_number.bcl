@@ -1,0 +1,5 @@
+program p
+if "a" = 1 then
+print 1
+end if
+end

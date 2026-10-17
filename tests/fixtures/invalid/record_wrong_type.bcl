@@ -1,0 +1,8 @@
+program p
+record R
+id: int16
+name: string(4)
+end record
+file f as R = open("x.dat")
+f[1] = { id: "x", name: 3 }
+end

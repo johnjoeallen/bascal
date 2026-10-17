@@ -1,0 +1,6 @@
+program p
+select case "a"
+case 1
+print 1
+end select
+end

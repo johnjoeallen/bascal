@@ -23,45 +23,45 @@
 220 ' 
 230 ' IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 240 ' Test for false with (expr) = 0, not NOT expr.
-
 250 ' Arithmetic — mix labels and numbers with ;
 260 a% = 17
 270 b% = 5
 280 PRINT a%; "+ "; b%; "="; a% + b%
-290 PRINT a%; "- "; b%; "="; a% - b%
-300 PRINT a%; "* "; b%; "="; a% * b%
-310 PRINT a%; "/ "; b%; "="; a% / b%
-
-320 ' Integer division and MOD
-330 PRINT a%; "\ "; b%; "="; a% \ b%
-340 PRINT a%; "MOD "; b%; "="; a% MOD b%
-
-350 ' Exponentiation — right-associative
-360 PRINT "2 ^ 8 ="; 2 ^ 8
-370 PRINT "2 ^ 3 ^ 2 ="; 2 ^ (3 ^ 2)
-
-380 ' Precedence
-390 PRINT 2 + (3 * 4); " (expect 14 — * before +)"
-400 PRINT (2 + 3) * 4; " (expect 20 — parens first)"
-
-410 ' Comparison — -1 means true, 0 means false
-420 PRINT 10 > 3; " (expect -1)"
-430 PRINT 10 < 3; " (expect  0)"
-440 PRINT 7 = 7; " (expect -1)"
-450 PRINT 7 <> 8; " (expect -1)"
-
-460 ' Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
-470 x% = 7
-480 IF ((x% > 0) AND (x% < 10)) = 0 THEN GOTO 500
-490     PRINT x%; "is in 1..9"
-500 REM END IF
-510 PRINT 6 XOR 3; " (expect 5 — 110 XOR 011 = 101)"
-
-520 ' String concatenation
-530 PRINT (("Hello" + ", ") + "World") + "!"
-
-540 ' Unary negation
-550 n% = 42
-560 PRINT -n%
-
-570 END
+290 ' 17 + 5 = 22
+300 PRINT a%; "- "; b%; "="; a% - b%
+310 ' 17 - 5 = 12
+320 PRINT a%; "* "; b%; "="; a% * b%
+330 ' 17 * 5 = 85
+340 PRINT a%; "/ "; b%; "="; a% / b%
+350 ' 17 / 5 = 3  (truncates)
+360 ' Integer division and MOD
+370 PRINT a%; "\ "; b%; "="; a% \ b%
+380 ' 17 \ 5 = 3  (integer quotient)
+390 PRINT a%; "MOD "; b%; "="; a% MOD b%
+400 ' 17 MOD 5 = 2  (remainder)
+410 ' Exponentiation — right-associative
+420 PRINT "2 ^ 8 ="; 2 ^ 8
+430 ' 256
+440 PRINT "2 ^ 3 ^ 2 ="; 2 ^ (3 ^ 2)
+450 ' 512  (= 2 ^ (3^2) = 2^9)
+460 ' Precedence
+470 PRINT 2 + (3 * 4); " (expect 14 — * before +)"
+480 PRINT (2 + 3) * 4; " (expect 20 — parens first)"
+490 ' Comparison — -1 means true, 0 means false
+500 PRINT 10 > 3; " (expect -1)"
+510 PRINT 10 < 3; " (expect  0)"
+520 PRINT 7 = 7; " (expect -1)"
+530 PRINT 7 <> 8; " (expect -1)"
+540 ' Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
+550 x% = 7
+560 IF ((x% > 0) AND (x% < 10)) = 0 THEN GOTO 580
+570     PRINT x%; "is in 1..9"
+580 REM END IF
+590 PRINT 6 XOR 3; " (expect 5 — 110 XOR 011 = 101)"
+600 ' String concatenation
+610 PRINT (("Hello" + ", ") + "World") + "!"
+620 ' Unary negation
+630 n% = 42
+640 PRINT -n%
+650 ' -42
+660 END

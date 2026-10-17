@@ -105,7 +105,7 @@ If the expression evaluates to 0 or exceeds the number of targets, execution con
 
 ### Legacy-Form Warnings
 
-Under `--target basic`, BASCAL stays a strict superset of classic BASIC — every legacy form on this page keeps compiling exactly as it always has. (This page's own `GOTO`/`GOSUB`/`ON ERROR GOTO`/`RESUME`/`ERROR` forms are exactly where `--target c` and `--target jvm` each permanently diverge from that — see [Portability across backends](command-line-reference.md#portability-across-backends) if you're targeting either of those.) But a few of these forms have a direct, unambiguous BASCAL structured equivalent, and `bcc` names it as an advisory warning printed to stderr (never a compile error) whenever it sees one, to steer new or edited source toward the structured spelling:
+Under `--target basic`, BASCAL stays a strict superset of classic BASIC — every legacy form on this page keeps compiling exactly as it always has. (This page's own `GOTO`/`GOSUB`/`ON ERROR GOTO`/`RESUME`/`ERROR` forms are exactly where `--target c` and `--target jvm` each permanently diverge from that — see [Portability across backends](command-line-reference.md#portability-across-backends) if you're targeting either of those.) But a few of these forms have a direct, unambiguous BASCAL structured equivalent, and `bcc` names it as an advisory warning printed to stderr (never a compile error) whenever it sees one, to steer new or edited source toward the structured syntax:
 
 - `ON ... GOTO` / `ON ... GOSUB` — prefer `select case`.
 - a chain of two or more `IF ... THEN GOTO` / `ELSEIF ... THEN GOTO` links, each branching to a different label — prefer `select case`. A single, unchained `IF cond THEN GOTO label` (an ordinary early-exit/error-check branch) is left alone.
@@ -194,6 +194,8 @@ end
 ### TRY / CATCH / THROW
 
 Portable structured error recovery: works unchanged under both `--target basic` and `--target c`. A failed statement anywhere in the `try` body abandons the rest of it and runs `catch` once, then always runs the rest of the program after `end try` — never back inside `try`. There is no `resume` equivalent: recovery always continues right after `end try`, not at the failing statement or "next".
+
+**Not supported under `--target fbc`, permanently.** `bcc` rejects `try`/`catch` outright for that target (a compile-time error, not a silent miscompile). This isn't a gap awaiting a fix: the generated BASIC relies on `RESUME <lineno>` to implement "always resume right after `end try`", which real BASCOM accepts but `fbc`'s parser rejects outright under every `-lang` dialect — and the obvious workaround (wrapping the risky code in its own `GOSUB`, then using the `RESUME NEXT` form `fbc` *does* accept) crashes at runtime with `fbc`'s own "illegal resume" error, since `fbc`'s resume model can't unwind across a `GOSUB` call frame either. A program that must build under `fbc` needs classic `on error goto`/`resume` instead (see below) — which has the opposite restriction, permanently rejected under `--target c` (GitHub issue #61). See GitHub issue #153 for the full investigation.
 
 ```bascal
 try

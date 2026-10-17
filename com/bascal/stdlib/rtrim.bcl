@@ -6,9 +6,9 @@
 library rtrim
 
 method rtrim[string]()
-    i% = LEN(self$)
-    while i% > 0 && MID$(self$, i%, 1) = " "
+    i% = len(self$)
+    while i% > 0 && mid$(self$, i%, 1) = " "
         i% = i% - 1
     end while
-    return LEFT$(self$, i%)
+    return left$(self$, i%)
 end method

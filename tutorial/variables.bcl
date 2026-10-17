@@ -18,14 +18,14 @@
 // so the intent is clear and the value lives in one place.
 program variables
 
-const MAX_SCORE  = 100
-const PASS_MARK  = 60
-const APP_NAME   = "Grade Checker"
-const TAX_RATE   = 0.2
+const MAX_SCORE = 100
+const PASS_MARK = 60
+const APP_NAME = "Grade Checker"
+const TAX_RATE = 0.2
 
 // Variable assignment uses =
-playerName$  = "Alice"
-score%       = 87
+playerName$ = "Alice"
+score% = 87
 temperature! = 36.6
 
 // print mixes strings and numbers directly with ; (no str$() needed)

@@ -1,0 +1,3 @@
+basic: ok
+c: `input` with more than one variable isn't supported with --target c
+jvm: `input` with more than one variable isn't supported with --target jvm

@@ -20,20 +20,17 @@
 190 ' All three loops share one early-exit statement: exit. It's unqualified --
 200 ' no "exit for"/"exit while"/"exit do" -- the compiler already knows which
 210 ' loop it's inside from context.
-
 220 ' --- for / NEXT ---
 230 PRINT "Squares 1..5:"
 240 FOR i% = 1 TO 5
 250     PRINT "  "; i%; "^2 = "; i% * i%
 260 NEXT i%
-
 270 ' Negative STEP — count down
 280 PRINT "Countdown:"
 290 FOR n% = 3 TO 1 STEP -1
 300     PRINT "  "; n%
 310 NEXT n%
 320 PRINT "  Go!"
-
 330 ' exit — stop early
 340 PRINT "First even > 4:"
 350 FOR i% = 1 TO 20
@@ -42,16 +39,14 @@
 380         EXIT FOR
 390     REM END IF
 400 NEXT i%
-
 410 ' --- WHILE / WEND ---
 420 PRINT "Powers of 2 under 100:"
 430 p% = 1
 440 IF (p% < 100) = 0 THEN GOTO 480
 450     PRINT "  "; p%
 460     p% = p% * 2
-470     GOTO 440
+470 GOTO 440
 480 REM END WHILE
-
 490 ' exit from a WHILE loop
 500 PRINT "Collatz from 27 (first 8 steps):"
 510 n% = 27
@@ -63,34 +58,30 @@
 570     REM END IF
 580     IF (((n% / 2) * 2) = n%) = 0 THEN GOTO 610
 590         n% = n% / 2
-600         GOTO 620
+600     GOTO 620
 610         n% = (n% * 3) + 1
 620     REM END IF
 630     steps% = steps% + 1
 640     PRINT "  "; n%
-650     GOTO 530
+650 GOTO 530
 660 REM END WHILE
-
 670 ' --- DO / LOOP variants ---
-
 680 ' DO WHILE — test before body
 690 PRINT "DO WHILE:"
 700 k% = 1
 710 IF (k% <= 3) = 0 THEN GOTO 750
 720     PRINT "  "; k%
 730     k% = k% + 1
-740     GOTO 710
+740 GOTO 710
 750 REM END DO
-
 760 ' DO UNTIL — enter while condition is false
 770 PRINT "DO UNTIL:"
 780 k% = 1
 790 IF (k% > 3) <> 0 THEN GOTO 830
 800     PRINT "  "; k%
 810     k% = k% + 1
-820     GOTO 790
+820 GOTO 790
 830 REM END DO
-
 840 ' DO ... LOOP UNTIL — post-check, body runs at least once
 850 PRINT "DO...LOOP UNTIL (body runs once even though already false):"
 860 k% = 99
@@ -98,7 +89,6 @@
 880     k% = k% + 1
 890     IF (k% > 3) = 0 THEN GOTO 870
 900 REM END DO
-
 910 ' exit from the middle of a DO loop
 920 PRINT "exit at k% = 3:"
 930 k% = 1
@@ -107,7 +97,6 @@
 960     REM END IF
 970     PRINT "  "; k%
 980     k% = k% + 1
-990     GOTO 940
+990 GOTO 940
 1000 REM END DO
-
 1010 END

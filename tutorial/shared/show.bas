@@ -11,14 +11,11 @@
 100 ' 
 110 ' Compile:
 120 ' bcc tutorial/shared/show.bcl
-
 130 PRINT "Label:  " + label$
 140 PRINT "Count:  " + STR$(count%)
-
 150 IF (count% > 0) = 0 THEN GOTO 180
 160     PRINT ("Counter was incremented " + STR$(count%)) + " time(s)."
-170     GOTO 190
+170 GOTO 190
 180     PRINT "Counter was never incremented."
 190 REM END IF
-
 200 END

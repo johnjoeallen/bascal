@@ -1,0 +1,1 @@
+all: type mismatch: a `case` value must be the same kind (string or numeric) as the `select case` expression

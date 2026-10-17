@@ -3,7 +3,7 @@
 program constAndPrint
 
 const MAX_SCORE = 100
-const TAX_RATE  = 0.2
+const TAX_RATE = 0.2
 
 score% = 87
 bonus% = 5

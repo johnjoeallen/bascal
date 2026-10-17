@@ -24,6 +24,13 @@ worked examples, side-by-side syntax comparisons, and the full
 complete language reference. Current backend and feature coverage is listed
 in the [conformance results](https://johnjoeallen.github.io/bascal/conformance/).
 
+## Editor support
+
+[`editors/vscode-bascal`](editors/vscode-bascal) has `.bcl` syntax
+highlighting: a TextMate grammar packaged as a VS Code extension that also
+works directly in IntelliJ/JetBrains IDEs via their built-in TextMate bundle
+support. See that directory's own README for install steps.
+
 ## Licence and generated programs
 
 BASCAL itself is GPLv3. Its [output exception](LICENSE-OUTPUT-EXCEPTION.md)

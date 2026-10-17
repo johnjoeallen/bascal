@@ -34,8 +34,8 @@
 program cardCatalog
 
 record Entry
-    author:  string(20) lpad
-    title:   string(20) lpad
+    author: string(20) lpad
+    title: string(20) lpad
     subject: string(20) lpad
 end record
 
@@ -44,14 +44,14 @@ end record
 // slot starts. size is the last valid entry slot number, mirroring
 // CLERK.BAS's own S = CVI(F$) header field.
 record Header
-    size:     int16
+    size: int16
     reserved: string(58) lpad
 end record
 
-const LAST_SLOT = 11   // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries
+const LAST_SLOT = 11 // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries
 
-file header  as Header = open("catalog.dat")
-file catalog as Entry  = open("catalog.dat")
+file header as Header = open("catalog.dat")
+file catalog as Entry = open("catalog.dat")
 
 /* ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ---- */
 procedure initCatalog()
@@ -83,7 +83,7 @@ procedure addItem(author$, title$, subject$)
         if i% = h.size then
             stop% = 1
         end if
-    loop
+    end do
     if e.author = "" then
         catalog[i%] = { author: author$, title: title$, subject: subject$ }
     else
@@ -151,7 +151,7 @@ procedure deleteItem(author$, title$)
         if i% = h.size then
             stop% = 1
         end if
-    loop
+    end do
     if e.author = author$ && e.title = title$ then
         print "Deleting: " + e.author + "  |  " + e.title
         catalog[i%] = { author: "", title: "", subject: "" }
@@ -198,7 +198,7 @@ procedure mainMenu()
             case else
                 print "Invalid choice"
         end select
-    loop
+    end do
 end procedure
 
 /* --- Drive the catalog --- */

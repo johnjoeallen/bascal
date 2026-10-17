@@ -25,7 +25,7 @@ data%(0) = 64
 data%(1) = 25
 data%(2) = 12
 data%(3) = 22
-data%(4) =  3
+data%(4) = 3
 data%(5) = 11
 
 /* Insertion sort — sorts data%() in place */
@@ -33,7 +33,7 @@ data%(5) = 11
 function insertionSort%(byref arr%(?))
     for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
-        j%   = i% - 1
+        j% = i% - 1
         while j% >= 0 && arr%(j%) > key%
             arr%(j% + 1) = arr%(j%)
             j% = j% - 1

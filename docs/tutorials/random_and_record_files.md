@@ -345,7 +345,7 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 /* ---- Batched update: read once, mutate twice, write back once ---- */
 
 // Carol changed her name and improved her score — the read-mutate-write
-// spelling of the same one-GET-one-PUT update, useful when the new values
+// form of the same one-GET-one-PUT update, useful when the new values
 // aren't just a couple of literals.
 let carol = db[3]
 carol.name  = "Carol Jones"
@@ -720,7 +720,7 @@ end
 2810 ' ---- Batched update: read once, mutate twice, write back once ----
 
 2820 ' Carol changed her name and improved her score — the read-mutate-write
-2830 ' spelling of the same one-GET-one-PUT update, useful when the new values
+2830 ' form of the same one-GET-one-PUT update, useful when the new values
 2840 ' aren't just a couple of literals.
 2850 ' let carol = db[...]  (whole-record read)
 2860 GET #1, 3
@@ -1367,7 +1367,7 @@ int main(void) {
     // ---- Batched update: read once, mutate twice, write back once ----
 
     // Carol changed her name and improved her score — the read-mutate-write
-    // spelling of the same one-GET-one-PUT update, useful when the new values
+    // form of the same one-GET-one-PUT update, useful when the new values
     // aren't just a couple of literals.
     // let carol = db[...]  (whole-record read)
     bcc_get_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);

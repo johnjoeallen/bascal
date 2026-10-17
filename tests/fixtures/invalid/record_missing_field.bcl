@@ -1,0 +1,7 @@
+program p
+record R
+id: int16
+end record
+file f as R = open("x.dat")
+f[1] = { idd: 3 }
+end

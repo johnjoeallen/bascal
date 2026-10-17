@@ -29,9 +29,9 @@ end function
 // text$    -- string to test
 // keyword$ -- keyword to look for at the start of text$
 function startsWithKeyword%(text$, keyword$)
-    t$  = trimLeft$(text$)
+    t$ = trimLeft$(text$)
     kw$ = keyword$
-    t$  = upper$(t$)
+    t$ = upper$(t$)
     kw$ = upper$(kw$)
     if t$.len() < kw$.len() then
         return 0

@@ -1,0 +1,3 @@
+basic: ok
+c: function `f%` isn't supported by the minimal C backend yet -- its body must return or terminate the
+jvm: ok

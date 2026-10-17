@@ -61,7 +61,7 @@ print "first three = "; firstThree$
 // Declared inline: the enclosing record supplies the receiver type, so
 // there is no `[Card]` bracket here at all.
 record Card
-    title:  string(40)
+    title: string(40)
     author: string(40)
     copies: int
 

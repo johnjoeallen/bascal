@@ -1,0 +1,5 @@
+program p
+a% = 1
+b$ = "x"
+swap a%, b$
+end

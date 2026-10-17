@@ -1,0 +1,1 @@
+all: recursion is not supported: `a%` -> `b%` -> `a%` -- functions and procedures transpile to shared glo

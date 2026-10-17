@@ -1,0 +1,6 @@
+program p
+method twice[integer]()
+return self% * 2
+end method
+print "a".twice()
+end

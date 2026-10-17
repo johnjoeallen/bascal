@@ -1,0 +1,6 @@
+program p
+dim n%(4)
+open "f.txt" for input as #1
+line input #1, n%(0)
+close #1
+end

@@ -1,0 +1,2 @@
+# accepted today: a bare `throw` outside a catch block is not diagnosed.
+all: ok

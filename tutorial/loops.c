@@ -109,6 +109,7 @@ int main(void) {
     while (1) {
         printf("  %d\n", bv_i_k);
         bv_i_k = (bv_i_k + 1);
+        bcc_semantic_continue_3: ;
         if ((-(bv_i_k > 3))) break;
     }
 

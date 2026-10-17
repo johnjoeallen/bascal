@@ -9,7 +9,7 @@
 .field public static g5 I
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     iconst_0
     istore 1
@@ -20,11 +20,15 @@
     ldc ""
     astore 3
     ldc 1
+    istore 4
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 5
+    iload 4
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 5
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -45,7 +49,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 122
     invokestatic java/lang/Integer/compare (II)I
@@ -53,12 +57,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     isub
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -70,6 +84,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -78,15 +93,13 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
 
 .method public static lcase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     iconst_0
     istore 1
@@ -97,11 +110,15 @@ L_for_0_end:
     ldc ""
     astore 3
     ldc 1
+    istore 4
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 5
+    iload 4
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 5
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -122,7 +139,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 90
     invokestatic java/lang/Integer/compare (II)I
@@ -130,12 +147,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     iadd
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -147,6 +174,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -154,8 +182,6 @@ L_if_1_else:
     goto L_for_0_top
 L_for_0_end:
     aload 3
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -171,14 +197,14 @@ L_for_0_end:
     ineg
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     iload 0
     ireturn
-    goto L_if_0_end
-L_if_0_else:
+    goto L_condition_1
+L_condition_0:
     iload 1
     ireturn
-L_if_0_end:
+L_condition_1:
     iconst_0
     ireturn
 .end method
@@ -192,14 +218,14 @@ L_if_0_end:
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     iload 0
     ireturn
-    goto L_if_0_end
-L_if_0_else:
+    goto L_condition_1
+L_condition_0:
     iload 1
     ireturn
-L_if_0_end:
+L_condition_1:
     iconst_0
     ireturn
 .end method
@@ -212,8 +238,8 @@ L_if_0_end:
     iload 1
     iload 0
     iload 2
-    invokestatic java/lang/Math/min (II)I
-    invokestatic java/lang/Math/max (II)I
+    invokestatic Functions/min (II)I
+    invokestatic Functions/max (II)I
     ireturn
     iconst_0
     ireturn
@@ -221,7 +247,7 @@ L_if_0_end:
 
 .method public static repeat : (Ljava/lang/String;I)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 6
 
     ldc ""
     astore 2
@@ -231,10 +257,14 @@ L_if_0_end:
     ldc ""
     astore 2
     ldc 1
+    istore 4
+    iload 1
+    istore 5
+    iload 4
     istore 3
 L_for_0_top:
     iload 3
-    iload 1
+    iload 5
     if_icmpgt L_for_0_end
     new java/lang/StringBuilder
     dup
@@ -245,6 +275,7 @@ L_for_0_top:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 2
+L_for_0_continue:
     iload 3
     ldc 1
     iadd
@@ -277,10 +308,10 @@ L_for_0_end:
     iconst_1
     ixor
     ineg
-    ifeq L_if_0_else
+    ifeq L_condition_0
     ldc ""
     areturn
-L_if_0_else:
+L_condition_0:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -305,7 +336,7 @@ L_if_0_else:
 
 .method public static sumTo : (I)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 5
 
     iconst_0
     istore 1
@@ -315,15 +346,20 @@ L_if_0_else:
     ldc 0
     istore 1
     ldc 1
+    istore 3
+    iload 0
+    istore 4
+    iload 3
     istore 2
 L_for_0_top:
     iload 2
-    iload 0
+    iload 4
     if_icmpgt L_for_0_end
     iload 1
     iload 2
     iadd
     istore 1
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -338,7 +374,7 @@ L_for_0_end:
 
 .method public static productTo : (I)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 5
 
     iconst_0
     istore 1
@@ -348,15 +384,20 @@ L_for_0_end:
     ldc 1
     istore 1
     ldc 1
+    istore 3
+    iload 0
+    istore 4
+    iload 3
     istore 2
 L_for_0_top:
     iload 2
-    iload 0
+    iload 4
     if_icmpgt L_for_0_end
     iload 1
     iload 2
     imul
     istore 1
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -402,63 +443,49 @@ L_for_0_end:
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Lower-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Tutorial — Functions
-    ; 
+    ;
     ; A BASCAL function is declared with FUNCTION ... END FUNCTION.
     ; The function name carries the return type suffix.  Parameters
     ; also carry type suffixes.  Every function must reach a RETURN.
-    ; 
+    ;
     ; Variables declared inside a function are local by default: the compiler
     ; prefixes them with the function name.  To access a global variable from
     ; inside a function, declare it with:  global varname
-    ; 
+    ;
     ; Functions cannot recurse, directly or indirectly (parameters would be
     ; overwritten) -- the compiler checks the whole call graph and rejects
     ; any cycle.  Use an explicit stack array for recursive algorithms.
-    ; 
+    ;
     ; Scalar methods are typed functions with an implicit receiver.  Calls use
     ; dot syntax and can chain: word$.left(1).ucase().  The existing titleCase$
     ; function below demonstrates this form; methods transpile to ordinary
     ; calls for both targets.
-
-
     ; Integer arithmetic functions
     ; a% -- first value to compare
     ; b% -- second value to compare
-
     ; a% -- first value to compare
     ; b% -- second value to compare
-
     ; value% -- number to constrain
     ; lo%    -- lower bound, inclusive
     ; hi%    -- upper bound, inclusive
-
     ; String functions
     ; text$ -- string to repeat
     ; n%    -- number of times to repeat it
-
     ; word$ -- string to title-case
-
     ; Local variable scoping — each function has its own i% and acc%
     ; n% -- upper bound of the sum, inclusive
-
     ; n% -- upper bound of the product, inclusive
-
     ; Global variable accessed inside a function with the global keyword
     ldc 0
     putstatic Functions/g5 I
-
     ; x% -- amount to add to the running total
-
     ; --- Exercise the functions ---
-
     ; print mixes string labels and numeric results directly with ;
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "max(4, 9) = "
@@ -466,16 +493,18 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 4
     ldc 9
-    invokestatic java/lang/Math/max (II)I
+    invokestatic Functions/max (II)I
     invokevirtual java/io/PrintStream/println (I)V
+    ; 9
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "min(4, 9) = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 4
     ldc 9
-    invokestatic java/lang/Math/min (II)I
+    invokestatic Functions/min (II)I
     invokevirtual java/io/PrintStream/println (I)V
+    ; 4
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "clamp(15,1,10) = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -485,6 +514,7 @@ L_for_0_end:
     ldc 10
     invokestatic Functions/clamp (III)I
     invokevirtual java/io/PrintStream/println (I)V
+    ; 10
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "clamp(-3,1,10) = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -495,6 +525,7 @@ L_for_0_end:
     ldc 10
     invokestatic Functions/clamp (III)I
     invokevirtual java/io/PrintStream/println (I)V
+    ; 1
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "clamp(7,1,10)  = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -504,32 +535,33 @@ L_for_0_end:
     ldc 10
     invokestatic Functions/clamp (III)I
     invokevirtual java/io/PrintStream/println (I)V
-
+    ; 7
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "ab"
     ldc 4
     invokestatic Functions/repeat (Ljava/lang/String;I)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; abababab
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "bASCAL"
     invokestatic Functions/titleCase (Ljava/lang/String;)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
+    ; Bascal
     ; Functions chained in expressions
     ldc 0
     ldc 5
     ineg
-    invokestatic java/lang/Math/max (II)I
+    invokestatic Functions/max (II)I
     ldc 100
-    invokestatic java/lang/Math/min (II)I
+    invokestatic Functions/min (II)I
     putstatic Functions/g4 I
+    ; max(0,-5)=0, min(0,100)=0
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "lo = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Functions/g4 I
     invokevirtual java/io/PrintStream/println (I)V
-
     ; Calling the same function twice — each result is captured separately
     ldc "x"
     ldc 3
@@ -548,7 +580,7 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Functions/g2 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
+    ; xxx yy
     ; Local scoping: sumTo% and productTo% each use i% without conflict
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "sumTo(5)     = "
@@ -557,6 +589,7 @@ L_for_0_end:
     ldc 5
     invokestatic Functions/sumTo (I)I
     invokevirtual java/io/PrintStream/println (I)V
+    ; 15
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "productTo(5) = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -564,7 +597,7 @@ L_for_0_end:
     ldc 5
     invokestatic Functions/productTo (I)I
     invokevirtual java/io/PrintStream/println (I)V
-
+    ; 120
     ; Global variable shared across calls
     ldc 10
     invokestatic Functions/addToTotal (I)I
@@ -578,6 +611,6 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Functions/g5 I
     invokevirtual java/io/PrintStream/println (I)V
-
+    ; 15
     return
 .end method

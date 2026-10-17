@@ -63,82 +63,6 @@ fn collect_typed_arrays(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayDecl> 
     arrays
 }
 
-fn collect_typed_array_refs(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayRef> {
-    let mut refs = Vec::new();
-    fn expr(e: &Expr, refs: &mut Vec<crate::ast::TypedArrayRef>) {
-        match e {
-            Expr::ArrayRef { name, indices } => refs.push(crate::ast::TypedArrayRef {
-                name: name.clone(),
-                element_suffix: name.suffix,
-                dimensions: indices.len(),
-                indices: indices.clone(),
-                sizeof_axis: None,
-            }),
-            Expr::Call { name, args } if name.name.eq_ignore_ascii_case("sizeof") => {
-                if let Some(Expr::Ident(array)) = args.first() {
-                    refs.push(crate::ast::TypedArrayRef {
-                        name: array.clone(),
-                        element_suffix: array.suffix,
-                        dimensions: 0,
-                        indices: Vec::new(),
-                        sizeof_axis: args.get(1).and_then(|axis| match axis {
-                            Expr::Integer(value) => usize::try_from(*value).ok(),
-                            _ => None,
-                        }),
-                    });
-                }
-            }
-            Expr::Binary { left, right, .. } => {
-                expr(left, refs);
-                expr(right, refs);
-            }
-            Expr::Unary { expr: inner, .. } => expr(inner, refs),
-            _ => {}
-        }
-    }
-    fn visit(statements: &[Stmt], refs: &mut Vec<crate::ast::TypedArrayRef>) {
-        for statement in statements {
-            match &statement.kind {
-                Statement::Assignment { target, value } => {
-                    expr(target, refs);
-                    expr(value, refs);
-                }
-                Statement::Print { tokens } => {
-                    for token in tokens {
-                        if let PrintToken::Expr(value) = token {
-                            expr(value, refs);
-                        }
-                    }
-                }
-                Statement::If {
-                    condition,
-                    then_body,
-                    else_body,
-                } => {
-                    expr(condition, refs);
-                    visit(then_body, refs);
-                    visit(else_body, refs);
-                }
-                Statement::For {
-                    start, end, body, ..
-                } => {
-                    expr(start, refs);
-                    expr(end, refs);
-                    visit(body, refs);
-                }
-                Statement::While { condition, body } => {
-                    expr(condition, refs);
-                    visit(body, refs);
-                }
-                Statement::Do { body, .. } => visit(body, refs),
-                _ => {}
-            }
-        }
-    }
-    visit(statements, &mut refs);
-    refs
-}
-
 impl Parser {
     pub fn new(filename: String, tokens: Vec<Token>) -> Self {
         Self {
@@ -242,7 +166,6 @@ impl Parser {
         }
 
         let typed_arrays = collect_typed_arrays(&statements);
-        let typed_array_refs = collect_typed_array_refs(&statements);
         Ok(Program {
             program_decl,
             library_decl,
@@ -253,7 +176,6 @@ impl Parser {
             functions,
             records,
             typed_arrays,
-            typed_array_refs,
         })
     }
 
@@ -864,6 +786,7 @@ impl Parser {
             Some(Kw::Try) => self.parse_try_catch(),
             Some(Kw::End) => self.parse_end_statement(),
             Some(Kw::Exit) => self.parse_exit(),
+            Some(Kw::Continue) => self.parse_continue(),
             Some(Kw::Goto) => self.parse_goto(),
             Some(Kw::Gosub) => self.parse_gosub(),
             Some(Kw::On) => self.parse_on(),
@@ -1794,6 +1717,18 @@ impl Parser {
         Ok(Statement::Exit)
     }
 
+    fn parse_continue(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("continue")?;
+        if self.check_keyword("for") || self.check_keyword("while") || self.check_keyword("do") {
+            return Err(self.error(
+                "`continue` takes no loop-type keyword -- just write `continue`; \
+                 the transpiler resolves which enclosing loop it leaves",
+            ));
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Continue)
+    }
+
     /// `goto`/`gosub`/`on ... goto`/`on ... gosub`/`resume` targets must
     /// name a label — BASCAL owns line numbering, so raw line-number
     /// literals aren't legal targets. `on error goto` has its own variant
@@ -2098,17 +2033,27 @@ impl Parser {
 
     fn parse_const(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("const")?;
+        let name_pos = self.current_pos();
         let mut name = BasicIdent::parse(&self.expect_ident("expected CONST name")?);
+        if name.suffix.is_some() {
+            return Err(Diagnostic::error(
+                name_pos,
+                format!(
+                    "`const {}` may not have a type suffix -- a const's type is always \
+                     inferred from its value (write `const {} = ...`)",
+                    name.as_basic(),
+                    name.name
+                ),
+            ));
+        }
         self.expect(TokenKind::Eq, "expected `=` in CONST")?;
         let value = self.parse_expr(0)?;
-        if name.suffix.is_none() {
-            name.suffix = Some(match value {
-                Expr::Integer(_) => TypeSuffix::Integer,
-                Expr::Float(_) => TypeSuffix::Single,
-                Expr::String(_) => TypeSuffix::String,
-                _ => TypeSuffix::Integer,
-            });
-        }
+        name.suffix = Some(match value {
+            Expr::Integer(_) => TypeSuffix::Integer,
+            Expr::Float(_) => TypeSuffix::Single,
+            Expr::String(_) => TypeSuffix::String,
+            _ => TypeSuffix::Integer,
+        });
         self.const_types
             .insert(name.name.to_ascii_lowercase(), name.suffix.unwrap());
         self.consume_line_end()?;
@@ -2761,6 +2706,7 @@ enum Kw {
     Try,
     End,
     Exit,
+    Continue,
     Goto,
     Gosub,
     On,
@@ -2826,6 +2772,7 @@ fn classify_keyword(value: &str) -> Option<Kw> {
         "try" => Kw::Try,
         "end" => Kw::End,
         "exit" => Kw::Exit,
+        "continue" => Kw::Continue,
         "goto" => Kw::Goto,
         "gosub" => Kw::Gosub,
         "on" => Kw::On,
@@ -3566,6 +3513,34 @@ mod tests {
             assert!(errs
                 .iter()
                 .any(|d| d.message.contains("no longer takes a loop-type keyword")));
+        }
+    }
+
+    #[test]
+    fn parses_bare_continue_inside_for_while_and_do() {
+        let program = parse(
+            "for i% = 1 to 5\ncontinue\nend for\nwhile 1\ncontinue\nend while\ndo\ncontinue\nend do\nend\n",
+        );
+        assert!(
+            matches!(&*program.statements[0], Statement::For { body, .. } if matches!(body[0].kind, Statement::Continue))
+        );
+        assert!(
+            matches!(&*program.statements[1], Statement::While { body, .. } if matches!(body[0].kind, Statement::Continue))
+        );
+        assert!(
+            matches!(&*program.statements[2], Statement::Do { body, .. } if matches!(body[0].kind, Statement::Continue))
+        );
+    }
+
+    #[test]
+    fn continue_rejects_a_loop_type_keyword() {
+        for keyword in ["for", "while", "do"] {
+            let source = format!("do\ncontinue {keyword}\nend do\nend\n");
+            let tokens = Lexer::new("test.bcl", &source).lex();
+            let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+            let errs =
+                result.expect_err(&format!("expected a parse error for `continue {keyword}`"));
+            assert!(errs.iter().any(|d| d.message.contains("takes no loop-type keyword")));
         }
     }
 

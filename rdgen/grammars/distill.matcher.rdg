@@ -1,0 +1,125 @@
+(* Distill (Matcher.dsl) starter grammar for rdgen, revision 2.
+ *
+ * This fixture is distilled from DistillMatcherEvaluator.java. The grammar
+ * describes syntax; closed-name checks and operation-specific argument
+ * contracts are explicit semantic validation rules below.
+ *
+ * `.name` and bare `name(...)` are checked against the closed vocabularies at
+ * parse time. A member may syntactically take ordinary arguments or a
+ * closure; sequence operations require the closure form during validation.
+ *)
+
+grammar DistillMatcher;
+
+(* ----- Lexical terminals ----- *)
+
+identifier       = java_ident_start , { java_ident_part } ;
+integer_literal  = digit , { digit } ;
+string_literal   = '"' , { string_piece } , '"' ;
+string_piece     = hole | ( '\\' , any_char )
+                 | any_char_except_quote_or_open_brace_or_backslash ;
+regex_literal    = ( "~/" | "/" ) , { regex_piece } , "/" ;
+regex_piece      = hole | ( '\\' , "/" )
+                 | ( '\\' , any_char_except_slash )
+                 | any_char_except_slash_or_open_brace_or_backslash ;
+hole             = "{{" , { any_char } , "}}" ;
+
+(* ----- Program ----- *)
+
+program          = "distill" , "(" , identifier , "," , identifier , ")"
+                   , "{" , "return" , expression , ";" , "}" ;
+
+(* ----- Expressions -----
+ * Precedence, low to high: ternary < || < && < equality/is blank
+ * < relational < additive < unary < postfix < primary.
+ *)
+
+expression       = or_expr , [ "?" , expression , ":" , expression ] ;
+or_expr          = and_expr , { "||" , and_expr } ;
+and_expr         = equality_expr , { "&&" , equality_expr } ;
+equality_expr    = relational_expr ,
+                    { ( equality_op , relational_expr )
+                    | ( "is" , "blank" ) } ;
+equality_op      = "==" | "!=" | "==~" | "=~" ;
+relational_expr  = additive_expr , { relational_op , additive_expr } ;
+relational_op    = "<" | "<=" | ">" | ">=" ;
+additive_expr    = unary_expr , { "+" , unary_expr } ;
+unary_expr       = "!" , unary_expr | "-" , unary_expr | postfix_expr ;
+
+(* Postfix operations are chainable. `?.` short-circuits on null, `.` does
+ * not. Elvis fallback is deliberately a primary, not a full expression.
+ * Every member_name is checked against known_member during validation.
+ *)
+postfix_expr     = primary ,
+                    { ( "." , member_name , postfix_call_shape )
+                    | ( "?" , "." , member_name , postfix_call_shape )
+                    | ( "?" , ":" , primary )
+                    | ( "[" , expression , "]" ) } ;
+postfix_call_shape = [ "(" , [ argument_list ] , ")" | closure ] ;
+member_name      = identifier ;
+primary          = "(" , expression , ")"
+                 | "[" , [ expression , { "," , expression } ] , "]"
+                 | string_literal | regex_literal | integer_literal
+                 | "true" | "false" | checks_form
+                 | implicit_sequence_call
+                 | identifier , [ "(" , [ argument_list ] , ")" ] ;
+argument_list    = expression , { "," , expression } ;
+
+(* Interpolation holes are parsed as standalone expressions over their raw
+ * contents. This is a semantic action of the frontend, not a backend concern.
+ *)
+interpolated_string = string_literal ;
+interpolated_regex  = regex_literal ;
+
+checks_form      = "checks" , "(" , expression , ")" , "{"
+                   , [ expression , { "," , expression } ] , "}" ;
+implicit_sequence_call = sequence_op , closure ;
+sequence_op      = "map" | "filter" | "match" | "expand"
+                 | "any" | "all" | "find" | "count" | "group" ;
+closure          = "{" , [ identifier , "->" ] , expression , "}" ;
+
+(* ----- Parse-time closed vocabularies ----- *)
+
+known_function   = "regexSearch" | "regexFullMatch"
+                 | "tokenize" | "tokenise"
+                 | "normalize" | "normalise"
+                 | "words" | "last" | "count" | "checks" | "distinct"
+                 | "join" | "strip" | "urlHost" | "parseInt" | "truthy"
+                 | "pathSegments" | "enumerate" | "type" | "occurrence"
+                 | "operationMessage" ;
+
+known_member     = "all" | "allowed" | "any" | "array" | "audience"
+                 | "case" | "check" | "components" | "compositionKind"
+                 | "contains" | "contactEmail" | "contactName" | "contactUrl"
+                 | "count" | "description" | "descriptions" | "distinct"
+                 | "endsWith" | "endsWithWord" | "enumPresent" | "enumValues"
+                 | "example" | "examplePresent" | "exampleStrings"
+                 | "exclusiveMaximum" | "exclusiveMinimum" | "expand"
+                 | "expected" | "explode" | "extensibleEnum" | "extensionKeys"
+                 | "filter" | "find" | "forbidden" | "format" | "group"
+                 | "headerDetails" | "headers" | "in" | "info" | "isBlank"
+                 | "itemsPresent" | "keys" | "length" | "licenseName"
+                 | "licenseUrl" | "lint" | "location" | "lower" | "map"
+                 | "match" | "maxItems" | "maxLength" | "maximum" | "mediaTypes"
+                 | "method" | "methods" | "minLength" | "minimum" | "name"
+                 | "nullable" | "openapiVersion" | "operationDetails"
+                 | "operationId" | "operations" | "parameters" | "path" | "paths"
+                 | "pattern" | "pointer" | "properties" | "refs" | "required"
+                 | "responses" | "schemaProperties" | "schemaPresent"
+                 | "schemaType" | "schemas" | "securitySchemes" | "scope"
+                 | "segments" | "servers" | "startsWith" | "startsWithWord"
+                 | "status" | "style" | "summary" | "tags" | "text" | "title"
+                 | "toList" | "trim" | "type" | "values" ;
+
+(* Semantic validation contracts:
+ *
+ * - `known_function` and `known_member` are closed sets. Unknown names are
+ *   diagnostics, not dynamic runtime lookups.
+ * - trim/lower/contains/startsWith/endsWith/startsWithWord/endsWithWord/
+ *   isBlank use ordinary call arguments.
+ * - map/filter/match/expand/any/all/find/count/group require `{ closure }`.
+ * - `==~` and `=~` pass operands to regex matching in reverse text/pattern
+ *   order, as defined by the evaluator.
+ * - `+` is numeric addition, iterable concatenation, or string concatenation
+ *   according to operand types; `*`, `/`, and `%` are not grammar operators.
+ *)

@@ -18,7 +18,7 @@
 .field public static g17 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 8
+    .limit locals 10
 
     iconst_0
     istore 1
@@ -29,11 +29,15 @@
     ldc ""
     astore 3
     ldc 1
+    istore 8
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 9
+    iload 8
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 9
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -54,7 +58,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 122
     invokestatic java/lang/Integer/compare (II)I
@@ -62,12 +66,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     isub
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -79,6 +93,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -86,8 +101,6 @@ L_if_1_else:
     goto L_for_0_top
 L_for_0_end:
     aload 3
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -106,8 +119,6 @@ L_for_0_end:
     ldc "!"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
-    areturn
-    aload 0
     areturn
     ldc ""
     areturn
@@ -133,8 +144,6 @@ L_for_0_end:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
@@ -148,24 +157,22 @@ L_for_0_end:
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     iload 1
     ireturn
-    goto L_if_0_end
-L_if_0_else:
+    goto L_condition_1
+L_condition_0:
     iload 0
     iload 2
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_2
     iload 2
     ireturn
-L_if_1_else:
-L_if_0_end:
-    iload 0
-    ireturn
+L_condition_2:
+L_condition_1:
     iload 0
     ireturn
     iconst_0
@@ -177,13 +184,19 @@ L_if_0_end:
     .limit locals 8
 
     dload 0
+    d2f
+    f2d
     dload 2
+    d2f
+    f2d
     dmul
+    d2f
+    f2d
     ldc 100
     i2d
     ddiv
-    dreturn
-    dload 0
+    d2f
+    f2d
     dreturn
     dconst_0
     dreturn
@@ -470,9 +483,8 @@ L_if_0_end:
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Tutorial — Methods
-    ; 
+    ;
     ; A method is a statically resolved callable with an implicit receiver,
     ; written in brackets after the method name: `method shout[string]()`
     ; receives a string. The return type follows the parameter list after
@@ -482,18 +494,12 @@ L_if_0_end:
     ; receiver's type. Methods transpile to ordinary typed calls for every
     ; backend -- there is no runtime method object, virtual dispatch, or
     ; vtable of any kind.
-    ; 
+    ;
     ; A record type is a valid receiver too, declared either externally (in
     ; brackets, same as a scalar receiver) or inline, directly inside the
     ; record itself. `self.field` is then ordinary field access against the
     ; receiver, and mutating it is visible to the caller once the call
     ; returns -- the receiver is passed by reference, not by copy.
-
-
-
-
-
-
     ldc "bascal"
     putstatic Methods/g7 Ljava/lang/String;
     getstatic Methods/g7 Ljava/lang/String;
@@ -519,7 +525,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g6 I
     invokevirtual java/io/PrintStream/println (I)V
-
     ldc 125
     putstatic Methods/g11 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -531,21 +536,25 @@ L_if_0_end:
     ldc 100
     invokestatic Methods/clamp (III)I
     invokevirtual java/io/PrintStream/println (I)V
-
     ldc 80
     i2d
+    d2f
+    f2d
     putstatic Methods/g8 D
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "discount amount = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g8 D
+    d2f
+    f2d
     ldc 15
     i2d
     invokestatic Methods/percent (DD)D
+    d2f
+    f2d
     invokestatic Methods/bccStr (D)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     getstatic Methods/g7 Ljava/lang/String;
     iconst_0
     ldc 3
@@ -558,16 +567,12 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g5 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; -------------------- Record methods --------------------
-
     ; Declared inline: the enclosing record supplies the receiver type, so
     ; there is no `[Card]` bracket here at all.
-
     ; Declared externally: same receiver, same callable identity as an
     ; inline method -- an external method just lets behavior be attached to
     ; a record without editing its own declaration.
-
     ldc "Dune"
     putstatic Methods/g4 Ljava/lang/String;
     ldc "Frank Herbert"
@@ -620,7 +625,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
-
     iconst_1
     anewarray java/lang/String
     dup
@@ -665,7 +669,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
-
     ; `combines` is structural field composition only, not inheritance:
     ; SignedCard's own field list is Card's fields (title, author, copies)
     ; followed by its own (signature), so its record literal accepts all
@@ -673,8 +676,6 @@ L_if_0_end:
     ; own display() (below); calling signed.restock(...) without declaring
     ; SignedCard's own restock() would be a compile error, since a method
     ; is only ever visible for the exact record type it was declared for.
-
-
     ldc "Dune"
     putstatic Methods/g17 Ljava/lang/String;
     ldc "Frank Herbert"
@@ -791,6 +792,5 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g14 J
     invokevirtual java/io/PrintStream/println (J)V
-
     return
 .end method

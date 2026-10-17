@@ -1,0 +1,4 @@
+program p
+def fnsq(x) = x * x
+print fnsq(3)
+end

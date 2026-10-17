@@ -12,6 +12,7 @@
 | `CLOSE`         | `CLOSE #n`                                                              | Close file channel *n*                                                                                |
 | `COLOR`         | `COLOR fg[, bg]`                                                        | Set foreground/background colour                                                                      |
 | `CONST`         | `CONST NAME = literal`                                                   | Declare a named constant; use uppercase `SNAKE_CASE` without a type suffix                            |
+| `CONTINUE`      | `continue`                                                              | Skip to the next iteration of the innermost enclosing FOR/WHILE/DO loop                               |
 | `DATA`          | `DATA val[, ...]`                                                       | Embed literal data values                                                                             |
 | `DIM`           | `DIM name[(d1[, d2, ...])][, name2...]`                                 | Declare one or more variables or 1-D/multi-D arrays                                                   |
 | `ERASE`         | `ERASE arr[, ...]`                                                      | Free memory used by arrays                                                                            |

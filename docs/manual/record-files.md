@@ -20,7 +20,7 @@ record Student
 end record
 ```
 
-Supported fixed-width file field types and their packed width are `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), and `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` spellings remain accepted as aliases. A plain `string` member is variable-length and may be used on an in-memory record, but a record containing one cannot be used as a random-access file type because its packed width is undefined. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its fixed-width field widths, in declaration order.
+Supported fixed-width file field types and their packed width are `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), and `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` keywords remain accepted as synonyms. A plain `string` member is variable-length and may be used on an in-memory record, but a record containing one cannot be used as a random-access file type because its packed width is undefined. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its fixed-width field widths, in declaration order.
 
 ### file ... as ... = open(...)
 
@@ -80,7 +80,7 @@ let s = db[i]
 
 Transpiles to `GET #n, i` followed by one unpacking assignment per field (`CVI`/`CVL`/`CVS`/`CVD` for numeric fields, taking no suffix at all on real MBASIC/BASCOM), each one written into a scalar named `<var><Field>` — e.g. `sId%`, `sName$`, `sScore#`. Later references to `s.id`, `s.name`, `s.score` in the source resolve directly to those scalars; no `Ident` named literally `s.id` is ever emitted.
 
-String fields aren't unpacked with `RTRIM$` — it isn't a real MBASIC/BASCOM builtin. Instead, the transpiler builds an inline right-trim loop directly from `LEN`/`MID$`/`LEFT$`, walking back from the end of the fixed-width buffer past trailing spaces.
+`RTRIM$` and `LTRIM$` aren't real MBASIC/BASCOM builtins, so string fields are unpacked with the `rtrim` and `ltrim` methods from `com.bascal.stdlib`, which the compiler loads for you whenever a program reads a string field back out of a record file. The padding to strip depends on how the field was stored: a left-aligned field (written with `LSET`) is padded on the right and unpacked with `rtrim`; a right-aligned field (`RSET`, declared `rpad`) is padded on the left and unpacked with `ltrim`.
 
 Because BASIC doesn't auto-convert numbers to strings for concatenation, writing a numeric field next to a string with `+` (as in `print "[" + s.id + "]"`) automatically wraps the numeric side in `STR$(...)` — but only where a record field is actually involved; ordinary BASCAL `+` expressions are untouched.
 

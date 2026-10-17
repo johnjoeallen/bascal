@@ -14,17 +14,13 @@
 130 ' 
 140 ' The generated .bas will open with COMMON count%, label$ followed by
 150 ' the program body below.
-
 160 label$ = "Counter demo"
 170 count% = 0
-
 180 count% = count% + 1
 190 count% = count% + 1
 200 count% = count% + 1
-
 210 PRINT "Initialised: " + label$
 220 PRINT "Count after 3 increments: " + STR$(count%)
-
 230 ' In a real multi-program application you would chain to the compiled
 240 ' show.exe -- CHAIN takes a program name, not the .bas source it was
 250 ' compiled from (verified against real BASCOM 2.00 under dosbox-x:

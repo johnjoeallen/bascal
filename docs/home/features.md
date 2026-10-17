@@ -148,19 +148,73 @@ end if
 
 <div class="snippet" markdown="1">
 
-### Readable generated output
+### A built-in source formatter
 
-Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number — everything else stays plain, hand-readable BASIC.
+`bcc --format` rewrites a `.bcl` file's indentation, spacing, and casing to `bcc`'s own canonical style, in the same spirit as `gofmt`; `--format-check` reports what's non-compliant without touching the file. It never reflows an expression, but it will split a `:`-chained multi-statement line into one statement per line — or, when that line is a single-line `if`, explode it into full block form, since single-line-if syntax has no closing keyword for a multi-line body to end at.
+
+```bash
+$ bcc --format-check legacy.bcl
+legacy.bcl:3:
+  - IF x% = 1 THEN
+  +     if x% = 1 then
+format check failed: legacy.bcl (1 line would change -- run `bcc --format legacy.bcl` to fix)
+
+$ bcc --format legacy.bcl
+formatted: legacy.bcl
+```
+
+It also knows a bare `label:` followed by `data` lines is a table, and indents accordingly:
 
 ```bascal
-' BASCAL source
+' before
+myTable:
+data 1, 2, 3
+data 4, 5, 6
+print "after"
+
+' after bcc --format
+myTable:
+    data 1, 2, 3
+    data 4, 5, 6
+print "after"
+```
+
+See [A built-in source formatter](formatter.md) for the full before/after walkthrough of every rule.
+
+</div>
+
+<div class="snippet" markdown="1">
+
+### Built-in linting
+
+`bcc --lint` runs five warning-only checks beyond `--strict-vars`'s mandatory-declaration rule: unused declarations, a local shadowing a parameter/global/enclosing `for` loop counter, unreachable code after `return`/`goto`/`end`/..., a bare numeric literal compared against something (`0`/`1`/`-1` exempted as common sentinels), and a top-level `const` whose name isn't uppercase snake case. Opt-in and never fails the build.
+
+```bash
+$ bcc --lint legacy.bcl
+warning: `34` is an unexplained numeric literal in a comparison -- consider naming it with a `const`
+  --> legacy.bcl:4:5
+```
+
+See [Built-in linting](linting.md) for a real, verified example of every check.
+
+</div>
+
+<div class="snippet" markdown="1">
+
+### Generated output nobody deliberately obfuscated
+
+Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number, so a simple construct like this `if` stays plain, recognizable BASIC. That's not a guarantee, though: some constructs (functions/procedures compiled to the `basic` target, in particular — see [Generated BASIC Shape](../manual/generated-basic-shape.md)) transpile by their very nature into something far more `GOTO`/label-heavy and assembly-like than the source that produced them.
+
+```bascal
 ' Track the high score for the level
 if score% > highScore% then highScore% = score%
+```
 
-' generated .bas
+<!-- generated-basic -->
+```basic
 ' Track the high score for the level
-IF (score% > highScore%) = 0 THEN GOTO 10
-    highScore% = score%
+IF (score% > highscore%) = 0 THEN GOTO 10
+    highscore% = score%
 10 REM END IF
 ```
 
@@ -172,4 +226,4 @@ IF (score% > highScore%) = 0 THEN GOTO 10
 
 ---
 
-[← Previous: Why BASCAL exists](../index.md) · [Next: Structured control flow →](control-flow.md)
+[← Previous: How has it evolved](evolution.md) · [Next: Structured control flow →](control-flow.md)

@@ -1,0 +1,6 @@
+program p
+procedure work()
+    print helper%(2)
+end procedure
+work()
+end

@@ -1,0 +1,3 @@
+basic: ok
+c: `on error goto` is not supported with --target c; use `try`/`catch`/`finally`
+jvm: `on error goto` is not supported with --target jvm; use `try`/`catch`/`finally`

@@ -1,0 +1,2 @@
+# `wend` is a supported terminator for `while`, so this is valid: a control.
+all: ok

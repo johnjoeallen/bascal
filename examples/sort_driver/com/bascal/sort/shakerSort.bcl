@@ -15,7 +15,7 @@ function shakerSort%(byref data%(?))
         swapped% = 0
 
         /* Forward pass moves large values toward the right edge. */
-        FOR i% = left% TO right%
+        for i% = left% to right%
             if data%(i%) > data%(i% + 1) then
                 temp% = data%(i%)
                 data%(i%) = data%(i% + 1)
@@ -27,7 +27,7 @@ function shakerSort%(byref data%(?))
         right% = right% - 1
 
         /* Backward pass moves small values toward the left edge. */
-        FOR i% = right% TO left% STEP -1
+        for i% = right% to left% step -1
             if data%(i%) > data%(i% + 1) then
                 temp% = data%(i%)
                 data%(i%) = data%(i% + 1)

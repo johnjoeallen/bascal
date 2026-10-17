@@ -19,22 +19,20 @@
     iconst_0
     putstatic SelectCase/g4 I
     ; Tutorial — SELECT CASE
-    ; 
+    ;
     ; SELECT CASE tests one expression against multiple patterns.  The
     ; compiler evaluates the expression once, stores it in a temporary
     ; variable, and emits an IF/goto dispatch chain.
-    ; 
+    ;
     ; Pattern forms:
     ; case value               — exact match
     ; case v1, v2, v3          — any of the listed values
     ; case low to high         — inclusive range
     ; case is <op> value       — comparison (=  <>  <  <=  >  >=)
     ; case else                — default; must be the last clause
-
     ; Integer select: convert numeric score to letter grade
     ldc 85
     putstatic SelectCase/g3 I
-
     getstatic SelectCase/g3 I
     dup
     ldc 100
@@ -105,6 +103,7 @@ L_select_0_case_2:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "B  — Good"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; score% = 85 matches here
     goto L_select_0_end
 L_select_0_case_3:
     pop
@@ -125,11 +124,9 @@ L_select_0_case_5:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_0_end
 L_select_0_end:
-
     ; String select: day-of-week classification
     ldc "Saturday"
     putstatic SelectCase/g2 Ljava/lang/String;
-
     getstatic SelectCase/g2 Ljava/lang/String;
     dup
     ldc "Monday"
@@ -200,14 +197,13 @@ L_select_1_case_1:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; matches here
     goto L_select_1_end
 L_select_1_end:
-
     ; IS comparisons on temperature
     ldc 3
     ineg
     putstatic SelectCase/g4 I
-
     getstatic SelectCase/g4 I
     dup
     ldc 0
@@ -251,6 +247,7 @@ L_select_2_case_0:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; matches here
     goto L_select_2_end
 L_select_2_case_1:
     pop
@@ -289,11 +286,9 @@ L_select_2_case_3:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_2_end
 L_select_2_end:
-
     ; Multi-value list on a menu choice
     ldc 2
     putstatic SelectCase/g1 I
-
     getstatic SelectCase/g1 I
     dup
     ldc 1
@@ -333,6 +328,7 @@ L_select_3_case_1:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Load game"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; choice% = 2 matches
     goto L_select_3_end
 L_select_3_case_2:
     pop
@@ -341,6 +337,5 @@ L_select_3_case_2:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_3_end
 L_select_3_end:
-
     return
 .end method

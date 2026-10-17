@@ -10,13 +10,11 @@
 90 ' '  single-line (BASIC style, passed through to generated output)
 100 ' // single-line (C style, same behaviour as ')
 110 ' /* ... */  block comment, each line becomes a ' comment in the output
-
 120 PRINT "Hello, World!"
-130 PRINT "Welcome to BASCAL."
-140 ' print "This line is commented out."
-
-150 ' Expected output:
-160 ' Hello, World!
-170 ' Welcome to BASCAL.
-
-180 END
+130 ' inline comment after a statement
+140 PRINT "Welcome to BASCAL."
+150 ' print "This line is commented out."
+160 ' Expected output:
+170 ' Hello, World!
+180 ' Welcome to BASCAL.
+190 END

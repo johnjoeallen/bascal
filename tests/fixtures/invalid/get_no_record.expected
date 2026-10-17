@@ -1,0 +1,3 @@
+basic: ok
+c: GET/PUT with no record number ("next sequential record") isn't supported with --target c
+jvm: GET/PUT with no record number ("next sequential record") isn't supported with --target jvm

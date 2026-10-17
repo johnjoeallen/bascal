@@ -1,0 +1,4 @@
+program p
+x% = "hello"
+print x%
+end

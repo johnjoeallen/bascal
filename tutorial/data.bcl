@@ -53,8 +53,8 @@ randomize 99
 
 end
 
-data "France",  "Paris"
+data "France", "Paris"
 data "Germany", "Berlin"
-data "Japan",   "Tokyo"
-data "Brazil",  "Brasilia"
-data "Egypt",   "Cairo"
+data "Japan", "Tokyo"
+data "Brazil", "Brasilia"
+data "Egypt", "Cairo"

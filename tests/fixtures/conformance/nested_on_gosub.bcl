@@ -1,0 +1,13 @@
+program nestedOnGosub
+if 1 then
+gosub first
+on 2 gosub first, second
+end if
+print "done"
+end
+first:
+print "first"
+return
+second:
+print "second"
+return

@@ -1,0 +1,9 @@
+program p
+function f%()
+return 1
+end function
+function f%()
+return 2
+end function
+print f%()
+end

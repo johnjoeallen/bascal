@@ -1,0 +1,2574 @@
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 17: Final Cleanup and Attribution
+
+<div class="prose" markdown="1">
+
+# Stage 17: Final Cleanup and Attribution
+
+The last stage. Every inline comment documenting the *port itself* --
+which stage renamed what, which original line number a block replaces,
+which GitHub issue a workaround exists for -- is gone: that history
+belongs in this case study's own commentary (stages 1-16, plus the
+commit/PR history), not in the finished program. In its place: a
+top-of-file attribution comment crediting the game's original author
+and every prior port it passed through on the way here, and one
+multi-line `/* ... */` doc comment above each of the 72 procedures and
+functions, describing what it does rather than how it got there.
+
+One pre-existing behavior surfaced by this cleanup, not changed by it:
+`askYesNo%()`'s final `return 0` (after its `while true` loop, needed
+only because the C backend requires a function's literal last
+top-level statement to be `return`) used to sit right before a
+multi-line trailing comment explaining exactly that. Removing the
+comment incidentally removes a harmless duplicate `RETURN` the BASIC
+backend was emitting right after it -- dead code either way, since the
+first `RETURN` always fires first, but one instruction shorter now.
+
+`verbClose%()` keeps its explanatory comment despite the rest of its
+history-commentary being removed: CLOSE's dispatch entry points at the
+same "no-op" line OPEN's own handler falls through to, so CLOSE's real
+logic just below is permanently unreachable -- an upstream bug already
+present in the original 1979 game, not something this port introduced
+or is fixing. That's a fact about the *program's own behavior*, not
+about its porting history, so it stays.
+
+Verified with `bcc --check`; `--target basic` still compiles with zero
+warnings; and a `--target c` smoke test (the same command sequence as
+every prior stage, plus a SAVE GAME round trip) byte-identical against
+stage 16.
+
+**Follow-up:** `reincarnate()` was misnamed -- despite the name, it
+doesn't always reincarnate the player. On the third death, or a "no"
+answer to "do you want to be reincarnated?", it ends the game instead;
+its own doc comment already said as much ("Handles a death, however it
+happened..."), but the function name only described one of its two
+outcomes. Renamed to `handleDeath()` (and its caller,
+`checkPitsAndReincarnateIfNeeded()`, to
+`checkPitsAndHandleDeathIfNeeded()`), a pure rename verified
+byte-identical against the version above under `--target c`.
+
+**Second follow-up:** the three data-file loaders still carried their
+names straight over from the original 8.3-era filenames --
+`loadAdescrip()`, `loadAitems()`, `loadAmessage()` -- the same kind of
+un-word-separated abbreviation stage 14 eliminated everywhere else in
+this port. Renamed to match what each one actually loads its data
+into (already given real names back in stage 14): `loadAdescrip()` ->
+`loadRoomDescriptions()` (fills `roomDescriptions$()`), `loadAitems()`
+-> `loadItemDescriptions()` (fills `itemDescriptions$()`, distinct from
+the unrelated `loadItemNames()` next to it), and `loadAmessage()` ->
+`loadMessages()` (fills `messages$()`). Again a pure rename, verified
+byte-identical under `--target c`.
+
+**Third follow-up:** every `:`-joined multi-statement line is gone --
+one statement per line throughout, matching BASCAL's own structured
+style rather than classic BASIC's line-budget conventions. Three
+flavors of `:` usage needed different treatment: plain sequences like
+`itemRoom(18) = 7 : lampOn = 0 : isDead = 0` split into one assignment
+per line; a `label: data ...` shorthand (six call sites, e.g.
+`bedquiltRooms: data 33,37,45,92,76`) split into the label alone on its
+own line followed by the `data` statement(s) indented one level under
+it -- including the rest of a multi-line `DATA` block that already had
+one statement per line (`keywordTable`, `itemLocationData`,
+`itemNames`), reindented to match so the whole block reads as the
+label's body rather than as loose, same-level statements that happen
+to follow it; and four single-line
+`IF cond THEN stmt : stmt` forms became block `if ... end if`, since
+BASCAL's single-line `IF` has nowhere to put a second statement without
+a colon. `checkPitsAndHandleDeathIfNeeded()`'s own 13-way `currentRoom%
+= 16 or ... or currentRoom% = 98` condition got a further cleanup in
+the same pass: BASCAL's `select case` accepts both comma-separated
+values and `n TO m` ranges in one `case`, so the 13 individual pit-room
+numbers become `case 16, 17, 19, 20, 25, 47, 48, 59 to 61, 75, 76, 98`
+-- `to` used only for the one genuinely contiguous run of three
+(`59,60,61`), not for pairs like 16/17, where `n to n+1` doesn't read
+any better than listing both values and risks implying 18 belongs to
+the range when it's deliberately excluded. Same set either way,
+confirmed by comparing the old condition and the new `select case`
+against every room number 1-100 under real `fbc`. All four kinds of
+change verified byte-identical under `--target c`.
+
+**Fourth follow-up:** every remaining integer-valued variable that
+hadn't already been typed -- stage 15 only covered array-index
+variables, and stage 14 only renamed, never typed -- gets an explicit
+`%` too, the same treatment stage 15 gave indices. That's every loop
+counter left bare (`itemScanIndex`, `tierIndex`, `readCount`), a
+handful of locals (`lastfra`, `stealableCount`, `foundFlag`, `tier`,
+`charCode`, `commaPos`, the save/load round-trip's own
+`itemLocationValue`/`roomVisitedValue`, and the `field1`..`field10`
+record-read scratch family), every 0/1/N-state game-flag global
+(`grateOpen`, `isDead`, `lampOn`, `trollState`, `descriptionMode`, and
+two dozen more like it), the running totals (`score`,
+`roomsVisitedCount`, `deathCount`, `matchCount`, `messageCount`,
+`totalRooms`/`totalItems`/`totalKeywords`), `previousRoom` (left alone
+by stage 15 specifically because it's never used as an index -- it
+still only ever holds a room number), `scratchValue` (kept a
+deliberately generic *name* in stage 14 since it's reused for three
+unrelated one-off purposes, but every one of those purposes is an
+integer), and every array that holds only whole numbers
+(`itemRoom`, `roomVisited`, `keywordFound`, `itemPoints`, `roomExits`,
+`messageIndex`, `fragmentIndex`). Left alone, deliberately, same as
+stage 15: `dwarfHitChance` (a real fractional value, decremented by
+0.02 and compared against 0.75) and `fragmentNumber` (needs to hold
+AMESSAGE's fractional "#N.M" variant-message numbers).
+
+Verified byte-identical under `--target c`, all four kinds of change
+included.
+
+**Fifth follow-up:** `findMatchedItems()` sets four globals --
+`matchCount%`, `itemCode%`, `selectedItemName$`, and `responseText$`
+-- but a careful trace of all 8 call sites (confirmed independently
+with `--strict-vars-warn`: remove a `global` declaration, recompile,
+and see whether the compiler flags a genuine pre-reassignment read at
+the exact line, rather than trusting a single test run that might not
+exercise every state) showed `selectedItemName$` is never read by any
+of them -- it only round-trips into `responseText$` inside
+`findMatchedItems()` itself, so that round-trip (and the variable) is
+gone; `findMatchedItems()` now writes `responseText$` directly.
+`verbGet%()` and `verbDrop%()` only ever consume `matchCount%` from
+the call -- their own `itemCode%`/`responseText$` outputs are
+overwritten before use every time (`itemCode%` by their own
+`for itemCode% = 1 to totalItems%` immediately after, `responseText$`
+inside one branch's own self-contained message) -- so both functions'
+now-pointless `global itemCode%`/`global responseText$` declarations
+are gone too. `verbFeed%()` and `verbReadMagazine%()` keep needing
+`itemCode%` but never read `responseText$` from the call (always
+overwritten with a literal first), so just their `global responseText$`
+lines drop. `verbThrow%()`, `verbAttack%()`, and `verbOpen%()` are
+unchanged -- they're the functions that actually depend on this call's
+output. Caught one self-inflicted bug during this cleanup: an initial
+edit missed `findMatchedItems()`'s trailing `responseText$ =
+selectedItemName$` copy-back line, which `--strict-vars-warn` flagged
+immediately (referencing the just-deleted variable) before it could
+reach the compiled output.
+
+Verified byte-identical under `--target c` against a richer command
+sequence than prior follow-ups used -- GET/DROP of both matched and
+unmatched items, GET ALL/DROP ALL, OPEN/CLOSE, READ MAGAZINE,
+ATTACK, FEED, DRINK, EAT, THROW -- specifically because this change
+touches those functions' own logic, not just cosmetics.
+
+**Sixth follow-up:** generalized the fifth follow-up's technique from
+one function's outputs to every `global` declaration in the program at
+once -- remove all 323 of them in one pass, recompile with
+`--strict-vars-warn`, and see which (function, variable) pairs never
+get flagged at all (meaning that variable is never referenced,
+read or write, anywhere in that function's body). Three were
+genuinely dead: `verbCross%()`'s `global targetRoom%` (it always
+routes moves through `attemptMove%()`, which computes its own target
+internally), `verbClose%()`'s `global itemRoom%`, and `verbOpen%()`'s
+`global commandLine$` -- the one sibling verb handler that never
+resets it, unlike every other one. All three declarations are gone.
+
+This pass also surfaced a real blind spot in `bcc`'s own
+`--strict-vars` checker, not a program bug: it never flags a read
+through a *multi*-dimensional array subscript (`roomExits%(a, b)`),
+likely because a two-argument access parses as `Expr::Call` rather
+than `Expr::ArrayRef`, and the checker only inspects those two node
+kinds. That made `roomExits%` look unused in `attemptMove%()`/
+`verbEnter%()`/`verbLeave%()`, which direct reading disproves --
+discarded as a tooling limitation, not acted on.
+
+Separately, `verbEnter%()`/`verbLeave%()` both declare
+`global direction%`, but it's masked by their own
+`for direction% = ...`/assignment before any read -- the same shape
+`itemCode%` had in `verbGet%()`/`verbDrop%()` in the fifth follow-up.
+Tracing every declaration of `direction%` in the file (only these two
+plus `verbCross%()`) found no function reading a value it leaves
+behind, so `global direction%` is gone from both -- it's now a plain
+per-function local in each.
+
+Verified byte-identical under `--target c` across four separate
+command sequences (the standard smoke test, the richer GET/DROP/etc.
+sequence from the fifth follow-up, a SAVE GAME round trip, and a new
+one exercising CROSS/ENTER/LEAVE/OPEN/CLOSE specifically -- the
+functions this change touches); `--target basic` still compiles with
+zero warnings; full `cargo test` suite passes.
+
+**Seventh follow-up:** converted the two procedures whose only real
+effect was setting a single global for the caller to read right back
+into proper functions that `return` it directly.
+`checkCarryingItem()` became `checkCarryingItem%()` -- its output,
+`isCarrying%`, had no other reader or writer anywhere in the program,
+so making it a return value eliminates the global entirely.
+`findFirstNamedItem()` became `findFirstNamedItem$()`; its output,
+`selectedItemName$`, has a second, unrelated producer elsewhere
+(`parseAndDispatchCommand%()`'s own item-name scan), so the global
+itself stays, but the one call site that used this procedure now
+assigns the function's return value to it explicitly instead of
+relying on an implicit side effect. The other candidates considered
+and rejected: `checkDwarf()`/`checkDwarfAttack()`/`checkPirate()`,
+which look similar (callers check `isDead%` after calling them) but
+`isDead%` is shared persistent state set by many unrelated code paths
+(pits, the troll, the dragon, ...), not a single-purpose return
+channel -- converting them would misrepresent what the check after the
+call actually means.
+
+`findFirstNamedItem$()`'s new trailing `return ""` is unreachable in
+practice: every caller only invokes it once it has already confirmed
+some keyword code in 1-47 matched, and the function's own scan covers
+that same range, so it's guaranteed to return from inside the loop --
+kept only because a function's literal last statement must be
+`return`, the same reasoning `askYesNo%()`'s own trailing return uses.
+
+Verified byte-identical under `--target c` across five separate
+command sequences, including a new one exercising EAT/DRINK in both
+their carrying and not-carrying branches and every "exotic word"
+command (`ROCK`, `STAIRS`, `GRATE`, ...) that reaches
+`findFirstNamedItem$()`; `--target basic` still compiles with zero
+warnings; full `cargo test` suite passes.
+
+</div>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>stage17-refactored-bascal/adventure.bcl</code> -- Stage 17: Final Cleanup and Attribution</summary>
+
+```bascal
+
+/*
+ * ADVENTURE/3000
+ *
+ * A text adventure originally written in 1979 by Benjamin Moser (James
+ * Madison High School, Vienna, Virginia) for the HP/3000, based on the
+ * map and gameplay of Crowther and Woods' original Adventure. Ported to
+ * Macintosh BASIC by Elizabeth and David Hunter (1998), then to PyBASIC
+ * for the Raspberry Pi Pico by richpl (https://github.com/richpl/PyBasic,
+ * 2021) -- whose examples/adventure.bas and companion data files
+ * (ADESCRIP, AITEMS, AMESSAGE, AMOVING) are the direct basis for this
+ * BASCAL port.
+ *
+ * This port is free software, licensed GPL-3.0, the same license as
+ * PyBASIC itself.
+ */
+
+program adventure3000
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+dim roomDescriptions$(200)
+dim itemDescriptions$(200)
+dim messages$(2500)
+dim messageIndex%(303)
+dim fragmentIndex%(10)
+dim itemNames$(47)
+
+/*
+ * Loads the room descriptions from ADESCRIP into roomDescriptions$(),
+ * one room per line, in file order.
+ */
+procedure loadRoomDescriptions()
+    global roomDescriptions$
+    dim dcount%, line$
+    open "ADESCRIP" for INPUT as #1
+    while not(EOF(1))
+        dcount% = dcount% + 1
+        input #1, line$
+        roomDescriptions$(dcount%) = line$
+        print ".";
+    end while
+    close #1
+end procedure
+
+/*
+ * Loads the item-in-room messages from AITEMS into itemDescriptions$(),
+ * one item per line, in file order.
+ */
+procedure loadItemDescriptions()
+    global itemDescriptions$
+    dim icount%, line$
+    open "AITEMS" for INPUT as #2
+    while not(EOF(2))
+        icount% = icount% + 1
+        input #2, line$
+        itemDescriptions$(icount%) = line$
+        print ".";
+    end while
+    close #2
+end procedure
+
+/*
+ * Loads every numbered message from AMESSAGE into messages$(), one
+ * line per array slot, ready for buildMessageIndex() to index.
+ */
+procedure loadMessages()
+    global messages$
+    global messageCount%
+    dim line$
+    messageCount% = 0
+    open "AMESSAGE" for INPUT as #3
+    while not(EOF(3))
+        messageCount% = messageCount% + 1
+        input #3, line$
+        messages$(messageCount%) = line$
+    end while
+    close #3
+end procedure
+
+/*
+ * Scans the messages$() lines loaded by loadMessages() and records, in
+ * messageIndex()/fragmentIndex(), where each numbered message ("#N" or
+ * a fractional variant "#N.M") begins, so printMessage() can jump
+ * straight to it instead of scanning from the top every time.
+ */
+procedure buildMessageIndex()
+    global messages$
+    global messageCount%
+    global messageIndex%
+    global fragmentIndex%
+    dim fpos%, fracnt%, lastfra%, messageLine$, fragmentNumber
+    fpos% = 0
+    fracnt% = 0
+    lastfra% = -1
+    while fpos% <= messageCount%
+        fpos% = fpos% + 1
+        if fpos% > messageCount% then
+            return
+        end if
+        messageLine$ = messages$(fpos%)
+        if messageLine$ = "#" then
+            return
+        end if
+        if instr(messageLine$, "#") <> 0 then
+            fragmentNumber = val(mid$(messageLine$, 2))
+            if int(fragmentNumber) = fragmentNumber then
+                messageIndex%(int(fragmentNumber)) = fpos%
+            else
+                fracnt% = fracnt% + 1
+                if lastfra% <> int(fragmentNumber) then
+                    messageIndex%(int(fragmentNumber)) = fracnt%
+                    lastfra% = int(fragmentNumber)
+                end if
+                fragmentIndex%(fracnt%) = fpos%
+            end if
+        end if
+    end while
+end procedure
+
+/*
+ * Loads the short item/object display names into itemNames$(),
+ * indexed by object code 1-47.
+ */
+procedure loadItemNames()
+    global itemNames$
+    dim ianame%
+    restore itemNames
+    for ianame% = 1 to 47
+        read itemNames$(ianame%)
+    end for
+end procedure
+
+/*
+ * Reads a line and returns 1 for "yes" or 0 for "no", reprompting
+ * until it gets a recognizable answer.
+ */
+function askYesNo%()
+    dim answer$
+    while true
+        input answer$
+        if len(answer$) = 0 then
+            answer$ = " "
+        end if
+        answer$ = lcase$(mid$(answer$, 1, 1))
+        if answer$ = "y" then
+            return 1
+        elseif answer$ = "n" then
+            return 0
+        end if
+        print "Yes or No-";
+    end while
+    return 0
+end function
+
+/*
+ * Prints the numbered message (and any unnumbered continuation lines
+ * that follow it) from AMESSAGE, using the index built by
+ * buildMessageIndex(). Messages 2 and 61 each have several
+ * interchangeable variants; one is picked at random.
+ */
+procedure printMessage(msgNum%)
+    global messageIndex%
+    global fragmentIndex%
+    global messages$
+    dim xtmp%, mpos%, messageText$
+    xtmp% = messageIndex%(msgNum%)
+    if msgNum% = 2 or msgNum% = 61 then
+        xtmp% = fragmentIndex%(xtmp% + int(RND(1) * 5))
+    end if
+    mpos% = xtmp%
+    messageText$ = messages$(mpos%)
+    if mid$(messageText$, 1, 1) <> "#" or int(val(mid$(messageText$, 2))) <> msgNum% then
+        print "NO DESC. # "; msgNum%; " IN FILE AMESSAGE"
+        return
+    end if
+    while true
+        mpos% = mpos% + 1
+        messageText$ = messages$(mpos%)
+        if mid$(messageText$, 1, 1) = "#" then
+            return
+        end if
+        print messageText$
+    end while
+end procedure
+
+/*
+ * Prints the room's short, one-line description and marks it visited.
+ */
+procedure shortDescription()
+    global currentRoom%
+    global roomVisited%
+    global roomDescriptions$
+    dim roomText$
+    roomText$ = roomDescriptions$(currentRoom%)
+    roomVisited%(currentRoom%) = 1
+    print roomText$
+end procedure
+
+/*
+ * Prints the room's long, AMESSAGE-driven description and marks it
+ * visited. The message number is normally currentRoom%+200, except a
+ * shared message for the forest (any room 1-4) and one for the
+ * maze-like rooms near the end.
+ */
+procedure longDescription()
+    global currentRoom%
+    global roomVisited%
+    roomVisited%(currentRoom%) = 1
+    if currentRoom% <= 4 then
+        printMessage(200)
+    elseif (currentRoom% > 88 and currentRoom% < 98) or currentRoom% = 99 then
+        printMessage(288)
+    else
+        printMessage(200 + currentRoom%)
+    end if
+end procedure
+
+/*
+ * Lists the items sitting in the current room, checks whether the
+ * golden bird's special message should play, and then checks for the
+ * dwarf and pirate encounters.
+ */
+procedure describeRoomContents()
+    global currentRoom%
+    global totalItems%
+    global itemRoom%
+    global isDead%
+    global itemDescriptions$
+    for itemIndex% = 1 to totalItems%
+        if itemRoom%(itemIndex%) = currentRoom% then
+            print itemDescriptions$(itemIndex%)
+        end if
+    end for
+    if itemRoom%(26) = -1 then
+        printMessage(67)
+    end if
+    checkDwarf()
+    if isDead% <> 1 then
+        checkPirate()
+        print
+    end if
+end procedure
+
+/*
+ * Checks whether the dwarf should give away his axe (the first time
+ * the player reaches a deep room) or attack with his knife.
+ */
+procedure checkDwarf()
+    global dwarfGaveAxe%
+    global currentRoom%
+    global itemRoom%
+    if dwarfGaveAxe% <> 0 then
+        checkDwarfAttack()
+        return
+    end if
+    if currentRoom% < 13 then return
+    if RND(1) > 0.05 then return
+    printMessage(80)
+    itemRoom%(27) = currentRoom%
+    dwarfGaveAxe% = 1
+end procedure
+
+/*
+ * The "should the dwarf attack" half of checkDwarf(), also called
+ * directly by anything else that provokes the dwarf (e.g. throwing an
+ * axe at him).
+ */
+procedure checkDwarfAttack()
+    global currentRoom%
+    global itemRoom%
+    global trollState%
+    global isDead%
+    global dwarfHitChance
+    if currentRoom% < 13 then
+        itemRoom%(35) = 0
+        return
+    end if
+    if itemRoom%(35) <> currentRoom% then
+        if RND(1) >= 0.05 then return
+        if (currentRoom% = 60 or currentRoom% = 61) and trollState% = 1 then return
+        itemRoom%(35) = currentRoom%
+        printMessage(31)
+        return
+    end if
+    if (currentRoom% <> 60 and currentRoom% <> 61) or trollState% <> 1 then
+        if RND(1) > 0.5 then return
+        printMessage(32)
+        dwarfHitChance = dwarfHitChance - 0.02
+        if dwarfHitChance < 0.75 then
+            dwarfHitChance = 0.75
+        end if
+        if RND(1) <= dwarfHitChance then
+            PRINT "It gets you!"
+            isDead% = 1
+        else
+            PRINT "It misses!"
+        end if
+    else
+        printMessage(299)
+        itemRoom%(35) = 0
+    end if
+end procedure
+
+/*
+ * Checks whether the pirate steals any of the player's carried
+ * treasures.
+ */
+procedure checkPirate()
+    global currentRoom%
+    global itemRoom%
+    dim stealableCount%, itemIndex%
+    stealableCount% = 0
+    if currentRoom% < 13 then return
+    for itemIndex% = 1 to 15
+        if itemRoom%(itemIndex%) = -1 then
+            stealableCount% = stealableCount% + 1
+        end if
+    end for
+    if stealableCount% < int(RND(1) * 4) + 1 then return
+    if RND(1) < 0.05 then
+        printMessage(33)
+        for itemIndex% = 1 to 15
+            if itemRoom%(itemIndex%) = -1 then
+                itemRoom%(itemIndex%) = 100
+            end if
+        end for
+    else
+        printMessage(34)
+    end if
+end procedure
+
+/*
+ * Prints the room's long description on first entry (always, for the
+ * forest and the maze-like rooms), the short one on repeat visits.
+ */
+procedure describeRoomOnEntry()
+    global currentRoom%
+    global roomVisited%
+    if currentRoom% < 5 or (currentRoom% > 88 and currentRoom% < 98) or currentRoom% = 99 then
+        longDescription()
+    elseif roomVisited%(currentRoom%) = 1 then
+        shortDescription()
+    else
+        longDescription()
+    end if
+end procedure
+
+/*
+ * Shows the room the way LOOK does: the full long description unless
+ * it's too dark to see anything, in which case just that message.
+ */
+procedure describeRoomForLook()
+    global currentRoom%
+    global lampOn%
+    global itemRoom%
+    if currentRoom% < 13 or currentRoom% = 58 or (lampOn% = 1 and (itemRoom%(18) = currentRoom% or itemRoom%(18) = -1)) then
+        longDescription()
+        describeRoomContents()
+    else
+        printMessage(45)
+    end if
+end procedure
+
+/*
+ * Prints a handful of situational, room-dependent one-off messages
+ * (the grate, crystal bridge, plugh noise, iron door, troll, bear, and
+ * plant in the pit) after a room's normal description.
+ */
+procedure situationDescriptions()
+    global currentRoom%
+    global grateOpen%
+    global crystalBridgeBuilt%
+    global ironDoorOiled%
+    global trollState%
+    global bearFedState%
+    global pirateState%
+    if currentRoom% = 10 or currentRoom% = 11 then
+        printMessage(grateOpen% + 10)
+    end if
+    if (currentRoom% = 19 or currentRoom% = 20) and crystalBridgeBuilt% = 1 then
+        printMessage(14)
+    end if
+    if currentRoom% = 26 and RND(1) > 0.3 then
+        printMessage(41)
+    end if
+    if currentRoom% = 73 and ironDoorOiled% = 0 then
+        printMessage(57)
+    end if
+    if (currentRoom% = 60 or currentRoom% = 61) and trollState% = 1 then
+        printMessage(63)
+    end if
+    if currentRoom% = 69 and bearFedState% = 0 then
+        printMessage(64)
+    end if
+    if currentRoom% = 69 and bearFedState% = 1 then
+        printMessage(66)
+    end if
+    if currentRoom% = 48 or currentRoom% = 50 then
+        printMessage(47 + pirateState%)
+    end if
+end procedure
+
+/*
+ * Scans the parsed keyword flags for item names the player typed:
+ * matchCount counts how many matched, itemCode% remembers the first
+ * exact-item match's own code, and responseText$ ends up holding the
+ * last match's display name.
+ */
+procedure findMatchedItems()
+    global keywordFound%
+    global matchCount%
+    global itemCode%
+    global responseText$
+    global itemNames$
+    matchCount% = 0
+    itemCode% = 0
+    responseText$ = ""
+    for itemScanIndex% = 1 to 45
+        if keywordFound%(itemScanIndex%) <> 0 then
+            matchCount% = matchCount% + 1
+            responseText$ = itemNames$(itemScanIndex%)
+            if keywordFound%(itemScanIndex%) = 1 and matchCount% = 1 then
+                itemCode% = itemScanIndex%
+            end if
+        end if
+    end for
+end procedure
+
+/*
+ * Finds the first object code the player's command mentioned and
+ * returns its display name -- used for messages like "What do you
+ * want to do with the LAMP?" where the exact item doesn't matter,
+ * just naming *something* the player typed. Every caller only invokes
+ * this once it has already confirmed some code in 1-47 matched, so
+ * the loop always finds one; the trailing return is unreachable in
+ * practice, kept only because a function's literal last statement
+ * must be return.
+ */
+function findFirstNamedItem$()
+    global keywordFound%
+    global itemNames$
+    for itemScanCode% = 1 to 47
+        if keywordFound%(itemScanCode%) = 1 then
+            return itemNames$(itemScanCode%)
+        end if
+    end for
+    return ""
+end function
+
+/*
+ * Checks whether the player is carrying item itemCode%, returning 1
+ * if so, 0 (and printing "You don't have the ...") if not.
+ */
+function checkCarryingItem%()
+    global itemCode%
+    global itemRoom%
+    global paddedCommand$
+    if itemRoom%(itemCode%) = -1 then
+        return 1
+    else
+        print "You don't have the "; paddedCommand$
+        return 0
+    end if
+end function
+
+/*
+ * Recomputes the current score from scratch -- treasures deposited or
+ * found, game milestones reached, and rooms visited -- into score and
+ * roomsVisitedCount.
+ */
+procedure computeScore()
+    global score%
+    global roomsVisitedCount%
+    global grateOpen%
+    global snakeAlive%
+    global dragonAlive%
+    global trollState%
+    global bearFedState%
+    global crystalBridgeBuilt%
+    global pirateState%
+    global ironDoorOiled%
+    global bearTamedScored%
+    global roomVisited%
+    global totalRooms%
+    global itemPoints%
+    global itemRoom%
+    restore itemLocationData
+    roomsVisitedCount% = 0
+    score% = 0
+    for treasureIndex% = 1 to 15
+        read treasureRoom%
+        if treasureRoom% <> 0 then
+            if roomVisited%(treasureRoom%) = 1 then
+                score% = score% + 4 * itemPoints%(treasureIndex%)
+            end if
+            if itemRoom%(treasureIndex%) = 7 then
+                score% = score% + 4 * itemPoints%(treasureIndex%)
+            end if
+        end if
+    end for
+    score% = (grateOpen% = 1) * 10 + score%
+    score% = (snakeAlive% = 0) * 20 + score%
+    score% = (dragonAlive% = 0) * 30 + score%
+    score% = (trollState% = 0) * 30 + score%
+    score% = (bearFedState% = 2) * 20 + score%
+    score% = (crystalBridgeBuilt% = 1) * 20 + score%
+    score% = (pirateState% = 2) * 20 + score%
+    score% = (ironDoorOiled% = 1) * 20 + score%
+    score% = (bearTamedScored% = 1) * 20 + score%
+    for roomIndex% = 1 to totalRooms%
+        if roomVisited%(roomIndex%) = 1 then
+            score% = score% + 1
+            roomsVisitedCount% = roomsVisitedCount% + 1
+        end if
+    end for
+end procedure
+
+/*
+ * Prints the player's current score, exploration percentage, and
+ * skill title (looked up by score tier).
+ */
+procedure printScore()
+    global score%
+    global roomsVisitedCount%
+    global totalRooms%
+    dim tier%, skillTitle$
+    computeScore()
+    print "Your score is now "; score%
+    print "You have explored "; (roomsVisitedCount% / totalRooms%) * totalRooms%; "% of the cave."
+    restore skillTitles
+    tier% = int((score% - 1) / 100)
+    if tier% > 4 then
+        tier% = 4
+    end if
+    for tierIndex% = 0 to tier%
+        read skillTitle$
+    end for
+    print "That makes you a "; skillTitle$; " adventurer."
+end procedure
+
+/*
+ * Asks what the player wants to do with the item named by
+ * selectedItemName$.
+ */
+procedure askWhatToDoWithItem()
+    global selectedItemName$
+    print "What do you want to do with the ";selectedItemName$;"?"
+end procedure
+
+/*
+ * Prints one of four random "I don't understand"-style messages.
+ */
+procedure printDontUnderstand()
+    global responseText$
+    dontUnderstandMessages:
+        data "What?","I don't understand.","I can't understand that.","I don't know that word."
+    restore dontUnderstandMessages
+    for readCount% = 1 to int(RND(1)*4)+1
+        read responseText$
+    end for
+    PRINT responseText$
+end procedure
+
+/*
+ * Ends the game: prints the final score, then stops.
+ */
+procedure endGame()
+    print "Oh well..."
+    printScore()
+    stop
+end procedure
+
+/*
+ * Handles a death, however it happened. Ends the game on the third
+ * death or a "no" answer to "do you want to be reincarnated?";
+ * otherwise resets carried-item locations and respawns the player in a
+ * random forest room.
+ */
+procedure handleDeath()
+    global deathCount%
+    global scratchValue%
+    global itemRoom%
+    global lampOn%
+    global isDead%
+    global dwarfHitChance
+    global totalItems%
+    global currentRoom%
+    global previousRoom%
+    deathCount% = deathCount% + 1
+    if deathCount% = 3 then
+        printMessage(78)
+        endGame()
+    end if
+    if deathCount% = 2 then
+        printMessage(77)
+    end if
+    printMessage(75)
+    scratchValue% = askYesNo%()
+    if scratchValue% = 0 then
+        endGame()
+    end if
+    printMessage(76)
+    itemRoom%(18) = 7
+    lampOn% = 0
+    isDead% = 0
+    dwarfHitChance = 1.03
+    for itemIndex% = 1 to totalItems%
+        if itemRoom%(itemIndex%) = -1 then
+            itemRoom%(itemIndex%) = currentRoom%
+        end if
+    end for
+    currentRoom% = int(RND(1)*4)+1
+    previousRoom% = currentRoom%
+end procedure
+
+/*
+ * Checks whether the room just moved into is dark and has a pit to
+ * fall into, handling the resulting death if so.
+ */
+procedure checkPitsAndHandleDeathIfNeeded()
+    global currentRoom%
+    global lampOn%
+    global itemRoom%
+    if currentRoom% < 13 or (lampOn% = 1 and (itemRoom%(18) = -1 or itemRoom%(18) = currentRoom%)) then
+        return
+    end if
+    select case currentRoom%
+        case 16, 17, 19, 20, 25, 47, 48, 59 to 61, 75, 76, 98
+            printMessage(44)
+            handleDeath()
+    end select
+end procedure
+
+/*
+ * Performs the actual room transition, carrying the pirate along with
+ * the player if he was following.
+ */
+function performMove%(targetRoom%)
+    global currentRoom%
+    global previousRoom%
+    global itemRoom%
+    previousRoom% = currentRoom%
+    currentRoom% = targetRoom%
+    if itemRoom%(35) = previousRoom% then
+        itemRoom%(35) = currentRoom%
+    end if
+    return 1
+end function
+
+/*
+ * Runs the special-room/special-direction checks (the grate, the
+ * nugget on the stairs, the crystal bridge, the snake, the narrow
+ * tunnel, the troll, the iron door, the dragon) for a destination room
+ * already found for a given direction, then completes the move if
+ * nothing blocks it.
+ */
+function checkSpecialRoomAndMove%(direction%, targetRoom%)
+    global currentRoom%
+    global grateOpen%
+    global crystalBridgeBuilt%
+    global snakeAlive%
+    global trollState%
+    global ironDoorOiled%
+    global itemRoom%
+    global keywordFound%
+    global totalItems%
+    dim itemScanIndex%
+    if (currentRoom% = 10 and (direction% = 10 or direction% = 5)) or (currentRoom% = 11 and (direction% = 9 or direction% = 3)) then
+        if grateOpen% = 1 then
+            return performMove%(targetRoom%)
+        end if
+        printMessage(10)
+        return 0
+    elseif currentRoom% = 17 and direction% = 9 and itemRoom%(1) = -1 then
+        printMessage(38)
+        return 0
+    elseif (currentRoom% = 19 and direction% = 7) or (currentRoom% = 20 and direction% = 3) then
+        if crystalBridgeBuilt% then
+            return performMove%(targetRoom%)
+        end if
+        printMessage(3)
+        return 0
+    elseif currentRoom% = 22 and direction% <> 3 and direction% <> 9 then
+        if snakeAlive% = 0 then
+            return performMove%(targetRoom%)
+        end if
+        printMessage(50)
+        return 0
+    elseif currentRoom% = 57 or currentRoom% = 58 then
+        if keywordFound%(102) <> 0 or keywordFound%(106) <> 0 then
+            for itemScanIndex% = 1 to totalItems%
+                if itemScanIndex% <> 10 and itemRoom%(itemScanIndex%) = -1 then
+                    printMessage(53)
+                    return 0
+                end if
+            end for
+        end if
+        return performMove%(targetRoom%)
+    elseif (currentRoom% = 60 and direction% = 2) or (currentRoom% = 61 and direction% = 6) then
+        select case trollState%+1
+            case 1
+                return performMove%(targetRoom%)
+            case 2
+                printMessage(55)
+                return 0
+            case 3
+                printMessage(56)
+                printMessage(55)
+                trollState% = 1
+                return 0
+            case 4
+                trollState% = 2
+                return performMove%(targetRoom%)
+            case else
+                return performMove%(targetRoom%)
+        end select
+    elseif currentRoom% = 73 and direction% = 1 and ironDoorOiled% = 0 then
+        printMessage(57)
+        return 0
+    elseif currentRoom% = 82 and itemRoom%(33) = currentRoom% and direction% = 1 then
+        printMessage(51)
+        return 0
+    else
+        return performMove%(targetRoom%)
+    end if
+end function
+
+/*
+ * Handles the two rooms (Bedquilt and Witt's End) whose exits are
+ * "pick one of several rooms at random" rather than one fixed
+ * destination.
+ */
+function attemptRandomMove%()
+    global currentRoom%
+    dim targetRoom%, pickCount%
+    if currentRoom% = 44 then
+        if RND(1) > 0.5 then
+            restore bedquiltRooms
+            for pickCount% = 1 to int(RND(1)*5)+1
+                read targetRoom%
+            end for
+            return performMove%(targetRoom%)
+        end if
+        printMessage(52)
+        return 0
+    end if
+    if currentRoom% = 39 then
+        if RND(1) < 0.15 then
+            return performMove%(38)
+        end if
+        printMessage(52)
+        return 0
+    end if
+    printMessage(1)
+    return 0
+end function
+bedquiltRooms:
+    data 33,37,45,92,76
+
+/*
+ * Looks up the destination room for a direction and either moves
+ * there or prints why not.
+ */
+function attemptMove%(direction%)
+    global currentRoom%
+    global roomExits%
+    dim targetRoom%
+    targetRoom% = roomExits%(currentRoom%, direction%)
+    if targetRoom% = 255 then
+        return attemptRandomMove%()
+    end if
+    if targetRoom% < 1 or targetRoom% > 254 then
+        printMessage(1)
+        return 0
+    end if
+    return checkSpecialRoomAndMove%(direction%, targetRoom%)
+end function
+
+/*
+ * Handles the magic word PLUGH: teleports between the Debris Room and
+ * the Y2 room; does nothing anywhere else.
+ */
+function verbPlugh%()
+    global currentRoom%
+    global itemRoom%
+    global targetRoom%
+    if currentRoom% = 7 then
+        if itemRoom%(35) = currentRoom% then
+            itemRoom%(35) = 0
+        end if
+        targetRoom% = 26
+    elseif currentRoom% = 26 then
+        targetRoom% = 7
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(targetRoom%)
+    checkPitsAndHandleDeathIfNeeded()
+    return 1
+end function
+
+/*
+ * Handles the magic word XYZZY: teleports between the Debris Room and
+ * the Grate Room; does nothing anywhere else.
+ */
+function verbXyzzy%()
+    global currentRoom%
+    global itemRoom%
+    global targetRoom%
+    if currentRoom% = 7 then
+        if itemRoom%(35) = currentRoom% then
+            itemRoom%(35) = 0
+        end if
+        targetRoom% = 13
+    elseif currentRoom% = 13 then
+        targetRoom% = 7
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(targetRoom%)
+    checkPitsAndHandleDeathIfNeeded()
+    return 1
+end function
+
+/*
+ * Handles the magic word PLOVER: teleports between the Plover Room and
+ * the dark room beyond it, carrying the emerald along if it hasn't
+ * already been dropped there.
+ */
+function verbPlover%()
+    global currentRoom%
+    global itemRoom%
+    global targetRoom%
+    if currentRoom% <= 26 then
+        if itemRoom%(35) = currentRoom% then
+            itemRoom%(35) = 0
+        end if
+        if itemRoom%(10) = -1 then
+            itemRoom%(10) = currentRoom%
+        end if
+        targetRoom% = 58
+    elseif currentRoom% = 58 then
+        targetRoom% = 26
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(targetRoom%)
+    checkPitsAndHandleDeathIfNeeded()
+    return 1
+end function
+
+/*
+ * Handles CROSS: crosses the crystal bridge or the troll's bridge,
+ * if standing at the right spot and the relevant condition is met.
+ */
+function verbCross%()
+    global currentRoom%
+    global crystalBridgeBuilt%
+    global direction%
+    if currentRoom% = 19 and crystalBridgeBuilt% = 0 then
+        printMessage(3)
+    elseif currentRoom% = 19 then
+        direction% = 7
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+    elseif currentRoom% = 20 and crystalBridgeBuilt% = 0 then
+        printMessage(3)
+    elseif currentRoom% = 20 then
+        direction% = 3
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+    elseif currentRoom% = 60 then
+        direction% = 2
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+    elseif currentRoom% = 61 then
+        direction% = 6
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+    else
+        printMessage(2)
+    end if
+    return 0
+end function
+
+/*
+ * Handles CLIMB: climbs the beanstalk from the Giant Room, once the
+ * pirate's stolen treasure has been reclaimed twice.
+ */
+function verbClimb%()
+    global currentRoom%
+    global pirateState%
+    global targetRoom%
+    if currentRoom%<>50 then
+        printMessage(2)
+        return 0
+    end if
+    if pirateState%<2 then
+        printMessage(2)
+        return 0
+    end if
+    targetRoom%=70
+    performMove%(targetRoom%)
+    checkPitsAndHandleDeathIfNeeded()
+    return 1
+end function
+
+/*
+ * Handles JUMP: instant death, in the handful of rooms where jumping
+ * makes any sense at all.
+ */
+function verbJump%()
+    global currentRoom%
+    if currentRoom%<>16 AND currentRoom%<>19 AND currentRoom%<>20 AND currentRoom%<>27 then
+        printMessage(2)
+        return 0
+    end if
+    printMessage(4)
+    handleDeath()
+    return 1
+end function
+
+/*
+ * Handles FILL: fills the bottle with water or oil, depending on which
+ * room the player is standing in.
+ */
+function verbFill%()
+    global currentRoom%
+    global itemRoom%
+    global bottleContents%
+    global responseText$
+    global commandLine$
+    if itemRoom%(21) <> -1 then
+        responseText$="bottle"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    if bottleContents% <> 0 then
+        printMessage(5)
+        commandLine$=""
+        return 0
+    end if
+    if currentRoom%=7 or currentRoom%=8 or currentRoom%=9 or currentRoom%=35 or currentRoom%=74 or currentRoom%=81 then
+        bottleContents%=1
+        itemRoom%(16)=-1
+    elseif currentRoom%=49 then
+        bottleContents%=2
+        itemRoom%(17)=-1
+    else
+        responseText$="oil"
+        PRINT "I see no ";responseText$;" here."
+        return 0
+    end if
+    PRINT "The bottle is now filled."
+    return 0
+end function
+
+/*
+ * Handles EMPTY: empties the bottle of whatever it currently holds.
+ */
+function verbEmpty%()
+    global itemRoom%
+    global bottleContents%
+    global responseText$
+    global commandLine$
+    if itemRoom%(21)<>-1 then
+        responseText$="bottle"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    itemRoom%(bottleContents%+15)=0
+    bottleContents%=0
+    PRINT "Emptied"
+    return 0
+end function
+
+/*
+ * Handles LOOK: redisplays the room in full.
+ */
+function verbLook%()
+    describeRoomForLook()
+    return 0
+end function
+
+/*
+ * Handles LIGHT (or ON): turns the carried lamp on.
+ */
+function verbLight%()
+    global itemRoom%
+    global lampOn%
+    global responseText$
+    global commandLine$
+    if itemRoom%(18) = -1 then
+        lampOn% = 1
+        responseText$ = "on"
+    else
+        responseText$ = "lamp"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    PRINT "The lamp is now ";responseText$
+    describeRoomForLook()
+    return 0
+end function
+
+/*
+ * Handles OFF (or EXTINGUISH): turns the carried lamp off.
+ */
+function verbOff%()
+    global itemRoom%
+    global lampOn%
+    global responseText$
+    global commandLine$
+    if itemRoom%(18) = -1 then
+        lampOn%=0
+        responseText$="off"
+    else
+        responseText$ = "lamp"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    PRINT "The lamp is now ";responseText$
+    describeRoomForLook()
+    return 0
+end function
+
+/*
+ * Handles ENTER: moves into the house or barren room directly from
+ * outside it, or otherwise tries every direction in turn (from Down
+ * back to North) looking for one that works.
+ */
+function verbEnter%()
+    global currentRoom%
+    global targetRoom%
+    global roomExits%
+    if currentRoom% = 6 or currentRoom% = 68 then
+        direction%=3
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+        return 0
+    end if
+    for direction% = 10 to 1 step -1
+        targetRoom% = roomExits%(currentRoom%,direction%)
+        IF targetRoom%>0 AND targetRoom%<101 THEN
+            if checkSpecialRoomAndMove%(direction%, targetRoom%) then
+                checkPitsAndHandleDeathIfNeeded()
+                return 1
+            else
+                return 0
+            end if
+        end if
+    end for
+    printMessage(2)
+    return 0
+end function
+
+/*
+ * Handles LEAVE: moves out of the house or barren room directly, or
+ * otherwise tries every direction in turn (from North through Down)
+ * looking for one that works.
+ */
+function verbLeave%()
+    global currentRoom%
+    global targetRoom%
+    global roomExits%
+    if currentRoom% = 7 or currentRoom% = 69 then
+        direction%=7
+        if attemptMove%(direction%) then
+            checkPitsAndHandleDeathIfNeeded()
+            return 1
+        end if
+        return 0
+    end if
+    for direction% = 1 to 10
+        targetRoom% = roomExits%(currentRoom%,direction%)
+        IF targetRoom%>0 AND targetRoom%<101 THEN
+            if checkSpecialRoomAndMove%(direction%, targetRoom%) then
+                checkPitsAndHandleDeathIfNeeded()
+                return 1
+            else
+                return 0
+            end if
+        end if
+    end for
+    printMessage(2)
+    return 0
+end function
+
+/*
+ * Handles INVENTORY: lists everything the player is carrying.
+ */
+function verbInventory%()
+    global scratchValue%
+    global itemRoom%
+    global totalItems%
+    global responseText$
+    global itemNames$
+    scratchValue%=0
+    PRINT "You are carrying:";
+    FOR itemIndex%=1 TO totalItems%
+        IF itemRoom%(itemIndex%)=-1 THEN
+            responseText$ = itemNames$(itemIndex%)
+            PRINT responseText$
+            scratchValue% = scratchValue% + 1
+        end if
+    end for
+    if scratchValue%=0 then
+        PRINT "nothing."
+    end if
+    PRINT
+    return 0
+end function
+
+/*
+ * Handles GET: picks up one or more matching items present in the
+ * room, subject to the carry limit and a handful of item-specific
+ * special cases (the bird and its cage, the bottle's contents, and
+ * several items that can't be taken at all under certain conditions).
+ */
+function verbGet%()
+    global keywordFound%
+    global matchCount%
+    global itemRoom%
+    global currentRoom%
+    global bearTamedScored%
+    global bearFedState%
+    global dragonAlive%
+    global birdInCage%
+    global bottleContents%
+    global totalItems%
+    global itemNames$
+    global paddedCommand$
+    global commandLine$
+    if keywordFound%(47) <> 1 then
+        findMatchedItems()
+        if matchCount% = 0 then
+            PRINT "Get what?"
+            printDontUnderstand()
+            return 0
+        end if
+    end if
+    for itemCode% = 1 to totalItems%
+        if keywordFound%(47) <> 1 and keywordFound%(itemCode%) = 0 then continue
+        if itemRoom%(itemCode%) <> currentRoom% then
+            if keywordFound%(47) <> 1 then
+                paddedCommand$ = itemNames$(itemCode%)
+                PRINT paddedCommand$;" not here."
+            end if
+            continue
+        end if
+        matchCount% = 0
+        for itemIndex% = 1 to totalItems%
+            if itemRoom%(itemIndex%) = -1 then
+                matchCount% = matchCount%+1
+            end if
+        end for
+        if matchCount% >= 7 then
+            printMessage(54)
+            commandLine$=""
+            return 0
+        end if
+        if itemCode% = 24 or itemCode% = 30 or itemCode% > 31 then
+            printMessage(61)
+            return 0
+        elseif itemCode% = 12 and bearTamedScored% = 0 then
+            printMessage(58)
+            return 0
+        elseif itemCode% = 26 and bearFedState% <> 2 then
+            printMessage(61)
+            return 0
+        elseif itemCode% = 14 and dragonAlive% = 1 then
+            printMessage(59)
+            return 0
+        elseif itemCode% = 16 or itemCode% = 17 then
+            PRINT "Why not say 'fill'?"
+            return 0
+        elseif itemCode% = 22 and birdInCage% then
+            itemRoom%(31) = -1
+            PRINT "Bird and ";
+        elseif itemCode% = 31 then
+            if birdInCage% = 1 then
+                PRINT "Cage and ";
+                itemRoom%(22) = -1
+            elseif itemRoom%(22) <> -1 then
+                responseText$ = "cage"
+                PRINT "I see no ";responseText$;" here."
+                return 0
+            elseif itemRoom%(23) = -1 then
+                printMessage(37)
+                return 0
+            else
+                birdInCage% = 1
+            end if
+        elseif itemCode% = 21 and bottleContents% then
+            PRINT "Contents and the ";
+            itemRoom%(bottleContents%+15) = -1
+        end if
+        itemRoom%(itemCode%) = -1
+        paddedCommand$ = itemNames$(itemCode%)
+        PRINT paddedCommand$;":taken."
+    end for
+    return 0
+end function
+
+/*
+ * Handles DROP: drops one or more matching carried items, with the
+ * same item-specific special cases GET has to account for.
+ */
+function verbDrop%()
+    global keywordFound%
+    global matchCount%
+    global itemRoom%
+    global currentRoom%
+    global birdInCage%
+    global bottleContents%
+    global trollState%
+    global totalItems%
+    global itemNames$
+    if keywordFound%(47) <> 1 then
+        findMatchedItems()
+        if matchCount% = 0 then
+            PRINT "Drop what?"
+            printDontUnderstand()
+            return 0
+        end if
+    end if
+    for itemCode% = 1 to totalItems%
+        if keywordFound%(47) <> 1 then
+            if keywordFound%(itemCode%) <> 1 or itemRoom%(itemCode%) = 0 then continue
+        end if
+        if itemRoom%(itemCode%) <> -1 then
+            if keywordFound%(47) <> 1 then
+                responseText$ = itemNames$(itemCode%)
+                PRINT "You don't have the ";responseText$
+            end if
+            continue
+        end if
+        if itemCode% = 31 or (itemCode% = 22 and birdInCage% = 1) then
+            itemRoom%(31)=currentRoom%
+            itemRoom%(22)=currentRoom%
+            birdInCage%=1
+            if itemCode% = 31 then
+                PRINT "Cage and ";
+                PRINT "Bird and ";
+            end if
+        elseif itemCode% = 21 and bottleContents% <> 0 then
+            PRINT "Contents and ";
+            itemRoom%(15+bottleContents%)=currentRoom%
+        elseif itemCode% = 16 or itemCode% = 17 then
+            PRINT "Try saying 'empty'"
+            return 0
+        elseif itemCode% = 26 and trollState% = 1 and (currentRoom% = 60 or currentRoom% = 61) then
+            printMessage(28)
+            trollState%=0
+            itemRoom%(26)=currentRoom%
+            itemRoom%(32)=0
+            return 0
+        elseif itemCode% = 6 and itemRoom%(28) <> currentRoom% then
+            printMessage(43)
+            itemRoom%(6)=0
+            itemRoom%(29)=currentRoom%
+            return 0
+        elseif itemCode% = 6 then
+            printMessage(60)
+        end if
+        responseText$ = itemNames$(itemCode%)
+        PRINT responseText$;":dropped."
+        itemRoom%(itemCode%)=currentRoom%
+    end for
+    return 0
+end function
+
+/*
+ * Handles THROW: throws a carried item, with special handling for a
+ * treasure thrown to the troll and an axe thrown at the dwarf.
+ */
+function verbThrow%()
+    global matchCount%
+    global itemCode%
+    global itemRoom%
+    global responseText$
+    global commandLine$
+    global currentRoom%
+    global trollState%
+    global isDead%
+    findMatchedItems()
+    if matchCount% = 0 then
+        PRINT "Throw what?"
+        printDontUnderstand()
+        return 0
+    end if
+    if itemRoom%(itemCode%) <> -1 then
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    if itemCode% < 16 and itemRoom%(32) = currentRoom% then
+        printMessage(27)
+        itemRoom%(itemCode%) = 0
+        trollState% = 3
+        return 0
+    elseif itemCode% = 27 and itemRoom%(32) = currentRoom% then
+        printMessage(26)
+        itemRoom%(27) = currentRoom%
+        return 0
+    elseif itemCode% = 27 and itemRoom%(35) = currentRoom% then
+        if rnd(1) <= 0.5 then
+            printMessage(29)
+            checkDwarfAttack()
+        else
+            printMessage(30)
+            itemRoom%(35) = 0
+        end if
+    else
+        if itemRoom%(35) = currentRoom% then
+            checkDwarf()
+        end if
+        PRINT "Thrown."
+    end if
+    itemRoom%(itemCode%) = currentRoom%
+    if isDead% = 1 then
+        handleDeath()
+        return 1
+    end if
+    return 0
+end function
+
+/*
+ * Handles ATTACK (or KILL): mostly just prints a flavor message; the
+ * dragon is the one enemy actually killable this way (after a YES
+ * confirmation).
+ */
+function verbAttack%()
+    global itemCode%
+    global itemRoom%
+    global currentRoom%
+    global commandLine$
+    findMatchedItems()
+    if itemCode% = 33 and itemRoom%(itemCode%) = currentRoom% and currentRoom% = 82 then
+        printMessage(68)
+        commandLine$=""
+    elseif itemRoom%(32) = currentRoom% then
+    elseif itemCode% = 26 or itemCode% > 30 then
+        printMessage(70)
+    else
+        printMessage(71)
+    end if
+    return 0
+end function
+
+/*
+ * Handles FEED: feeds the bear, which only works with food, and only
+ * in the bear's own room.
+ */
+function verbFeed%()
+    global itemCode%
+    global itemRoom%
+    global currentRoom%
+    global commandLine$
+    global bearFedState%
+    global itemNames$
+    findMatchedItems()
+    if itemCode% = 35 then
+        printMessage(24)
+        return 0
+    end if
+    if itemRoom%(20) <> -1 then
+        responseText$ = "FOOD"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    if currentRoom% <> 69 then
+        PRINT "I can't feed it."
+        printMessage(23)
+        return 0
+    end if
+    if itemRoom%(20)=currentRoom% then
+        printMessage(60)
+        responseText$ = itemNames$(itemCode%)
+        PRINT responseText$;":dropped."
+        itemRoom%(itemCode%)=currentRoom%
+    else
+        bearFedState%=1
+        itemRoom%(20)=0
+        printMessage(6)
+    end if
+    return 0
+end function
+
+/*
+ * Handles WATER: pours water on the plant in the Giant Room, cycling
+ * it through its three growth stages.
+ */
+function verbWater%()
+    global itemRoom%
+    global responseText$
+    global commandLine$
+    global currentRoom%
+    global pirateState%
+    global bottleContents%
+    if itemRoom%(16) <> -1 then
+        responseText$ = "water"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    if currentRoom% <> 50 then
+        printMessage(2)
+        return 0
+    end if
+    if pirateState% = 0 then
+        printMessage(7)
+        pirateState% = 1
+    elseif pirateState% = 1 then
+        printMessage(8)
+        pirateState% = 2
+    else
+        printMessage(9)
+        pirateState% = 0
+    end if
+    itemRoom%(16)=0
+    bottleContents%=0
+    return 0
+end function
+
+/*
+ * Handles LOCK: locks the grate, if the player is carrying the keys.
+ */
+function verbLock%()
+    global currentRoom%
+    global itemRoom%
+    global grateOpen%
+    global responseText$
+    global commandLine$
+    if currentRoom%=10 or currentRoom%=11 then
+        if itemRoom%(19)=-1 then
+            grateOpen%=0
+            printMessage(10)
+        else
+            responseText$="keys"
+            PRINT "You don't have the ";responseText$
+            commandLine$=""
+            return 0
+        end if
+    else
+        printMessage(2)
+    end if
+    return 0
+end function
+
+/*
+ * Handles UNLOCK: unlocks the grate, or -- in the bear's room --
+ * tames a fed bear.
+ */
+function verbUnlock%()
+    global itemRoom%
+    global currentRoom%
+    global grateOpen%
+    global bearFedState%
+    global bearTamedScored%
+    global responseText$
+    global commandLine$
+    if itemRoom%(19) <> -1 then
+        responseText$="keys"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    end if
+    if currentRoom%=10 or currentRoom%=11 then
+        grateOpen%=1
+        printMessage(11)
+    elseif currentRoom%=69 then
+        if bearFedState%>0 then
+            if bearTamedScored%=0 then
+                bearTamedScored%=1
+                bearFedState%=2
+            end if
+            printMessage(13)
+        else
+            printMessage(12)
+        end if
+    else
+        printMessage(2)
+    end if
+    return 0
+end function
+
+/*
+ * Handles FREE (or RELEASE): frees the bird from its cage, letting it
+ * drive off the snake or die attacking the dragon.
+ */
+function verbFree%()
+    global keywordFound%
+    global itemRoom%
+    global currentRoom%
+    global birdInCage%
+    global snakeAlive%
+    global responseText$
+    global commandLine$
+    if keywordFound%(31) <> 1 or itemRoom%(31) <> -1 then
+        printMessage(2)
+        commandLine$=""
+        return 0
+    end if
+    itemRoom%(31) = currentRoom%
+    birdInCage%=0
+    PRINT "Freed."
+    if currentRoom% = 22 and snakeAlive% = 1 then
+        responseText$ = "snake"
+    elseif currentRoom% = 82 then
+        responseText$ = "dragon"
+    else
+        return 0
+    end if
+    PRINT "The little bird attacks the green ";responseText$;" and"
+    if currentRoom% = 82 then
+        PRINT "gets burned to a crisp"
+        itemRoom%(31)=0
+    else
+        PRINT "drives it off"
+        snakeAlive%=0
+        itemRoom%(34)=0
+    end if
+    return 0
+end function
+
+/*
+ * Handles WAVE: waves the black rod at the fissure, building or
+ * collapsing the crystal bridge.
+ */
+function verbWave%()
+    global keywordFound%
+    global itemRoom%
+    global responseText$
+    global commandLine$
+    global currentRoom%
+    global crystalBridgeBuilt%
+    if keywordFound%(23) <> 1 then
+        printMessage(2)
+    elseif itemRoom%(23) <> -1 then
+        responseText$="rod"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
+    elseif currentRoom%<>19 and currentRoom%<>20 then
+        printMessage(2)
+    elseif crystalBridgeBuilt%=0 then
+        printMessage(14)
+        crystalBridgeBuilt%=1
+    else
+        printMessage(15)
+        crystalBridgeBuilt%=0
+    end if
+    return 0
+end function
+
+/*
+ * Handles OPEN: opens the clam to reveal the pearl, or defers to
+ * verbUnlock%() when the grate is what's being opened.
+ */
+function verbOpen%()
+    global itemCode%
+    global itemRoom%
+    global currentRoom%
+    global responseText$
+    findMatchedItems()
+    if itemCode%=0 then
+        PRINT "Open ";
+        printDontUnderstand()
+        return 0
+    end if
+    if itemCode%=40 then return verbUnlock%()
+    if itemRoom%(itemCode%)<>currentRoom% then
+        PRINT "I see no ";responseText$;" here."
+        return 0
+    end if
+    if itemCode%<>24 then
+        PRINT "I don't know how to open a ";responseText$
+        return 0
+    end if
+    if itemRoom%(9)=-1 then
+        printMessage(16)
+        return 0
+    end if
+    if itemRoom%(itemCode%) = 0 then
+        printMessage(2)
+        return 0
+    end if
+    itemRoom%(7)=43
+    itemRoom%(24)=0
+    itemRoom%(30)=currentRoom%
+    printMessage(17)
+    return 0
+end function
+
+/*
+ * Handles CLOSE. An upstream bug in the original game (not introduced
+ * by this port) means the dispatcher never actually reaches this
+ * function's own logic below the initial return -- CLOSE has always
+ * silently done nothing, so that behavior is preserved here rather
+ * than "fixed."
+ */
+function verbClose%()
+    global itemCode%
+    return 0
+    findMatchedItems()
+    IF itemCode%=40 THEN return verbLock%()
+    printMessage(18)
+    return 0
+end function
+
+/*
+ * Handles OIL: oils the rusty iron door's hinges, using the bottle's
+ * oil.
+ */
+function verbOil%()
+    global keywordFound%
+    global itemRoom%
+    global currentRoom%
+    global ironDoorOiled%
+    global bottleContents%
+    global responseText$
+    if keywordFound%(17)=0 then
+        printMessage(2)
+    elseif itemRoom%(17)<>-1 then
+        responseText$="oil"
+        PRINT "I see no ";responseText$;" here."
+    elseif currentRoom%<>73 then
+        printMessage(2)
+    elseif ironDoorOiled%=1 then
+        printMessage(2)
+    else
+        ironDoorOiled%=1
+        itemRoom%(17)=0
+        bottleContents%=0
+        printMessage(19)
+    end if
+    return 0
+end function
+
+/*
+ * Handles EAT: eats the food, if the player is carrying it.
+ */
+function verbEat%()
+    global keywordFound%
+    global itemCode%
+    global itemRoom%
+    global bottleContents%
+    global commandLine$
+    if keywordFound%(20) <> 1 then
+        printMessage(20)
+        commandLine$=""
+        return 0
+    end if
+    itemCode%=20
+    if checkCarryingItem%()=0 then
+        commandLine$=""
+        return 0
+    end if
+    printMessage(73)
+    itemRoom%(20)=0
+    bottleContents%=0
+    return 0
+end function
+
+/*
+ * Handles DRINK: drinks the water, if the player is carrying it.
+ */
+function verbDrink%()
+    global keywordFound%
+    global itemCode%
+    global itemRoom%
+    global bottleContents%
+    global commandLine$
+    if keywordFound%(16) <> 1 then
+        printMessage(21)
+        commandLine$=""
+        return 0
+    end if
+    itemCode%=16
+    if checkCarryingItem%()=0 then
+        commandLine$=""
+        return 0
+    end if
+    printMessage(22)
+    itemRoom%(17)=0
+    bottleContents%=0
+    return 0
+end function
+
+/*
+ * Handles the magic phrase "FEE FIE FOE FOO": makes the golden eggs
+ * appear or disappear in the Giant Room.
+ */
+function verbFeeFieFoeFoo%()
+    global currentRoom%
+    global itemRoom%
+    global commandLine$
+    if currentRoom% <> 71 then
+        printMessage(2)
+        commandLine$=""
+    elseif itemRoom%(8) = currentRoom% then
+        printMessage(79)
+        itemRoom%(8)=0
+    else
+        itemRoom%(8)=currentRoom%
+        printMessage(81)
+    end if
+    return 0
+end function
+
+/*
+ * Handles SHORT: switches to short room descriptions from now on.
+ */
+function verbShort%()
+    global descriptionMode%
+    PRINT "Short descriptions"
+    descriptionMode%=0
+    return 0
+end function
+
+/*
+ * Handles LONG: switches to long room descriptions from now on.
+ */
+function verbLong%()
+    global descriptionMode%
+    PRINT "Long descriptions"
+    descriptionMode%=1
+    return 0
+end function
+
+/*
+ * Handles BRIEF: switches to long-description-once-then-short from
+ * now on.
+ */
+function verbBrief%()
+    global descriptionMode%
+    PRINT "OK, I'll only describe the room in detail the first time."
+    descriptionMode%=2
+    return 0
+end function
+
+/*
+ * Handles QUIT: optionally saves the game first, then ends it.
+ */
+function verbQuit%()
+    global scratchValue%
+    PRINT "Save game";
+    scratchValue% = askYesNo%()
+    IF scratchValue%=1 THEN return verbSaveGame%()
+    endGame()
+    return 0
+end function
+
+/*
+ * Handles SCORE: prints the player's current score.
+ */
+function verbScore%()
+    printScore()
+    return 0
+end function
+
+/*
+ * Handles SAVE: writes the full game state -- room, item locations,
+ * every flag and counter -- to a save file the player names.
+ */
+function verbSaveGame%()
+    global paddedCommand$
+    global totalRooms%
+    global totalItems%
+    global totalKeywords%
+    global currentRoom%
+    global previousRoom%
+    global grateOpen%
+    global bottleContents%
+    global snakeAlive%
+    global dragonAlive%
+    global ironDoorOiled%
+    global descriptionMode%
+    global trollState%
+    global bearFedState%
+    global crystalBridgeBuilt%
+    global pirateState%
+    global lampOn%
+    global bearTamedScored%
+    global dwarfGaveAxe%
+    global birdInCage%
+    global deathCount%
+    global dwarfHitChance
+    global itemRoom%
+    global roomVisited%
+    global gameLoaded%
+    global commandLine$
+    global keywordFound%
+    INPUT "What do you want to call the save file? ";paddedCommand$
+    try
+        OPEN paddedCommand$ FOR OUTPUT AS #5
+    catch err%, erl%
+        PRINT "File ";paddedCommand$;" not created"
+        commandLine$=""
+        return 0
+    end try
+    PRINT #5,totalRooms%;",";totalItems%;",";totalKeywords%;",";currentRoom%;",";previousRoom%;",";grateOpen%;",";bottleContents%;",";snakeAlive%;",";dragonAlive%;",";ironDoorOiled%;",";descriptionMode%;",";trollState%;",";bearFedState%;",";crystalBridgeBuilt%;",";pirateState%;",";lampOn%;",";bearTamedScored%;",";dwarfGaveAxe%;",";birdInCage%;",";deathCount%;",";dwarfHitChance
+    FOR recordIndex%=1 TO 99
+        PRINT #5,itemRoom%(recordIndex%);",";roomVisited%(recordIndex%)
+    end for
+    PRINT #5,roomVisited%(100)
+    CLOSE #5
+    PRINT "Game saved"
+    gameLoaded% = 0
+    if keywordFound%(143) = 1 then
+        endGame()
+    end if
+    commandLine$=""
+    return 0
+end function
+
+/*
+ * Handles LOAD: reads a previously saved game state back in, refusing
+ * to overwrite a game already in progress.
+ */
+function verbLoadOldGame%()
+    global paddedCommand$
+    global totalRooms%
+    global totalItems%
+    global totalKeywords%
+    global currentRoom%
+    global previousRoom%
+    global grateOpen%
+    global bottleContents%
+    global snakeAlive%
+    global dragonAlive%
+    global ironDoorOiled%
+    global descriptionMode%
+    global trollState%
+    global bearFedState%
+    global crystalBridgeBuilt%
+    global pirateState%
+    global lampOn%
+    global bearTamedScored%
+    global dwarfGaveAxe%
+    global birdInCage%
+    global deathCount%
+    global dwarfHitChance
+    global itemRoom%
+    global roomVisited%
+    global gameLoaded%
+    global commandLine$
+    if gameLoaded%<>0 then
+        PRINT "You already have a loaded game!"
+        commandLine$=""
+        return 0
+    end if
+    INPUT "Save file name? ";paddedCommand$
+    try
+        OPEN paddedCommand$ FOR INPUT AS #5
+    catch err%, erl%
+        PRINT "Unable to use file ";paddedCommand$
+        commandLine$=""
+        return 0
+    end try
+    INPUT #5,totalRooms%,totalItems%,totalKeywords%,currentRoom%,previousRoom%,grateOpen%,bottleContents%,snakeAlive%,dragonAlive%,ironDoorOiled%,descriptionMode%,trollState%,bearFedState%,crystalBridgeBuilt%,pirateState%,lampOn%,bearTamedScored%,dwarfGaveAxe%,birdInCage%,deathCount%,KCX$
+    dwarfHitChance = val(kcx$)
+    FOR recordIndex%=1 TO 99
+        INPUT #5,itemLocationValue%,roomVisitedValue%
+        itemRoom%(recordIndex%)=itemLocationValue%
+        roomVisited%(recordIndex%)=roomVisitedValue%
+    end for
+    INPUT #5,roomVisitedValue%
+    roomVisited%(100)=roomVisitedValue%
+    CLOSE #5
+    gameLoaded%=1
+    return 1
+end function
+
+/*
+ * Handles READ (or EXAMINE): reads the spelunker magazine, if the
+ * player is carrying it.
+ */
+function verbReadMagazine%()
+    global itemCode%
+    global itemRoom%
+    global commandLine$
+    findMatchedItems()
+    if itemCode% <> 25 then
+        printMessage(74)
+        commandLine$=""
+    elseif itemRoom%(25) <> -1 then
+        responseText$="magazine"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+    else
+        printMessage(303)
+    end if
+    return 0
+end function
+
+/*
+ * Handles YES: only meaningful in the dragon's room, where it
+ * confirms killing the dragon bare-handed.
+ */
+function verbYes%()
+    global currentRoom%
+    global itemRoom%
+    global dragonAlive%
+    if currentRoom% <> 82 then
+        printDontUnderstand()
+        return 0
+    end if
+    printMessage(69)
+    itemRoom%(33)=0
+    dragonAlive%=0
+    return 0
+end function
+
+/*
+ * Handles BUG: appends a player-submitted bug report, up to five
+ * lines, to ADVBUGS.TXT.
+ */
+function verbBug%()
+    global paddedCommand$
+    global scratchValue%
+    global commandLine$
+    paddedCommand$ = "ADVBUGS.TXT"
+    try
+        OPEN paddedCommand$ FOR APPEND AS #5
+    catch err%, erl%
+        PRINT "Unable to use file ";paddedCommand$
+        commandLine$=""
+        return 0
+    end try
+    INPUT "Your name: ";paddedCommand$
+    paddedCommand$=paddedCommand$+" "+DATE$
+    PRINT #5,paddedCommand$
+    PRINT "Enter your gripe in up to five lines (hit return to quit):"
+    scratchValue% = 1
+    while scratchValue% <= 5
+        PRINT scratchValue%;
+        INPUT paddedCommand$
+        if paddedCommand$="" then
+            exit
+        end if
+        PRINT #5,paddedCommand$
+        scratchValue% = scratchValue% + (1)
+    end while
+    PRINT "Message recorded. Thank you!"
+    CLOSE #5
+    commandLine$=""
+    return 0
+end function
+
+/*
+ * Dispatches to the right verb-handler function for a numeric verb
+ * code (1-40, one per recognized command word).
+ */
+function dispatchVerb%(verbCode%)
+    select case verbCode%
+        case 1
+            return verbPlugh%()
+        case 2
+            return verbXyzzy%()
+        case 3
+            return verbPlover%()
+        case 4
+            return verbCross%()
+        case 5
+            return verbClimb%()
+        case 6
+            return verbJump%()
+        case 7
+            return verbFill%()
+        case 8
+            return verbEmpty%()
+        case 9
+            return verbLook%()
+        case 10
+            return verbLight%()
+        case 11
+            return verbOff%()
+        case 12
+            return verbEnter%()
+        case 13
+            return verbLeave%()
+        case 14
+            return verbInventory%()
+        case 15
+            return verbGet%()
+        case 16
+            return verbDrop%()
+        case 17
+            return verbThrow%()
+        case 18
+            return verbAttack%()
+        case 19
+            return verbFeed%()
+        case 20
+            return verbWater%()
+        case 21
+            return verbLock%()
+        case 22
+            return verbUnlock%()
+        case 23
+            return verbFree%()
+        case 24
+            return verbWave%()
+        case 25
+            return verbOpen%()
+        case 26
+            return verbClose%()
+        case 27
+            return verbOil%()
+        case 28
+            return verbEat%()
+        case 29
+            return verbDrink%()
+        case 30
+            return verbFeeFieFoeFoo%()
+        case 31
+            return verbShort%()
+        case 32
+            return verbLong%()
+        case 33
+            return verbBrief%()
+        case 34
+            return verbQuit%()
+        case 35
+            return verbScore%()
+        case 36
+            return verbSaveGame%()
+        case 37
+            return verbLoadOldGame%()
+        case 38
+            return verbReadMagazine%()
+        case 39
+            return verbYes%()
+        case 40
+            return verbBug%()
+        case else
+            printDontUnderstand()
+            return 0
+    end select
+end function
+
+/*
+ * Reads a command line from the player if one isn't already pending,
+ * tokenizes it against the keyword table, and dispatches it: an item
+ * name with no verb prompts what to do with it, a recognized verb
+ * calls dispatchVerb%(), and a direction attempts a move. Falls
+ * through to printDontUnderstand() if nothing matched.
+ */
+function parseAndDispatchCommand%()
+    global commandLine$
+    global paddedCommand$
+    global responseText$
+    global selectedItemName$
+    global keywordFound%
+    global totalKeywords%
+    global itemCode%
+    global itemNames$
+    if len(commandLine$) = 0 then
+        INPUT ">";commandLine$
+        commandLine$=ucase$(commandLine$)
+        if commandLine$ = "" then
+            commandLine$=""
+            return 0
+        end if
+        PRINT
+        PRINT
+        commandLine$ = ucase$(commandLine$)
+        for scanIndex% = 1 to len(commandLine$)
+            charCode% = asc(mid$(commandLine$,scanIndex%,1))
+            if not ((charCode% > 64 and charCode% < 91) or (charCode% > 47 and charCode% < 58) or charCode% = 44) then
+                commandLine$ = mid$(commandLine$,1,scanIndex%-1)+" "+mid$(commandLine$,scanIndex%+1)
+            end if
+        end for
+        if mid$(commandLine$,len(commandLine$),1) <> "," then
+            commandLine$ = commandLine$+","
+        end if
+    end if
+    commaPos% = instr(commandLine$,",")
+    paddedCommand$ = ucase$(mid$(commandLine$,1,commaPos%-1))
+    commandLine$ = mid$(commandLine$,commaPos%+1)
+    paddedCommand$ = " "+paddedCommand$+" "
+    keywordTable:
+        data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
+        data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
+        data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
+        data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
+        data 16,"WATER",17,"OIL",18,"LAMP",18,"LANTERN",19,"KEYS",20,"FOOD",21,"BOTTLE"
+        data 22,"CAGE",23,"ROD",23,"WAND",24,"CLAM",25,"MAGAZINE",26,"BEAR"
+        data 27,"AXE",28,"VELVET",28,"PILLOW",29,"SHARDS",30,"OYSTER"
+        data 31,"BIRD",32,"TROLL",33,"DRAGON",34,"SNAKE",35,"DWARF"
+        data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
+        data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
+        data 46,"ROAD",47,"ALL",47,"EVERYTHING"
+        data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
+        data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
+        data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
+        data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
+        data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
+        data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
+        data 124,"GET",124,"CATCH",124,"TAKE",125,"DROP",125,"DUMP",126,"THROW",127,"ATTACK"
+        data 127,"KILL",128,"FEED",129,"WATER",130,"LOCK",131,"UNLOCK"
+        data 132,"FREE",132,"RELEASE",133,"WAVE",134,"OPEN",135,"CLOSE"
+        data 136,"OIL",137,"EAT",138,"DRINK",139,"FEE FIE FOE FOO"
+        data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
+        data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
+        data 148,"YES",148,"Y",149,"BUG",150,"*"
+    restore keywordTable
+    for i% = 1 to 200
+        keywordFound%(i%) = 0
+    end for
+    itemCode% = 0
+    keywordCode% = 0
+    while keywordCode% <= totalKeywords%
+        read keywordCode%,responseText$
+        responseText$ = " "+responseText$+" "
+        if instr(paddedCommand$,responseText$) <> 0 then
+            keywordFound%(keywordCode%) = 1
+        end if
+    end while
+    for scanIndex% = 36 to 46
+        if keywordFound%(scanIndex%) = 1 then
+            selectedItemName$ = findFirstNamedItem$()
+            askWhatToDoWithItem()
+            commandLine$=""
+            return 0
+        end if
+    end for
+    for scanIndex% = 110 to totalKeywords%
+        if keywordFound%(scanIndex%) = 1 then
+            return dispatchVerb%(scanIndex% - 109)
+        end if
+    end for
+    for directionIndex% = 1 to 10
+        if keywordFound%(directionIndex%+99) = 1 then
+            if attemptMove%(directionIndex%) then
+                checkPitsAndHandleDeathIfNeeded()
+                return 1
+            else
+                return 0
+            end if
+        end if
+    end for
+    for scanIndex% = 1 to 35
+        selectedItemName$ = itemNames$(scanIndex%)
+        if keywordFound%(scanIndex%) = 1 then
+            askWhatToDoWithItem()
+            commandLine$=""
+            return 0
+        end if
+    end for
+    printDontUnderstand()
+    return 0
+end function
+PRINT "Adventure 3.2 for PyBASIC"
+open "AMOVING" for INPUT as #4
+dim roomExits%(100,10)
+dim itemRoom%(99)
+dim roomVisited%(100)
+dim keywordFound%(200)
+dim itemPoints%(15)
+PRINT
+PRINT "Initializing.";
+currentRoom% = int(RND(1)*4)+1
+previousRoom% = currentRoom%
+grateOpen% = 0
+bottleContents% = 1
+snakeAlive% = 1
+dragonAlive% = 1
+ironDoorOiled% = 0
+trollState% = 1
+bearFedState% = 0
+crystalBridgeBuilt% = 0
+pirateState% = 0
+isDead% = 0
+lampOn% = 0
+bearTamedScored% = 0
+dwarfGaveAxe% = 0
+birdInCage% = 0
+descriptionMode% = 2
+totalRooms% = 100
+totalItems% = 35
+totalKeywords% = 149
+deathCount% = 0
+gameLoaded% = 0
+commandLine$=""
+dwarfHitChance = 1.02
+for roomIndex% = 1 to 99
+    itemRoom%(roomIndex%) = 0
+    roomVisited%(roomIndex%) = 0
+end for
+PRINT ".";
+roomVisited%(100) = 0
+messageIndex%(1) = -1
+messageIndex%(2)=-1
+for targetRoom% = 1 to 100
+    INPUT #4,field1%,field2%,field3%,field4%,field5%,field6%,field7%,field8%,field9%,field10%
+    roomExits%(targetRoom%,1)=field1%
+    roomExits%(targetRoom%,2)=field2%
+    roomExits%(targetRoom%,3)=field3%
+    roomExits%(targetRoom%,4)=field4%
+    roomExits%(targetRoom%,5)=field5%
+    roomExits%(targetRoom%,6)=field6%
+    roomExits%(targetRoom%,7)=field7%
+    roomExits%(targetRoom%,8)=field8%
+    roomExits%(targetRoom%,9)=field9%
+    roomExits%(targetRoom%,10)=field10%
+    PRINT ".";
+end for
+close #4
+loadRoomDescriptions()
+loadItemDescriptions()
+loadMessages()
+buildMessageIndex()
+loadItemNames()
+PRINT
+restore itemLocationData
+for targetRoom% = 1 to totalItems% step 5
+    read field1%,field2%,field3%,field4%,field5%
+    itemRoom%(targetRoom%)=field1%
+    itemRoom%(targetRoom%+1)=field2%
+    itemRoom%(targetRoom%+2)=field3%
+    itemRoom%(targetRoom%+3)=field4%
+    itemRoom%(targetRoom%+4)=field5%
+    PRINT ".";
+end for
+itemLocationData:
+    data 18,25,23,24,21
+    data 52,0,71,74,58
+    data 59,69,66,82,100
+    data 7,49,7,7,7
+    data 7,12,13,40,38
+    data 69,0,46,0,0
+    data 15,60,82,22,250
+for itemPointsIndex% = 1 to 15 step 5
+    read field1%,field2%,field3%,field4%,field5%
+    itemPoints%(itemPointsIndex%)=field1%
+    itemPoints%(itemPointsIndex%+1)=field2%
+    itemPoints%(itemPointsIndex%+2)=field3%
+    itemPoints%(itemPointsIndex%+3)=field4%
+    itemPoints%(itemPointsIndex%+4)=field5%
+    PRINT ".";
+end for
+data 1,2,2,2,2
+data 3,4,3,3,2
+data 5,3,2,3,3
+printMessage(301)
+scratchValue% = askYesNo%()
+if scratchValue% then printMessage(302)
+while true
+    if currentRoom% < 13 or currentRoom% = 58 or (lampOn% = 1 and (itemRoom%(18) = currentRoom% or itemRoom%(18) = -1)) then
+        select case descriptionMode%
+            case 0
+                shortDescription()
+            case 1
+                longDescription()
+            case else
+                describeRoomOnEntry()
+        end select
+        roomVisited%(currentRoom%) = 1
+        describeRoomContents()
+        if isDead% = 1 then
+            handleDeath()
+            continue
+        end if
+        situationDescriptions()
+    else
+        printMessage(45)
+    end if
+    while true
+        moved% = parseAndDispatchCommand%()
+        if moved% = 1 then exit
+        continue
+    end while
+end while
+skillTitles:
+    DATA "beginner","novice","experienced","advanced","expert"
+itemNames:
+    data "large gold nugget"
+    data "bars of silver"
+    data "precious jewelry"
+    data "many coins"
+    data "several diamonds"
+    data "fragile ming vase"
+    data "glistening pearl"
+    data "nest of golden eggs"
+    data "jewel-encrusted trident"
+    data "egg-sized emerald"
+    data "platinum pyramid"
+    data "golden chain"
+    data "rare spices"
+    data "persian rug"
+    data "treasure chest"
+    data "water"
+    data "oil"
+    data "brass lamp"
+    data "keys"
+    data "food"
+    data "bottle"
+    data "wicker cage"
+    data "3-foot black rod"
+    data "clam"
+    data "magazine"
+    data "bear"
+    data "axe"
+    data "velvet pillow"
+    data "shards of pottery"
+    data "oyster"
+    data "bird"
+    data "troll"
+    data "dragon"
+    data "snake"
+    data "dwarf"
+    data "rock"
+    data "stairs"
+    data "steps"
+    data "house"
+    data "grate"
+    data "stream"
+    data "room"
+    data "bridge"
+    data "pit"
+    data "volcano"
+    data "road"
+    data "everything"
+```
+
+</details>
+
+[← Stage 16: Real Scratch-Variable Names](adventure3000-stage16.md)

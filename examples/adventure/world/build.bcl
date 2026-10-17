@@ -28,7 +28,7 @@ procedure buildWorld(byref rooms%(?) as Room, byref things%(?) as Thing, byref p
     things%(5) = { name: "Throne", description: "A golden chair", location: ROOM_3 }
     things%(6) = { name: "Wombat", description: "A cuddly wombat [asleep]", location: ROOM_4 }
     things%(7) = { name: "Pot of jam", description: "A sticky jar", location: ROOM_4 }
-    things%(8) = { name: "A Nameless Horror", description: "\"   \"", location: ROOM_5 }
+    things%(8) = { name: "A Nameless Horror", description: "\" \ "", location: ROOM_5 }
     things%(9) = { name: "Lamp", description: "A lantern [providing light]", location: INVENTORY }
     player = { name: "You", description: "You look just like You!", room: ROOM_0 }
 end procedure

@@ -1,0 +1,15 @@
+program midAssignDynamicTarget
+
+dim values$(2)
+values$(0) = "abcdefgh"
+indexCalls% = 0
+
+function nextIndex%(byref indexCalls%)
+    indexCalls% = indexCalls% + 1
+    return indexCalls% - 1
+end function
+
+mid$(values$(nextIndex%(indexCalls%)), 2, 3) = "XY"
+print values$(0)
+print indexCalls%
+end

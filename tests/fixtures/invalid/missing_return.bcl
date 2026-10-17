@@ -1,0 +1,8 @@
+program p
+function f%(x%)
+if x% > 0 then
+return 1
+end if
+end function
+print f%(1)
+end

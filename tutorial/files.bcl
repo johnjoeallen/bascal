@@ -30,7 +30,7 @@ csvFile$ = "tutorial_scores.csv"
 /* Write three records */
 open csvFile$ for output as #1
 write #1, "Alice", 95, "pass"
-write #1, "Bob",   54, "fail"
+write #1, "Bob", 54, "fail"
 write #1, "Carol", 78, "pass"
 close #1
 

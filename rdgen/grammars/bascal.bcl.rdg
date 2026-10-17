@@ -1,0 +1,467 @@
+(* BASCAL (.bcl) starter grammar for rdgen.
+ *
+ * This is based on BASCAL grammar rev. 5. The source is intentionally kept
+ * in the EBNF-plus-constructor notation used during the design phase while
+ * rdgen's grammar frontend is being implemented. Confirmed bcc behavior and
+ * deliberate rdgen extensions are documented inline.
+ *
+ * Deliberate rdgen choice: && and || are ordinary expression operators here.
+ * Their contextual validity is a semantic validation pass, not a CFG rule.
+ *)
+
+grammar Bascal;
+
+start program;
+
+(* Unary "not" and "-" are Pratt-style prefix operators: each `binds_below`
+ * clause names the tightest level its operand may absorb, so `not a = b`
+ * still reads as `not (a = b)` and `-2 ^ 2` still reads as `-(2 ^ 2)`. *)
+precedence expr {
+    left "xor" => Binary(left: left, operator: operator, right: right);
+    left "or", "||" => Binary(left: left, operator: operator, right: right);
+    left "and", "&&" => Binary(left: left, operator: operator, right: right);
+    prefix "not" binds_below "=" => Unary(operator: operator, operand: operand);
+    left "=", "<>", "<", ">", "<=", ">=" => Binary(left: left, operator: operator, right: right);
+    left "+", "-" => Binary(left: left, operator: operator, right: right);
+    left "mod" => Binary(left: left, operator: operator, right: right);
+    left "\\" => Binary(left: left, operator: operator, right: right);
+    left "*", "/" => Binary(left: left, operator: operator, right: right);
+    prefix "-" binds_below "^" => Unary(operator: operator, operand: operand);
+    right "^" => Binary(left: left, operator: operator, right: right);
+}
+
+(* `expr` climbs the table above directly from `postfix_expr`; every other
+ * precedence layer that used to sit between them (xor/or/and/not/compare/
+ * add/mod/intdiv/mul/unary/pow) is now parser machinery the table replaces. *)
+output expr Expr;
+output postfix_expr Expr;
+output postfix_suffix Expr;
+output primary Expr;
+output ident_primary Expr;
+
+(* ----- Lexical terminals ----- *)
+
+lexical identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;
+lexical suffix           = "%" | "$" | "!" | "#" | "&" ;
+lexical integer_literal  = digit , { digit } ;
+lexical float_literal    = digit , { digit } , "." , digit , { digit } ;
+lexical hex_literal      = "&" , ( "H" | "h" ) , { hex_digit } ;
+lexical octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
+(* Match bcc's current lexer exactly: it has no string escape handling.
+ * The proposed backslash/doubled-quote extension belongs in a later grammar
+ * revision once the reference lexer adopts it. *)
+lexical string_literal   = "\"" , { any_char_except_quote } , "\"" ;
+lexical line_comment     = prefix: "'" , body: { any_char_except_newline }
+                         => ApostropheComment(prefix: prefix, body: body)
+                         | prefix: "//" , body: { any_char_except_newline }
+                         => SlashComment(prefix: prefix, body: body) ;
+lexical block_comment    = opening: "/*" , body: { any_char_except_block_comment_close } , closing: "*/"
+                         => BlockComment(opening: opening, body: body, closing: closing) ;
+
+(* ----- Program and declarations ----- *)
+
+program          = items: { file_item } => File(items: items) ;
+file_item        = declaration: program_decl => ProgramDeclaration(declaration: declaration)
+                 | declaration: library_decl => LibraryDeclaration(declaration: declaration)
+                 | declaration: shared_decl => SharedDeclaration(declaration: declaration)
+                 | declaration: require_decl => RequireDeclaration(declaration: declaration)
+                 | declaration: import_decl => ImportDeclaration(declaration: declaration)
+                 | subprogram: subprogram => Subprogram(subprogram: subprogram)
+                 | record: record_decl => Record(record: record)
+                 | statement: top_level_statement => Statement(statement: statement) ;
+
+program_decl     = "program" , name: identifier , shared: [ "shared" , identifier ]
+                   => ProgramDeclaration(name: name, shared: shared) ;
+library_decl     = "library" , name: identifier => LibraryDeclaration(name: name) ;
+shared_decl      = "shared" , name: identifier => SharedDeclaration(name: name) ;
+require_decl     = "require" , path: identifier => RequireDeclaration(path: path) ;
+import_decl      = "import" , path: identifier => ImportDeclaration(path: path) ;
+
+record_decl      = "record" , name: identifier ,
+                    combines: [ "combines" , combined_record_list ] ,
+                    members: { record_member } until { "end" } ,
+                    "end" , "record"
+                    => RecordDeclaration(name: name, combines: combines, members: members) ;
+combined_record_list = first: identifier , rest: { "," , identifier }
+                    => CombinedRecordList(first: first, rest: rest) ;
+record_member    = field: field_decl => Field(field: field)
+                 | method: inline_method => InlineMethod(method: method) ;
+field_decl       = name: identifier , ":" , field_type: field_type
+                   => FieldDeclaration(name: name, field_type: field_type) ;
+field_type       = "string" , capacity: [ "(" , integer_literal , ")" ] , alignment: [ string_align ]
+                   => StringType(capacity: capacity, alignment: alignment)
+                 | "int16" => Int16Type()
+                 | "int" => IntType()
+                 | "int32" => Int32Type()
+                 | "float32" => Float32Type()
+                 | "float64" => Float64Type()
+                 | record: identifier => RecordType(record: record) ;
+string_align     = "lpad" => LeftPad()
+                 | "left" => Left()
+                 | "rpad" => RightPad()
+                 | "right" => Right() ;
+
+subprogram       = function: function_decl => Function(function: function)
+                 | procedure: procedure_decl => Procedure(procedure: procedure)
+                 | method: fluent_method_decl => FluentMethod(method: method)
+                 | method: method_decl => Method(method: method) ;
+function_decl    = "function" , name: typed_ident , "(" , parameters: [ param_list ] , ")"
+                   , body: { statement } until { "end function" } , "end" , "function"
+                   => FunctionDeclaration(name: name, parameters: parameters, body: body) ;
+procedure_decl   = "procedure" , name: identifier , "(" , parameters: [ param_list ] , ")"
+                   , body: { statement } until { "end procedure" } , "end" , "procedure"
+                   => ProcedureDeclaration(name: name, parameters: parameters, body: body) ;
+fluent_method_decl = "fluent" , method: method_decl => FluentMethod(method: method) ;
+method_decl      = "method" , name: identifier , "[" , receiver: identifier , "]"
+                   , "(" , parameters: [ param_list ] , ")" , result: [ ":" , return_type ]
+                   , body: { statement } until { "end method" } , "end" , "method"
+                   => MethodDeclaration(name: name, receiver: receiver, parameters: parameters, result: result, body: body) ;
+inline_method    = "method" , name: identifier , "(" , parameters: [ param_list ] , ")"
+                   , result: [ ":" , return_type ] , body: { statement } until { "end method" }
+                   , "end" , "method"
+                   => InlineMethodDeclaration(name: name, parameters: parameters, result: result, body: body) ;
+return_type      = "integer" => Integer()
+                 | "long" => Long()
+                 | "single" => Single()
+                 | "double" => Double()
+                 | "string" => String()
+                 | value: suffix => Suffix(value: value) ;
+param_list       = first: param , rest: { "," , param }
+                   => ParameterList(first: first, rest: rest) ;
+(* The passing mode was previously matched but not bound to any field,
+ * silently discarding byref/byval instead of exposing it. *)
+param            = mode: [ passing_mode ] , name: typed_ident
+                   , axes: [ array_axes ] , default: [ "=" , expr ]
+                   , type_annotation: [ "as" , identifier ]
+                   => Parameter(mode: mode, name: name, axes: axes, default: default, type_annotation: type_annotation) ;
+passing_mode     = "byref" => ByRef()
+                 | "byval" => ByVal() ;
+array_axes       = "(" , first: axis , rest: { "," , axis } , ")"
+                   => ArrayAxes(first: first, rest: rest)
+                 | "(" , ")" => EmptyArrayAxes() ;
+axis             = "?" => InferredCapacity()
+                 | capacity: expr => ExpressionCapacity(capacity: capacity) ;
+typed_ident      = value: identifier => TypedIdentifier(value: value) ;
+
+(* ----- Statements ----- *)
+
+top_level_statement = statement: statement => Statement(statement: statement)
+                    | end: end_stmt => End(end: end) ;
+(* A colon chain is an ordinary statement list, not a right-nested
+ * continuation: "a=1 : b=2 : c=3" is Line(a=1, [b=2, c=3]), not
+ * Core(a=1, Some(Core(b=2, Some(Core(c=3, None))))). *)
+statement        = label: label_stmt => Label(label: label)
+                 | first: statement_core , rest: { ":" , statement_core }
+                   => Line(first: first, rest: rest) ;
+statement_core   = label: label_stmt => Label(label: label)
+                 | comment: comment_stmt => Comment(comment: comment)
+                 | dim: dim_stmt => Dim(dim: dim)
+                 | constant: const_stmt => Const(constant: constant)
+                 | print: print_stmt => Print(print: print)
+                 | lprint: lprint_stmt => Lprint(lprint: lprint)
+                 | global: global_decl => Global(global: global)
+                 | open: open_stmt => Open(open: open)
+                 | line_input: line_input_stmt => LineInput(line_input: line_input)
+                 | input: input_stmt => Input(input: input)
+                 | write: write_stmt => Write(write: write)
+                 | file_declaration: file_decl_stmt => FileDeclaration(file_declaration: file_declaration)
+                 | field: field_stmt => Field(field: field)
+                 | get: get_stmt => Get(get: get)
+                 | put: put_stmt => Put(put: put)
+                 | lset: lset_stmt => Lset(lset: lset)
+                 | rset: rset_stmt => Rset(rset: rset)
+                 | seek: seek_stmt => Seek(seek: seek)
+                 | kill: kill_stmt => Kill(kill: kill)
+                 | rename: name_stmt => Rename(rename: rename)
+                 | close: close_stmt => Close(close: close)
+                 | data: data_stmt => Data(data: data)
+                 | read: read_stmt => Read(read: read)
+                 | restore: restore_stmt => Restore(restore: restore)
+                 | locate: locate_stmt => Locate(locate: locate)
+                 | color: color_stmt => Color(color: color)
+                 | swap: swap_stmt => Swap(swap: swap)
+                 | stop: stop_stmt => Stop(stop: stop)
+                 | cls: cls_stmt => Cls(cls: cls)
+                 | beep: beep_stmt => Beep(beep: beep)
+                 | system: system_stmt => System(system: system)
+                 | clear: clear_stmt => Clear(clear: clear)
+                 | randomize: randomize_stmt => Randomize(randomize: randomize)
+                 | poke: poke_stmt => Poke(poke: poke)
+                 | out: out_stmt => Out(out: out)
+                 | width: width_stmt => Width(width: width)
+                 | erase: erase_stmt => Erase(erase: erase)
+                 | if_statement: if_stmt => If(if_statement: if_statement)
+                 | for_statement: for_stmt => For(for_statement: for_statement)
+                 | while_statement: while_stmt => While(while_statement: while_statement)
+                 | do_statement: do_stmt => Do(do_statement: do_statement)
+                 | select_case: select_case_stmt => SelectCase(select_case: select_case)
+                 | return_statement: return_stmt => Return(return_statement: return_statement)
+                 | exit: exit_stmt => Exit(exit: exit)
+                 | continue_statement: continue_stmt => Continue(continue_statement: continue_statement)
+                 | goto: goto_stmt => Goto(goto: goto)
+                 | gosub: gosub_stmt => Gosub(gosub: gosub)
+                 | on_error: on_error_goto_stmt => OnErrorGoto(on_error: on_error)
+                 | on_branch: on_branch_stmt => OnBranch(on_branch: on_branch)
+                 | resume: resume_stmt => Resume(resume: resume)
+                 | error: error_stmt => Error(error: error)
+                 | throw: throw_stmt => Throw(throw: throw)
+                 | option_base: option_base_stmt => OptionBase(option_base: option_base)
+                 | try_statement: try_stmt => Try(try_statement: try_statement)
+                 | end: end_stmt => End(end: end)
+                 (* assignment_or_expr_stmt remains the final fallback so
+                  * keyword-led statements are not consumed as bare calls. *)
+                 | statement: assignment_or_expr_stmt => AssignmentOrExpression(statement: statement) ;
+label_stmt       = name: identifier , ":" => Label(name: name) ;
+comment_stmt     = raw: line_comment => Raw(comment: raw)
+                 | block: block_comment => BlockComment(comment: block) ;
+global_decl      = "global" , name: identifier => GlobalDeclaration(name: name) ;
+dim_stmt         = ( "dim" | "declare" ) , first: dim_item , rest: { "," , dim_item }
+                   => Dim(first: first, rest: rest) ;
+dim_item         = name: typed_ident , axes: [ array_axes ] , type_annotation: [ "as" , identifier ]
+                   => DimItem(name: name, axes: axes, type_annotation: type_annotation) ;
+const_stmt       = "const" , name: identifier , "=" , value: expr => Const(name: name, value: value) ;
+print_stmt       = "print" , destination: print_destination ,
+                    tokens: { print_token } until { "\n", "else" }
+                    => Print(destination: destination, tokens: tokens) ;
+print_destination = "#" , channel: expr , "," , using: [ "using" , expr , ";" ]
+                    => Channel(channel: channel, using: using)
+                 | "using" , format: expr , ";" => Using(format: format)
+                 | ε => Standard() ;
+lprint_stmt      = "lprint" , using: [ "using" , expr , ";" ] ,
+                    tokens: { print_token } until { "\n" }
+                    => Lprint(using: using, tokens: tokens) ;
+print_token      = "," => Comma()
+                 | ";" => Semicolon()
+                 | value: expr => Expression(value: value) ;
+file_decl_stmt   = "file" , name: identifier , record_type: [ "as" , identifier ] , "=" ,
+                    "open" , "(" , path: expr , ")" , mode: [ "for" , file_mode ]
+                    => FileDeclaration(name: name, record_type: record_type, path: path, mode: mode) ;
+file_mode         = "input" => Input()
+                 | "output" => Output()
+                 | "append" => Append() ;
+field_stmt       = "field" , "#" , channel: expr , "," , first: field_binding ,
+                    rest: { "," , field_binding }
+                    => Field(channel: channel, first: first, rest: rest) ;
+field_binding    = length: expr , "as" , name: identifier
+                    => Binding(length: length, name: name) ;
+get_stmt         = "get" , "#" , channel: expr , position: [ "," , [ expr ] , [ "," , expr ] ]
+                    => Get(channel: channel, position: position) ;
+put_stmt         = "put" , "#" , channel: expr , position: [ "," , [ expr ] , [ "," , expr ] ]
+                    => Put(channel: channel, position: position) ;
+lset_stmt        = "lset" , target: identifier , "=" , value: expr
+                   => Lset(target: target, value: value) ;
+rset_stmt        = "rset" , target: identifier , "=" , value: expr
+                   => Rset(target: target, value: value) ;
+open_stmt        = "open" , path: expr , "for" , mode: open_mode ,
+                    "as" , "#" , channel: expr , length: [ "len" , "=" , expr ]
+                    => Open(path: path, mode: mode, channel: channel, length: length) ;
+open_mode         = "input" => Input()
+                 | "output" => Output()
+                 | "append" => Append()
+                 | "random" => Random()
+                 | "binary" => Binary() ;
+line_input_stmt  = "line" , "input" , "#" , channel: expr , "," , target: expr
+                    => LineInput(channel: channel, target: target) ;
+input_stmt       = "input" , "#" , channel: expr , "," , first: expr , rest: { "," , expr }
+                    => ChannelInput(channel: channel, first: first, rest: rest)
+                 | "input" , prompt: [ string_literal , ( ";" | "," ) ] ,
+                    first: expr , rest: { "," , expr }
+                    => ConsoleInput(prompt: prompt, first: first, rest: rest) ;
+write_stmt       = "write" , "#" , channel: expr , values: [ "," , expr , { "," , expr } ]
+                    => Write(channel: channel, values: values) ;
+seek_stmt        = "seek" , "#" , channel: expr , "," , position: expr
+                    => Seek(channel: channel, position: position) ;
+kill_stmt        = "kill" , path: expr => Kill(path: path) ;
+name_stmt        = "name" , source: expr , "as" , destination: expr
+                   => Rename(source: source, destination: destination) ;
+close_stmt       = "close" , "#" , channel: expr => Close(channel: channel) ;
+data_stmt        = "data" , first: expr , rest: { "," , expr } => Data(first: first, rest: rest) ;
+read_stmt        = "read" , first: expr , rest: { "," , expr } => Read(first: first, rest: rest) ;
+restore_stmt     = "restore" , target: [ same_line identifier ] => Restore(target: target) ;
+locate_stmt      = "locate" , row: expr , "," , column: expr
+                   => Locate(row: row, column: column) ;
+color_stmt       = "color" , foreground: expr , background: [ "," , expr ]
+                   => Color(foreground: foreground, background: background) ;
+swap_stmt        = "swap" , left: expr , "," , right: expr => Swap(left: left, right: right) ;
+stop_stmt        = "stop" => Stop() ;
+cls_stmt         = "cls" => Cls() ;
+beep_stmt        = "beep" => Beep() ;
+system_stmt      = "system" => System() ;
+clear_stmt       = "clear" => Clear() ;
+randomize_stmt   = "randomize" , seed: [ same_line expr ] => Randomize(seed: seed) ;
+poke_stmt        = "poke" , address: expr , "," , value: expr => Poke(address: address, value: value) ;
+out_stmt         = "out" , port: expr , "," , value: expr => Out(port: port, value: value) ;
+width_stmt       = "width" , channel: [ "#" , expr , "," ] , value: expr
+                   => Width(channel: channel, value: value) ;
+erase_stmt       = "erase" , first: identifier , rest: { "," , identifier }
+                   => Erase(first: first, rest: rest) ;
+return_stmt      = "return" , value: [ same_line expr ] => Return(value: value) ;
+exit_stmt        = "exit" => Exit() ;
+continue_stmt    = "continue" => Continue() ;
+goto_stmt        = "goto" , target: identifier => Goto(target: target) ;
+gosub_stmt       = "gosub" , target: identifier => Gosub(target: target) ;
+on_error_goto_stmt = "on" , "error" , "goto" , target: error_target
+                   => OnErrorGoto(target: target) ;
+error_target     = label: identifier => Label(label: label)
+                 | "0" => Disable() ;
+on_branch_stmt   = "on" , selector: expr , branch: branch_kind , first: identifier ,
+                    rest: { "," , identifier }
+                    => OnBranch(selector: selector, branch: branch, first: first, rest: rest) ;
+branch_kind      = "goto" => Goto()
+                 | "gosub" => Gosub() ;
+resume_stmt      = "resume" , target: [ same_line resume_target ] => Resume(target: target) ;
+resume_target    = "next" => Next()
+                 | label: identifier => Label(label: label) ;
+error_stmt       = "error" , value: expr => Error(value: value) ;
+throw_stmt       = "throw" , value: [ same_line expr ] => Throw(value: value) ;
+option_base_stmt = "option" , "base" , value: expr => OptionBase(value: value) ;
+end_stmt         = "end" => End() ;
+
+if_stmt          = "if" , condition: expr , "then" , tail: if_tail
+                   => If(condition: condition, tail: tail) ;
+(* A comment after `then` still ends the physical line, so it selects the
+ * block form; it is trivia here and has no semantic node of its own. *)
+if_tail          = comment: [ same_line line_comment ] , newline , tail: block_if_tail
+                   => Block(comment: comment, tail: tail)
+                 | tail: ( same_line single_line_if_tail ) => SingleLine(tail: tail) ;
+block_if_tail    = then_body: { statement } until { "elseif", "else", "end if" } ,
+                    continuation: if_block_continuation
+                    => BlockIf(then_body: then_body, continuation: continuation) ;
+if_block_continuation = "elseif" , condition: expr , "then" , tail: block_if_tail
+                    => ElseIf(condition: condition, tail: tail)
+                 | else_body: [ "else" , { statement } until { "end if" } ] , "end" , "if"
+                    => End(else_body: else_body) ;
+single_line_if_tail = first: ( same_line statement ) , rest: { ( same_line statement ) } until { "else" }
+                     , else_clause: [ "else" , ( same_line statement ) , { ( same_line statement ) } ]
+                     => SingleLineIf(first: first, rest: rest, else_clause: else_clause) ;
+for_stmt         = "for" , variable: typed_ident , "=" , start: expr , bounds: for_bounds ,
+                    body: { statement } until { "end" } , "end" , qualifier: [ same_line "for" ]
+                    => For(variable: variable, start: start, bounds: bounds, body: body, qualifier: qualifier) ;
+(* `downto`'s step is implied, not written, so it is a constant field
+ * rather than something parsed: -1 has no source token of its own, unlike
+ * `to`'s optional `step` expression. *)
+for_bounds       = "to" , limit: expr , step: [ "step" , expr ]
+                    => To(limit: limit, step: step)
+                 | "downto" , limit: expr => Downto(limit: limit, step: -1) ;
+while_stmt       = "while" , condition: expr , body: { statement } until { "wend", "end" }
+                   , terminator: while_terminator
+                   => While(condition: condition, body: body, terminator: terminator) ;
+while_terminator = "wend" => Wend()
+                 | "end" , qualifier: [ same_line "while" ] => End(qualifier: qualifier) ;
+do_stmt          = "do" , pre_condition: [ same_line do_condition ] , body: { statement } until { "loop", "end" }
+                   , terminator: do_terminator
+                   => Do(pre_condition: pre_condition, body: body, terminator: terminator) ;
+do_terminator    = "loop" , post_condition: [ same_line do_condition ]
+                    => Loop(post_condition: post_condition)
+                 | "end" , qualifier: [ same_line "do" ] => End(qualifier: qualifier) ;
+do_condition     = kind: do_condition_kind , value: expr => Condition(kind: kind, value: value) ;
+do_condition_kind = "while" => While()
+                  | "until" => Until() ;
+select_case_stmt = "select" , "case" , selector: expr ,
+                    cases: { case_clause } until { "end select" } ,
+                    "end" , "select"
+                    => SelectCase(selector: selector, cases: cases) ;
+case_clause      = "case" , "else" , body: { statement } until { "end select" }
+                    => Else(body: body)
+                 | "case" , values: case_values , body: { statement } until { "case", "end select" }
+                    => Case(values: values, body: body) ;
+case_values      = first: case_value , rest: { "," , case_value }
+                    => CaseValues(first: first, rest: rest) ;
+case_value       = "is" , operator: compare_op , value: expr
+                    => Comparison(operator: operator, value: value)
+                 | first: expr , range_end: [ "to" , expr ]
+                    => ValueOrRange(first: first, range_end: range_end) ;
+try_stmt         = "try" , body: { statement } until { "catch", "finally", "end try" } ,
+                    catch_clause: [ catch_clause ] , finally_clause: [ "finally" , { statement } until { "end try" } ] ,
+                    "end" , "try"
+                    => Try(body: body, catch_clause: catch_clause, finally_clause: finally_clause) ;
+catch_clause     = "catch" , error: identifier , filters: [ "(" , expr , { "," , expr } , ")" ] ,
+                    "," , line: identifier , source: [ "," , identifier ] ,
+                    body: { statement } until { "finally", "end try" }
+                    => Catch(error: error, filters: filters, line: line, source: source, body: body) ;
+(* `let` is optional BASCOM-compatibility noise with no semantic weight of
+ * its own, so it is matched and discarded rather than threaded through the
+ * AST as a field every consumer would have to ignore. *)
+assignment_or_expr_stmt = [ "let" ] , assignment: mid_assign
+                           => MidAssignment(assignment: assignment)
+                        | [ "let" ] , target: assign_target , operator: assignment_op , value: expr
+                           => Assignment(target: target, operator: operator, value: value)
+                        | [ "let" ] , value: expr
+                           => Expression(value: value) ;
+assign_target       = value: postfix_expr => Target(value: value) ;
+(* Retained as the plain matched token (not a tagged Assign/AddAssign/...
+ * enum) so a later pass can distinguish "=" from "+=" etc. by spelling
+ * without a name-per-operator zoo, matching how Binary/Unary already
+ * retain their operator token directly. Compound assignment is deliberately
+ * left as this marker rather than eagerly expanded to an ordinary
+ * assignment plus a binary expression: doing that safely requires knowing
+ * the target has no side effects to duplicate, which is semantic
+ * knowledge the grammar does not have. *)
+lexical assignment_op = "=" | "+=" | "-=" | "*=" | "/=" ;
+mid_assign          = "mid$" , "(" , target: expr , "," , start: expr
+                      , length: [ "," , expr ] , ")" , "=" , value: expr
+                      => MidAssign(target: target, start: start, length: length, value: value) ;
+
+(* ----- Expressions -----
+ * Precedence is represented explicitly in the `precedence expr` table above
+ * rather than inferred by a backend or encoded as a rule ladder. `expr`
+ * climbs that table directly from `postfix_expr`; `compare_op` survives on
+ * its own because `case_value` below also spells `is <compare_op> value`.
+ *)
+
+expr             = value: climb postfix_expr => Identity(value: value) ;
+compare_op       = "<>" => NotEqual()
+                 | "<=" => LessOrEqual()
+                 | ">=" => GreaterOrEqual()
+                 | "=" => Equal()
+                 | "<" => Less()
+                 | ">" => Greater() ;
+(* postfix_suffix's `base` field is filled in by the fold below, not by any
+ * of its own elements: `a.b.c()` nests as Member(Member(a, b), c), rather
+ * than staying the flat Postfix(a, [b, c]) list a plain repetition would
+ * produce. *)
+postfix_expr     = value: fold(primary, postfix_suffix) => Identity(value: value) ;
+postfix_suffix   = "." , member: identifier , arguments: [ "(" , [ arg_list ] , ")" ]
+                   => Member(base: base, member: member, arguments: arguments) ;
+arg_list         = first: expr , rest: { "," , expr }
+                   => Arguments(first: first, rest: rest) ;
+(* Literal, name, call, and index alternatives forward the shared Expr
+ * output directly (retaining full spelling and span through the lexical
+ * token they wrap) instead of nesting behind a provisional wrapper. Hex and
+ * octal keep their own variant (rather than folding into IntegerLiteral)
+ * so the radix is a tag, not something a later stage re-derives from
+ * spelling; both still carry their exact source text. Parens are pure
+ * grouping and are discarded rather than kept as a node. *)
+primary          = value: float_literal => FloatLiteral(value: value)
+                 | value: integer_literal => IntegerLiteral(value: value)
+                 | value: hex_literal => HexLiteral(value: value)
+                 | value: octal_literal => OctalLiteral(value: value)
+                 | value: string_literal => StringLiteral(value: value)
+                 (* Both backends reject two alternatives of the same rule
+                  * sharing one constructor name (only precedence *levels*
+                  * may merge that way), so true/false keep distinct
+                  * variants rather than a single shared Boolean node. *)
+                 | value: "true" => True(value: value)
+                 | value: "false" => False(value: value)
+                 | value: ident_primary => Identity(value: value)
+                 (* Not folded via Identity: the C backend (unlike Rust) does
+                  * not yet special-case Identity forwarding, and a rule may
+                  * only use it once without colliding on the reserved
+                  * variant name. Parens still carry no span/data beyond the
+                  * inner expr once a later pass can drop this wrapper. *)
+                 | "(" , value: expr , ")" => Parenthesized(value: value)
+                 | "{" , fields: record_lit_fields , "}" => RecordLiteral(fields: fields)
+                 | fields: ( "?" , "{" , record_lit_fields , "}" ) => PartialRecordLiteral(fields: fields) ;
+ident_primary    = name: identifier , "(" , arguments: [ arg_list ] , ")"
+                   => Call(name: name, arguments: arguments)
+                 | name: identifier , "[" , index: expr , "]"
+                   => Index(name: name, index: index)
+                 | name: identifier => Name(name: name) ;
+record_lit_fields = fields: [ field_init , { "," , field_init } ]
+                    => RecordFields(fields: fields) ;
+field_init       = name: identifier , ":" , value: expr
+                   => Field(name: name, value: value) ;
+
+(* Constructor annotations and recovery declarations are supported by the DSL.
+ * This grammar is being converted from provisional AltN variants to named
+ * BASCAL AST nodes incrementally, beginning with preserved comment payloads. *)

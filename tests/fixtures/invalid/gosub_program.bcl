@@ -1,0 +1,6 @@
+program p
+gosub work
+end
+work:
+print 1
+return

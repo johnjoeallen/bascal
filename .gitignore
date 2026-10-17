@@ -16,6 +16,10 @@ target
 # BASCAL temporary compiled binaries
 /tmp/
 
+# Local parser/code analysis output and compiled object files.
+graphify-out/
+*.o
+
 # Generated BASIC output from test runs
 /output/
 

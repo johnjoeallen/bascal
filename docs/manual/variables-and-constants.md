@@ -27,7 +27,7 @@ Variables do not require pre-declaration; they come into existence on first assi
 
 ### DIM
 
-Declares an array or a simple variable. `declare` is an interchangeable synonym for `dim` — they parse to exactly the same statement and generate identical output. A reasonable convention: `declare` for a plain scalar (it reads as "declare this variable"), `dim` for an array (it keeps BASIC's own "dimension this array" sense) — but nothing enforces the split, and both spellings freely mix within one program.
+Declares an array or a simple variable. `declare` is an interchangeable synonym for `dim` — they parse to exactly the same statement and generate identical output. A reasonable convention: `declare` for a plain scalar (it reads as "declare this variable"), `dim` for an array (it keeps BASIC's own "dimension this array" sense) — but nothing enforces the split, and both keywords freely mix within one program.
 
 ```bascal
 declare playerName$

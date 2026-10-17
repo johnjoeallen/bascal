@@ -15,7 +15,6 @@
     putstatic JvmTryFilter/g2 I
     ldc ""
     putstatic JvmTryFilter/g3 Ljava/lang/String;
-
 L_try_0_start:
     new java/lang/RuntimeException
     dup
@@ -70,7 +69,6 @@ L_try_0_finish:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "finally"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     return
     .catch java/lang/RuntimeException from L_try_0_start to L_try_0_end using L_try_0_catch
 .end method

@@ -60,7 +60,7 @@ int main(void) {
     // "(checking element)" in the output below: it does NOT print here, proving
     // isPositive%() was never called for an out-of-range ptr%.
     printf("Short way (&&), ptr%% = -1:\n");
-    if (((-(bv_i_ptr >= 0)) && (-(bf_i_ispositive(bv_i_scores[(bv_i_ptr)]) > 0)))) {
+    if ((-(((-(bv_i_ptr >= 0))) != 0 && ((-(bf_i_ispositive(bv_i_scores[(bv_i_ptr)]) > 0))) != 0))) {
         printf("  safe to read, value is positive\n");
     } else {
         printf("  ptr%% is out of range or value is not positive\n");
@@ -70,7 +70,7 @@ int main(void) {
     // "(checking element)" DOES print, since ptr% >= 0 no longer stops it early.
     printf("Short way (&&), ptr%% = 2:\n");
     bv_i_ptr = 2;
-    if (((-(bv_i_ptr >= 0)) && (-(bf_i_ispositive(bv_i_scores[(bv_i_ptr)]) > 0)))) {
+    if ((-(((-(bv_i_ptr >= 0))) != 0 && ((-(bf_i_ispositive(bv_i_scores[(bv_i_ptr)]) > 0))) != 0))) {
         printf("  safe to read, value is positive\n");
     } else {
         printf("  ptr%% is out of range or value is not positive\n");
@@ -104,7 +104,7 @@ int main(void) {
     bv_i_attempts = 0;
     bv_i_succeeded = 0;
     while (1) {
-        if (((-(bv_i_succeeded != 0)) || (-(bv_i_attempts >= bv_i_maxattempts)))) break;
+        if ((-(((-(bv_i_succeeded != 0))) != 0 || ((-(bv_i_attempts >= bv_i_maxattempts))) != 0))) break;
         bv_i_attempts = (bv_i_attempts + 1);
         printf("  attempt %d\n", bv_i_attempts);
         if ((-(bv_i_attempts == 2))) {

@@ -1,37 +1,689 @@
 pub mod ast;
+mod c89_hoist;
+mod c_dialect;
 pub mod codegen;
 mod codegen_basic;
 mod codegen_c;
 mod codegen_jvm;
 pub mod diagnostics;
+pub mod format;
 pub mod lexer;
 mod lower;
 pub mod parser;
 pub mod records;
 pub mod resolver;
 mod scalar_builtins;
+pub mod semantic_ir;
+
+/// Source-span-aware semantic AST generated from `bascal.bcl.rdg` at build
+/// time.  It remains parallel to the legacy frontend until the pipeline can
+/// consume its typed IR directly.
+pub mod rdgen_frontend;
+pub mod record_transpile;
 
 mod driver;
 
+#[cfg(test)]
+pub(crate) use driver::parse_source;
 #[doc(inline)]
 pub use driver::{
-    check_file, compile_file, compile_source, default_output_path, CompileOptions, Target,
+    CompileOptions, Target, check_file, compile_file, compile_source, default_output_path,
 };
-pub(crate) use driver::{parse_source, required_symbol_to_path, stdlib_search_roots};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::codegen::CodeGenerator;
     use crate::diagnostics::Diagnostic;
     use crate::driver::*;
     use std::fs;
     use std::path::Path;
 
+    /// Keep the ordinary driver path and its AST-only compatibility path in
+    /// lockstep while backend facts migrate to generated semantic IR.
+    #[test]
+    fn backend_output_matches_legacy_compatibility_for_semantic_fixtures() {
+        fn compile(source: &str, semantic: bool, target: Target) -> String {
+            compile_with_semantic_source(source, source, semantic, target)
+        }
+
+        fn compile_with_semantic_source(
+            ast_source: &str,
+            semantic_source: &str,
+            semantic: bool,
+            target: Target,
+        ) -> String {
+            let parsed = parse_source("differential.bcl".to_string(), ast_source)
+                .expect("fixture parses with the legacy frontend");
+            let lower::Lowered {
+                program,
+                synthesized_buffer_names,
+                lowered_record_files,
+            } = lower::lower(parsed).expect("fixture lowers");
+            let resolved = if semantic {
+                let mut module =
+                    semantic_ir::parse_and_adapt_named("differential.bcl", semantic_source).ok();
+                if let Some(module) = module.as_mut() {
+                    module.lowered_record_files = lowered_record_files;
+                }
+                resolver::resolve_with_semantic(program, module)
+            } else {
+                resolver::resolve(program)
+            }
+            .expect("fixture resolves");
+            match target {
+                Target::Basic => CodeGenerator::new()
+                    .with_synthesized_buffer_names(synthesized_buffer_names)
+                    .generate(&resolved)
+                    .expect("fixture transpiles"),
+                Target::C => {
+                    codegen_c::generate(&resolved, Target::C)
+                        .expect("fixture transpiles to C")
+                        .app
+                }
+                Target::Jvm => codegen_jvm::generate(&resolved).expect("fixture transpiles to JVM"),
+                Target::C64 => {
+                    codegen_c::generate(&resolved, Target::C64)
+                        .expect("fixture transpiles to C64")
+                        .app
+                }
+                Target::Fbc => unreachable!("fixture targets are selected above"),
+            }
+        }
+
+        let fixtures = [
+            "dim value%\nvalue% = 7\nprint value%\nend\n",
+            "function twice%(value%)\nreturn value% * 2\nend function\nresult% = twice%(3)\nprint result%\nend\n",
+            "const limit = 4\ndim values%(4)\nfor index% = 0 to limit\nvalues%(index%) = index%\nend for\nprint values%(3)\nend\n",
+            "const limit = 4\ndim values%(4)\nfor index% = 0 to limit\nvalues%(index%) = index%\nend for\nprint values%(3)\nend\n",
+            "dim choice$\nchoice$ = \"typed\"\nselect case choice$\ncase \"typed\"\nprint \"match\"\ncase else\nprint \"other\"\nend select\nend\n",
+        ];
+        for source in fixtures {
+            for target in [Target::Basic, Target::C, Target::Jvm] {
+                assert_eq!(
+                    compile(source, true, target),
+                    compile(source, false, target),
+                    "target: {target:?}, fixture:\n{source}"
+                );
+            }
+        }
+        let record_file_statements = "open \"records.dat\" for random as #1 len = 4\nfield #1, 4 as value$\nlset value$ = \"left\"\nrset value$ = \"right\"\nput #1, 1\nget #1, 2\nclose #1\nend\n";
+        for target in [Target::Basic] {
+            assert_eq!(
+                compile(record_file_statements, true, target),
+                compile(record_file_statements, false, target),
+                "target: {target:?}, record file fixture:\n{record_file_statements}"
+            );
+        }
+        let semantic_c = compile(record_file_statements, true, Target::C);
+        let compatibility_c = compile(record_file_statements, false, Target::C);
+        fn c_main(generated: &str) -> &str {
+            generated
+                .split("int main(void) {")
+                .nth(1)
+                .expect("C main function")
+                .split("\n}\n\nstatic ")
+                .next()
+                .expect("C main function terminator")
+        }
+        assert_eq!(
+            c_main(&semantic_c),
+            c_main(&compatibility_c),
+            "C record file statement body:\n{record_file_statements}"
+        );
+        let ast_callable_calls = "procedure worker(value%, message$, byref flag%, fallback% = 9)\nprint \"worker\"\nend procedure\nprocedure caller()\nflag%=0\nprint \"stale\"\nend procedure\ncaller()\nend\n";
+        let semantic_callable_calls = "procedure worker(value%, message$, byref flag%, fallback% = 9)\nprint \"worker\"\nend procedure\nprocedure caller()\nflag%=0\nworker(7, \"typed\", flag%)\nend procedure\ncaller()\nend\n";
+        let semantic_call_c = compile_with_semantic_source(
+            ast_callable_calls,
+            semantic_callable_calls,
+            true,
+            Target::C,
+        );
+        let compatibility_call_c = compile(ast_callable_calls, false, Target::C);
+        let semantic_caller = semantic_call_c
+            .split("bf_i_caller(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        let compatibility_caller = compatibility_call_c
+            .split("bf_i_caller(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            semantic_caller.contains("bf_i_worker(bt_arg_")
+                && semantic_caller.contains("&bv_i_flag, bt_arg_"),
+            "driver-boundary typed callable invocation missing: {semantic_caller}"
+        );
+        assert!(
+            compatibility_caller.contains("stale")
+                && !compatibility_caller.contains("bf_i_worker("),
+            "AST-only compatibility path should retain its callable statement: {compatibility_caller}"
+        );
+        let ast_simple_callable = "procedure worker(byref value%, fallback% = 9)\nvalue% = value% + fallback%\nend procedure\nprocedure caller()\nvalue%=7\nprint \"stale\"\nend procedure\ncaller()\nend\n";
+        let semantic_simple_callable = "procedure worker(byref value%, fallback% = 9)\nvalue% = value% + fallback%\nend procedure\nprocedure caller()\nvalue%=7\nworker(value%)\nend procedure\ncaller()\nend\n";
+        for target in [Target::Basic, Target::Jvm] {
+            let semantic_output = compile_with_semantic_source(
+                ast_simple_callable,
+                semantic_simple_callable,
+                true,
+                target,
+            );
+            let compatibility_output = compile(ast_simple_callable, false, target);
+            let has_typed_call = match target {
+                Target::Basic => {
+                    semantic_output.contains("GOSUB")
+                        && semantic_output.contains("= 7")
+                        && semantic_output.contains("= 9")
+                }
+                Target::Jvm => {
+                    semantic_output.contains("invokestatic Program/worker ([II)V")
+                        && semantic_output.contains("ldc 9")
+                }
+                Target::C | Target::Fbc | Target::C64 => unreachable!(),
+            };
+            assert!(
+                !semantic_output.contains("stale") && has_typed_call,
+                "{target:?} driver-boundary typed callable invocation missing:\n{semantic_output}"
+            );
+            assert!(
+                compatibility_output.contains("stale"),
+                "{target:?} AST-only compatibility path should retain its callable statement:\n{compatibility_output}"
+            );
+        }
+        let ast_array_callable = "procedure worker(byref values%(?))\nvalues%(0)=values%(0)+1\nend procedure\nprocedure caller()\ndim values%(1)\nvalues%(0)=7\nprint \"stale array call\"\nend procedure\ncaller()\nend\n";
+        let semantic_array_callable = "procedure worker(byref values%(?))\nvalues%(0)=values%(0)+1\nend procedure\nprocedure caller()\ndim values%(1)\nvalues%(0)=7\nworker(values%)\nend procedure\ncaller()\nend\n";
+        let semantic_array_basic = compile_with_semantic_source(
+            ast_array_callable,
+            semantic_array_callable,
+            true,
+            Target::Basic,
+        );
+        assert!(
+            !semantic_array_basic.contains("stale array call")
+                && semantic_array_basic
+                    .contains("copy array argument into transpiled procedure storage")
+                && semantic_array_basic
+                    .contains("copy mutated array argument back to caller storage"),
+            "BASIC semantic array procedure ABI was not emitted:\n{semantic_array_basic}"
+        );
+        let ast_try_call = "function fails%(code%, fallback% = 3)\nthrow code%\nreturn fallback%\nend function\nfunction failsText$(code%, fallback$ = \"default\")\nthrow code%\nreturn fallback$\nend function\nprocedure oldWorker()\nprint \"old worker\"\nend procedure\nprocedure caller()\noldWorker()\noldWorker()\nend procedure\ntry\ncaller()\ncatch err%, erl%\nprint err%\nend try\nend\n";
+        let semantic_try_call = "function fails%(code%, fallback% = 3)\nthrow code%\nreturn fallback%\nend function\nfunction failsText$(code%, fallback$ = \"default\")\nthrow code%\nreturn fallback$\nend function\nprocedure oldWorker()\nprint \"old worker\"\nend procedure\nprocedure caller()\nfails%(17)\nfailsText$(17)\nend procedure\ntry\ncaller()\ncatch err%, erl%\nprint err%\nend try\nend\n";
+        let semantic_try_c =
+            compile_with_semantic_source(ast_try_call, semantic_try_call, true, Target::C);
+        let typed_caller = semantic_try_c
+            .split("bf_i_caller(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            typed_caller.contains("bf_i_fails(bt_arg_")
+                && typed_caller.contains("bcc_result_int bcc_st_")
+                && typed_caller.contains("bcc_result_string bcc_st_")
+                && typed_caller.contains("char bt_s_")
+                && typed_caller.contains("bcc_st_")
+                && typed_caller.contains("= 3")
+                && !typed_caller.contains("bf_i_oldWorker()"),
+            "C typed try-reachable procedure call did not replace AST call:\n{typed_caller}"
+        );
+        let ast_c_array_call = "procedure arrayWorker(byref values%(?))\nvalues%(0)=99\nend procedure\nprocedure arrayCaller()\ndim values%(1)\nprint \"stale array\"\nend procedure\narrayCaller()\nend\n";
+        let semantic_c_array_call = "procedure arrayWorker(byref values%(?))\nvalues%(0)=99\nend procedure\nprocedure arrayCaller()\ndim values%(1)\narrayWorker(values%)\nend procedure\narrayCaller()\nend\n";
+        let semantic_array_c =
+            compile_with_semantic_source(ast_c_array_call, semantic_c_array_call, true, Target::C);
+        let typed_array_caller = semantic_array_c
+            .split("bf_i_arraycaller(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            !typed_array_caller.contains("stale array")
+                && typed_array_caller.contains("bf_i_arrayworker("),
+            "C typed array procedure call did not replace AST call:\n{typed_array_caller}"
+        );
+        let ast_root_call =
+            "function calc%(value%)\nreturn value%\nend function\nprint \"stale root call\"\nend\n";
+        let semantic_root_call =
+            "function calc%(value%)\nreturn value%\nend function\ncalc%(7)\nend\n";
+        let semantic_root_c =
+            compile_with_semantic_source(ast_root_call, semantic_root_call, true, Target::C);
+        let semantic_root_main = semantic_root_c
+            .split("int main(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            semantic_root_main.contains("(void)(bf_i_calc(7))")
+                && !semantic_root_main.contains("stale root call"),
+            "C semantic module-root callable call did not replace AST statement:\n{semantic_root_main}"
+        );
+        let ast_stale_builtin = "print len(\"obsolete\")\nend\n";
+        let semantic_without_builtin = "print 1\nend\n";
+        let semantic_builtin_c = compile_with_semantic_source(
+            ast_stale_builtin,
+            semantic_without_builtin,
+            true,
+            Target::C,
+        );
+        let compatibility_builtin_c = compile(ast_stale_builtin, false, Target::C);
+        assert!(
+            !semantic_builtin_c.contains("strlen")
+                && !semantic_builtin_c.contains("#include <string.h>"),
+            "C helper selection retained a builtin present only in the compatibility AST:\n{semantic_builtin_c}"
+        );
+        assert!(
+            compatibility_builtin_c.contains("strlen"),
+            "AST-only compatibility output should still select LEN support:\n{compatibility_builtin_c}"
+        );
+        let ast_stale_name = "print date$\nend\n";
+        let semantic_builtin_name_c =
+            compile_with_semantic_source(ast_stale_name, semantic_without_builtin, true, Target::C);
+        let compatibility_builtin_name_c = compile(ast_stale_name, false, Target::C);
+        assert!(
+            !semantic_builtin_name_c.contains("bcc_date"),
+            "C helper selection retained a bare name present only in the compatibility AST:\n{semantic_builtin_name_c}"
+        );
+        assert!(
+            compatibility_builtin_name_c.contains("bcc_date"),
+            "AST-only compatibility output should still select DATE$ support:\n{compatibility_builtin_name_c}"
+        );
+        let ast_c64_float = "value# = 1\nend\n";
+        let semantic_c64_integer = "value% = 1\nend\n";
+        let semantic_c64_output =
+            compile_with_semantic_source(ast_c64_float, semantic_c64_integer, true, Target::C64);
+        assert!(
+            semantic_c64_output.contains("bv_i_value"),
+            "C64 should use the typed integer assignment from semantic IR:\n{semantic_c64_output}"
+        );
+        let ast_c64_callable_float = "procedure work()\nlocal# = 1\nend procedure\nwork()\nend\n";
+        let semantic_c64_callable_integer =
+            "procedure work()\nlocal% = 1\nend procedure\nwork()\nend\n";
+        let semantic_c64_callable = compile_with_semantic_source(
+            ast_c64_callable_float,
+            semantic_c64_callable_integer,
+            true,
+            Target::C64,
+        );
+        assert!(
+            semantic_c64_callable.contains("bf_i_work"),
+            "C64 should use the typed integer callable assignment:\n{semantic_c64_callable}"
+        );
+        let ast_c64_callable_dim =
+            "procedure work()\ndim local#\nprint \"stale\"\nend procedure\nwork()\nend\n";
+        let semantic_c64_callable_dim =
+            "procedure work()\ndim local as integer\nprint \"typed\"\nend procedure\nwork()\nend\n";
+        let semantic_c64_dim = compile_with_semantic_source(
+            ast_c64_callable_dim,
+            semantic_c64_callable_dim,
+            true,
+            Target::C64,
+        );
+        assert!(
+            semantic_c64_dim.contains("bv_i_local"),
+            "C64 should use the typed integer DIM annotation:\n{semantic_c64_dim}"
+        );
+        let ast_c64_top_dim = "dim value#\nprint \"stale\"\nend\n";
+        let semantic_c64_top_dim = "dim value as integer\nprint \"typed\"\nend\n";
+        let semantic_c64_top_dim_output =
+            compile_with_semantic_source(ast_c64_top_dim, semantic_c64_top_dim, true, Target::C64);
+        assert!(
+            semantic_c64_top_dim_output.contains("bv_i_value"),
+            "C64 should use the typed module-root integer DIM:\n{semantic_c64_top_dim_output}"
+        );
+        for target in [Target::Basic, Target::Jvm] {
+            let output =
+                compile_with_semantic_source(ast_root_call, semantic_root_call, true, target);
+            assert!(
+                !output.contains("stale root call"),
+                "{target:?} semantic module-root callable call did not replace AST statement:\n{output}"
+            );
+            assert!(
+                output.to_ascii_lowercase().contains("calc") && output.contains('7'),
+                "{target:?} semantic module-root callable call is missing from output:\n{output}"
+            );
+            if target == Target::Jvm {
+                assert!(
+                    output.contains("invokestatic Program/calc (I)I\n    pop"),
+                    "JVM must discard the typed function result after the invocation:\n{output}"
+                );
+            }
+        }
+        let ast_nested_discard = "function calc%(value%)\nreturn value%\nend function\nprocedure discardResult()\nprint \"stale callable call\"\nend procedure\ndiscardResult()\nend\n";
+        let semantic_nested_discard = "function calc%(value%)\nreturn value%\nend function\nprocedure discardResult()\ncalc%(9)\nend procedure\ndiscardResult()\nend\n";
+        let nested_discard = compile_with_semantic_source(
+            ast_nested_discard,
+            semantic_nested_discard,
+            true,
+            Target::Jvm,
+        );
+        assert!(
+            !nested_discard.contains("stale callable call")
+                && nested_discard.contains("invokestatic Program/calc (I)I\n    pop"),
+            "JVM callable-body dispatch did not discard the typed function result:\n{nested_discard}"
+        );
+        let ast_wide_discard = "function wide&(value&)\nreturn value&\nend function\nfunction ratio#(value#)\nreturn value#\nend function\nprocedure discardWideResults()\nprint \"stale wide\"\nprint \"stale ratio\"\nend procedure\ndiscardWideResults()\nend\n";
+        let semantic_wide_discard = "function wide&(value&)\nreturn value&\nend function\nfunction ratio#(value#)\nreturn value#\nend function\nprocedure discardWideResults()\nwide&(9)\nratio#(2.0)\nend procedure\ndiscardWideResults()\nend\n";
+        semantic_ir::parse_and_adapt_named("differential.bcl", semantic_wide_discard)
+            .expect("wide discarded-call semantic fixture parses");
+        let wide_discard = compile_with_semantic_source(
+            ast_wide_discard,
+            semantic_wide_discard,
+            true,
+            Target::Jvm,
+        );
+        assert!(
+            !wide_discard.contains("stale wide")
+                && !wide_discard.contains("stale ratio")
+                && wide_discard.contains("invokestatic Program/wide (J)J\n    pop2")
+                && wide_discard.contains("invokestatic Program/ratio (D)D\n    pop2"),
+            "JVM must discard typed LONG and DOUBLE function results with `pop2`:\n{wide_discard}"
+        );
+        let string_constants =
+            "const greeting = \"hello\"\nconst copy = greeting\nprint copy\nend\n";
+        let semantic_string_constants = compile(string_constants, true, Target::Basic);
+        assert!(
+            semantic_string_constants.contains("CONSTCOPY$ = CONSTGREETING$"),
+            "typed IR must preserve the initializer-derived string type through a CONST alias:\n{semantic_string_constants}"
+        );
+        let const_bound = "const limit = 4\ndim values%(limit)\nprint values%(0)\nend\n";
+        assert_eq!(
+            compile(const_bound, true, Target::Basic),
+            compile(const_bound, false, Target::Basic),
+            "BASIC constant array bound fixture:\n{const_bound}"
+        );
+        let arithmetic = "const limit = 2 + 2\ndim values%(limit - 1)\nprint values%(0)\nend\n";
+        assert_eq!(
+            compile(arithmetic, true, Target::Basic),
+            compile(arithmetic, false, Target::Basic),
+            "BASIC arithmetic constant and array capacity fixture:\n{arithmetic}"
+        );
+        let builtin_call = "const limit = abs(2 + 2)\ndim values%(limit)\nprint values%(0)\nend\n";
+        assert_eq!(
+            compile(builtin_call, true, Target::Basic),
+            compile(builtin_call, false, Target::Basic),
+            "BASIC builtin call in constant and array capacity fixture:\n{builtin_call}"
+        );
+        let boolean_constants =
+            "const truth = true\nconst untrue = false\nprint truth\nprint untrue\nend\n";
+        assert_eq!(
+            compile(boolean_constants, true, Target::Basic),
+            compile(boolean_constants, false, Target::Basic),
+            "BASIC Boolean constant fixture:\n{boolean_constants}"
+        );
+        let array_read_constant = "dim source%(1)\nsource%(0) = 5\nconst first = source%(0)\ndim values%(first)\nprint values%(0)\nend\n";
+        assert_eq!(
+            compile(array_read_constant, true, Target::Basic),
+            compile(array_read_constant, false, Target::Basic),
+            "BASIC array read in constant/capacity fixture:\n{array_read_constant}"
+        );
+        let array_bound_constants = "dim source%(4)\nconst count = sizeof(source%)\nconst upper = ubound(source%)\nconst lower = lbound(source%)\nprint count\nprint upper\nprint lower\nend\n";
+        assert_eq!(
+            compile(array_bound_constants, true, Target::Basic),
+            compile(array_bound_constants, false, Target::Basic),
+            "BASIC semantic array-bound builtin fixture:\n{array_bound_constants}"
+        );
+        let mixed_case_bound_builtin =
+            "dim source%(4)\nconst count = SiZeOf(source%)\nprint count\nend\n";
+        assert_eq!(
+            compile(mixed_case_bound_builtin, true, Target::Basic),
+            compile(mixed_case_bound_builtin, false, Target::Basic),
+            "BASIC mixed-case array-bound builtin fixture:\n{mixed_case_bound_builtin}"
+        );
+        let multidimensional_bounds = "dim grid%(2, 3)\nconst rowCount = sizeof(grid%, 0)\nconst lastColumn = ubound(grid%, 1)\nconst firstColumn = lbound(grid%, 1)\nprint rowCount\nprint lastColumn\nprint firstColumn\nend\n";
+        assert_eq!(
+            compile(multidimensional_bounds, true, Target::Basic),
+            compile(multidimensional_bounds, false, Target::Basic),
+            "BASIC multidimensional bound fixture:\n{multidimensional_bounds}"
+        );
+        let three_dimensional_bounds =
+            "dim cube%(1, 2, 3)\nconst lastDepth = ubound(cube%, 2)\nprint lastDepth\nend\n";
+        assert_eq!(
+            compile(three_dimensional_bounds, true, Target::Basic),
+            compile(three_dimensional_bounds, false, Target::Basic),
+            "BASIC three-dimensional bound fixture:\n{three_dimensional_bounds}"
+        );
+        let callable_array_bound = "function count%(capacity%)\ndim local%(capacity%)\nconst elements = sizeof(local%)\nreturn elements\nend function\nprint count%(4)\nend\n";
+        assert_eq!(
+            compile(callable_array_bound, true, Target::Basic),
+            compile(callable_array_bound, false, Target::Basic),
+            "BASIC callable-local array-bound fixture:\n{callable_array_bound}"
+        );
+        let callable_multidimensional_bound = "function count%(rows%, columns%)\ndim local%(rows%, columns%)\nconst columnsCount = sizeof(local%, 1)\nreturn columnsCount\nend function\nprint count%(2, 3)\nend\n";
+        assert_eq!(
+            compile(callable_multidimensional_bound, true, Target::Basic),
+            compile(callable_multidimensional_bound, false, Target::Basic),
+            "BASIC callable multidimensional bound fixture:\n{callable_multidimensional_bound}"
+        );
+        let array_parameter_bound = "function count%(byref values%(?))\nconst elements = sizeof(values%)\nreturn elements\nend function\ndim source%(4)\nprint count%(source%)\nend\n";
+        assert_eq!(
+            compile(array_parameter_bound, true, Target::Basic),
+            compile(array_parameter_bound, false, Target::Basic),
+            "BASIC array-parameter bound fixture:\n{array_parameter_bound}"
+        );
+        let callable_global_array_bound = "dim source%(4)\nfunction count%()\nconst elements = sizeof(source%)\nreturn elements\nend function\nprint count%()\nend\n";
+        assert_eq!(
+            compile(callable_global_array_bound, true, Target::Basic),
+            compile(callable_global_array_bound, false, Target::Basic),
+            "BASIC callable global-array bound fixture:\n{callable_global_array_bound}"
+        );
+        let captured_array_bound = "dim capacity%\ncapacity% = 4\ndim values%(capacity%)\nconst count = sizeof(values%)\nprint count\nend\n";
+        assert_eq!(
+            compile(captured_array_bound, true, Target::Basic),
+            compile(captured_array_bound, false, Target::Basic),
+            "BASIC captured array-bound fixture:\n{captured_array_bound}"
+        );
+        let arithmetic_array_bound =
+            "dim values%(2 + 3)\nconst count = sizeof(values%)\nprint count\nend\n";
+        assert_eq!(
+            compile(arithmetic_array_bound, true, Target::Basic),
+            compile(arithmetic_array_bound, false, Target::Basic),
+            "BASIC arithmetic array-bound fixture:\n{arithmetic_array_bound}"
+        );
+        let multiple_array_bound = "dim first%(2), second%(4)\nconst firstCount = sizeof(first%)\nconst secondCount = sizeof(second%)\nprint firstCount\nprint secondCount\nend\n";
+        assert_eq!(
+            compile(multiple_array_bound, true, Target::Basic),
+            compile(multiple_array_bound, false, Target::Basic),
+            "BASIC multi-item DIM bounds fixture:\n{multiple_array_bound}"
+        );
+        let nested_array_bound = "if true then\ndim values%(4)\nconst count = sizeof(values%)\nprint count\nend if\nend\n";
+        assert_eq!(
+            compile(nested_array_bound, true, Target::Basic),
+            compile(nested_array_bound, false, Target::Basic),
+            "BASIC nested array-bound fixture:\n{nested_array_bound}"
+        );
+        let unsuffixed_typed_array_bound =
+            "dim values(4) as integer\nconst count = sizeof(values)\nprint count\nend\n";
+        let typed_array_output = compile(unsuffixed_typed_array_bound, true, Target::Basic);
+        assert!(
+            typed_array_output.contains("DIM values(4) AS INTEGER"),
+            "{typed_array_output}"
+        );
+        assert!(
+            !compile(unsuffixed_typed_array_bound, false, Target::Basic).contains("AS INTEGER")
+        );
+        let next_stage_fixtures = [
+            "const limit = (2 + 3) * 4\\2\ndim values%(limit)\nprint values%(0)\nend\n",
+            "const limit = &H10 + &O10\ndim values%(limit)\nprint values%(0)\nend\n",
+            "const rows = 2\nconst columns = 3\ndim cells%(rows, columns)\nprint cells%(0, 0)\nend\n",
+            "const truth = not false\nprint truth\nend\n",
+            "const truth = 2 < 3\nprint truth\nend\n",
+            "const limit = 17 mod 5\ndim values%(limit)\nprint values%(0)\nend\n",
+            "const limit = abs(-4)\ndim values%(limit)\nprint values%(0)\nend\n",
+            "function read%()\nconst rows = 2\nconst columns = rows + 1\ndim cells%(rows, columns)\nreturn cells%(0, 0)\nend function\nprint read%()\nend\n",
+        ];
+        for source in next_stage_fixtures {
+            assert_eq!(
+                compile(source, true, Target::Basic),
+                compile(source, false, Target::Basic),
+                "next-stage BASIC declaration fixture:\n{source}"
+            );
+        }
+        let concatenated_string = "const greeting = \"hello\" + \" world\"\nprint greeting\nend\n";
+        let semantic_string_output = compile(concatenated_string, true, Target::Basic);
+        assert!(
+            semantic_string_output.contains("CONSTGREETING$ = \"hello\" + \" world\""),
+            "{semantic_string_output}"
+        );
+        assert!(
+            !semantic_string_output.contains("CONSTGREETING%"),
+            "{semantic_string_output}"
+        );
+        let local_dim = "function first%(count%)\nif count% > 0 then\ndim local%(count% - 1)\nlocal%(0) = count%\nreturn local%(0)\nend if\nreturn 0\nend function\nprint first%(3)\nend\n";
+        let semantic_local_dim = compile(local_dim, true, Target::Basic);
+        assert!(
+            semantic_local_dim.contains("DIM firstLocal0%(firstCount0% - 1)"),
+            "semantic callable-local DIM missing:\n{semantic_local_dim}"
+        );
+        assert!(
+            semantic_local_dim.contains("firstLocal0%(0)"),
+            "{semantic_local_dim}"
+        );
+        assert!(
+            semantic_local_dim.contains(" = firstCount0% - 1"),
+            "{semantic_local_dim}"
+        );
+        let typed_local_dim = "function typed%(value%)\ndim scratch as integer\nscratch = value%\nreturn scratch\nend function\nprint typed%(5)\nend\n";
+        let typed_output = compile(typed_local_dim, true, Target::Basic);
+        assert!(
+            typed_output.contains("DIM typedScratch0 AS INTEGER"),
+            "{typed_output}"
+        );
+        let callable_constant = "function scaled%(value%)\nconst doubled = value% * 2\nreturn doubled\nend function\nprint scaled%(3)\nend\n";
+        assert_eq!(
+            compile(callable_constant, true, Target::Basic),
+            compile(callable_constant, false, Target::Basic),
+            "BASIC callable-local CONST fixture:\n{callable_constant}"
+        );
+        let nested_callable_constant = "function nested%(value%)\nif value% > 0 then\nconst doubled = value% * 2\nreturn doubled\nend if\nreturn 0\nend function\nprint nested%(3)\nend\n";
+        assert_eq!(
+            compile(nested_callable_constant, true, Target::Basic),
+            compile(nested_callable_constant, false, Target::Basic),
+            "BASIC nested callable CONST fixture:\n{nested_callable_constant}"
+        );
+        let array_bound_builtin =
+            "dim source%(4)\ndim values%(sizeof(source%))\nprint values%(0)\nend\n";
+        assert_eq!(
+            compile(array_bound_builtin, true, Target::Basic),
+            compile(array_bound_builtin, false, Target::Basic),
+            "BASIC specialized array-bound builtin fallback fixture:\n{array_bound_builtin}"
+        );
+        let nested_module_dim =
+            "if true then\ndim nested%(2 + 1)\nnested%(0) = 7\nend if\nprint nested%(0)\nend\n";
+        let nested_semantic_output = compile(nested_module_dim, true, Target::Basic);
+        assert!(
+            nested_semantic_output.contains("DIM nested%(2 + 1)"),
+            "semantic nested DIM declaration missing:\n{nested_semantic_output}"
+        );
+        assert!(
+            nested_semantic_output.contains("nested%(0) = 7"),
+            "nested assignment missing after semantic DIM dispatch:\n{nested_semantic_output}"
+        );
+        assert!(
+            nested_semantic_output.contains("nested%(0)")
+                && nested_semantic_output.contains(" = 2 + 1"),
+            "semantic array capacity was not captured for later use:\n{nested_semantic_output}"
+        );
+    }
+
+    #[test]
+    fn resolver_diagnostics_match_between_semantic_and_compatibility_paths() {
+        let source = "goto missing\nend\n";
+        let resolve = |semantic| {
+            let parsed = parse_source("diagnostic-differential.bcl".to_string(), source)
+                .expect("fixture parses");
+            let lower::Lowered { program, .. } = lower::lower(parsed).expect("fixture lowers");
+            if semantic {
+                resolver::resolve_with_semantic(
+                    program,
+                    semantic_ir::parse_and_adapt_named("diagnostic-differential.bcl", source).ok(),
+                )
+            } else {
+                resolver::resolve(program)
+            }
+        };
+        let semantic = match resolve(true) {
+            Err(diagnostics) => diagnostics,
+            Ok(_) => panic!("undefined label is diagnosed"),
+        };
+        let compatibility = match resolve(false) {
+            Err(diagnostics) => diagnostics,
+            Ok(_) => panic!("undefined label is diagnosed"),
+        };
+        assert_eq!(semantic, compatibility);
+    }
+
+    #[test]
+    fn basic_backend_diagnostics_match_between_semantic_and_compatibility_paths() {
+        fn compile(source: &str, semantic: bool) -> Result<String, Vec<Diagnostic>> {
+            let parsed = parse_source("backend-diagnostic-differential.bcl".to_string(), source)?;
+            let lower::Lowered {
+                program,
+                synthesized_buffer_names,
+                ..
+            } = lower::lower(parsed)?;
+            let resolved = if semantic {
+                resolver::resolve_with_semantic(
+                    program,
+                    semantic_ir::parse_and_adapt_named(
+                        "backend-diagnostic-differential.bcl",
+                        source,
+                    )
+                    .ok(),
+                )
+            } else {
+                resolver::resolve(program)
+            }?;
+            CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)
+        }
+
+        let fixtures = [
+            "function sumArr%(arr%, count%)\nfor i% = 0 to count% - 1\ntotal% = total% + arr%(i%)\nnext i%\nreturn total%\nend function\nend\n",
+            "function bad%(arr%(?, ?))\nreturn arr%(0)\nend function\nend\n",
+        ];
+        for source in fixtures {
+            let semantic = compile(source, true).expect_err("fixture has an array rank diagnostic");
+            let compatibility =
+                compile(source, false).expect_err("fixture has an array rank diagnostic");
+            assert_eq!(semantic.len(), compatibility.len(), "fixture:\n{source}");
+            for (semantic, compatibility) in semantic.iter().zip(&compatibility) {
+                assert_eq!(
+                    semantic.severity, compatibility.severity,
+                    "fixture:\n{source}"
+                );
+                assert_eq!(
+                    semantic.message, compatibility.message,
+                    "fixture:\n{source}"
+                );
+                // The typed-IR path may place a diagnostic at the real
+                // parameter or callable; the AST path only has the synthetic
+                // validation position.
+                assert!(
+                    semantic.pos == compatibility.pos
+                        || semantic.pos.filename == "backend-diagnostic-differential.bcl",
+                    "fixture:\n{source}\n{:?} vs {:?}",
+                    semantic.pos,
+                    compatibility.pos
+                );
+            }
+        }
+    }
+
     #[test]
     fn trailing_fixed_parameter_defaults_are_inserted_at_call_sites() {
-        let source = r#"const punctuation$ = "!"
+        let source = r#"const punctuation = "!"
 
-function decorate$(text$, suffix$ = punctuation$)
+function decorate$(text$, suffix$ = punctuation)
     return text$ + suffix$
 end function
 
@@ -45,7 +697,11 @@ print result$
 end
 "#;
         let basic = compile_source("defaults.bcl", source).expect("defaults should compile");
-        assert!(basic.contains("decorateSuffix0$ = punctuation$"), "{basic}");
+        assert!(basic.contains("CONSTPUNCTUATION$ = \"!\""), "{basic}");
+        assert!(
+            basic.contains("decorateSuffix0$ = CONSTPUNCTUATION$"),
+            "{basic}"
+        );
         assert!(basic.contains("announceSuffix0$ = \"!\""), "{basic}");
 
         let c = compile_source_via_c_target(source);
@@ -53,7 +709,13 @@ end
             c.contains("bf_s_decorate(\"hello\", bv_s_punctuation,"),
             "{c}"
         );
-        assert!(c.contains("bf_i_announce(\"ready\", \"!\");"), "{c}");
+        assert!(
+            c.contains("snprintf(bt_arg_3, sizeof(bt_arg_3), \"%s\", \"ready\");")
+                && c.contains("snprintf(bt_arg_4, sizeof(bt_arg_4), \"%s\", \"!\");")
+                && c.contains("bf_i_announce(bt_arg_3, bt_arg_4);")
+                && !c.contains("BCC_MAX_STRING_LEN"),
+            "{c}"
+        );
     }
 
     #[test]
@@ -72,7 +734,9 @@ end
         let output = compile_source("methods.bcl", source).expect("methods should lower to BASIC");
         assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
         assert!(output.contains("GOSUB"), "{output}");
-        assert!(output.contains("result$ = padResult0$"), "{output}");
+        assert!(output.contains("BCCT1$ = capitalizeResult0$"), "{output}");
+        assert!(output.contains("padSelf0$ = BCCT1$"), "{output}");
+        assert!(output.contains("result$ = BCCT3$"), "{output}");
     }
 
     #[test]
@@ -171,8 +835,12 @@ print s$.left(1).shout()
 end
 "#;
         let output = compile_source("builtin_chain.bcl", source).expect("should compile");
-        assert!(output.contains("PRINT LEFT$(shoutResult0$, 2)"), "{output}");
-        assert!(output.contains("shoutSelf0$ = LEFT$(s$, 1)"), "{output}");
+        // User method first: `.left()` consumes the method's result.
+        assert!(output.contains("BCCT1$ = shoutResult0$"), "{output}");
+        assert!(output.contains("PRINT LEFT$(BCCT2$, BCCT3%)"), "{output}");
+        // Built-in first: the user method receives `.left()`'s result.
+        assert!(output.contains("BCCT6$ = LEFT$(BCCT4$, BCCT5%)"), "{output}");
+        assert!(output.contains("shoutSelf0$ = BCCT6$"), "{output}");
     }
 
     #[test]
@@ -273,21 +941,24 @@ end
         // lookup -- the real, type-checked fallback lives entirely in
         // records.rs's `try_ordinary_call_as_method` now. A mismatched
         // call falls through to the same "unknown function" passthrough
-        // any genuinely-undeclared identifier already gets under
-        // --target basic (trusting the real BASIC compiler to catch it),
-        // and a hard resolver-level error under --target c.
+        // any genuinely-undeclared identifier gets -- a hard error on every
+        // target.
         let source = "method ltrim$[string]()\n    return self$\nend method\n\
                        n% = 5\nprint ltrim$(n%)\nend\n";
-        let basic = compile_source("mismatched_receiver.bcl", source).expect("should compile");
+        let basic = compile_source("mismatched_receiver.bcl", source)
+            .expect_err("a call with no matching callable is an error");
         assert!(
-            !basic.contains("ltrimSelf0$ = n%"),
-            "a numeric argument must never be silently assigned into ltrim's string self:\n{basic}"
+            basic
+                .iter()
+                .any(|d| d.message.contains("unknown function or array `ltrim$`")),
+            "a numeric argument must never resolve to ltrim's string receiver: {basic:?}"
         );
-
         let c_err = compile_source_via_c_target_err(source);
         assert!(
-            !c_err.is_empty(),
-            "the C target should reject the mismatched call outright"
+            c_err
+                .iter()
+                .any(|d| d.message.contains("unknown function or array `ltrim$`")),
+            "the C target should reject the mismatched call outright: {c_err:?}"
         );
     }
 
@@ -326,9 +997,11 @@ end
 "#;
         let dynamic_error = compile_source("dynamic_default.bcl", dynamic)
             .expect_err("a dynamic default must be rejected");
-        assert!(dynamic_error
-            .iter()
-            .any(|d| d.message.contains("literal or a top-level `const`")));
+        assert!(
+            dynamic_error
+                .iter()
+                .any(|d| d.message.contains("literal or a top-level `const`"))
+        );
 
         let non_trailing = r#"function choose%(first% = 1, second%)
     return first% + second%
@@ -337,9 +1010,11 @@ end
 "#;
         let trailing_error = compile_source("non_trailing_default.bcl", non_trailing)
             .expect_err("a required parameter after a default must be rejected");
-        assert!(trailing_error
-            .iter()
-            .any(|d| d.message.contains("required but follows")));
+        assert!(
+            trailing_error
+                .iter()
+                .any(|d| d.message.contains("required but follows"))
+        );
 
         let signed = r#"function offset%(value% = -1)
     return value%
@@ -353,13 +1028,16 @@ end
 
     #[test]
     fn compiles_sort_driver_sample() {
-        let source = include_str!("../examples/sort_driver/sort_driver.bcl");
-        let output = compile_source("examples/sort_driver/sort_driver.bcl", source)
-            .expect("sample should compile");
-        assert!(output.contains("' require com.bascal.sort.bubbleSort"));
-        // Without the sort library bubbleSort% is not in the symbol table;
-        // it is emitted lowercase like any other user symbol, not uppercased.
-        assert!(output.contains("bubblesort%(bubbledata%)"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("examples/sort_driver/sort_driver.bcl");
+        let output = compile_file(&path, &CompileOptions::new()).unwrap_or_else(|diagnostics| {
+            panic!(
+                "sample should compile: {}",
+                diagnostics.iter().map(|d| d.to_string()).collect::<String>()
+            )
+        });
+        // The sort library is loaded, so `bubbleSort%` is a real callable.
+        assert!(output.contains("bubblesort"), "{output}");
         assert!(output.contains("END"));
     }
 
@@ -409,7 +1087,10 @@ END
         assert!(output.contains("GOSUB "));
         assert!(output.contains("total% = addResult0%"));
         assert!(!output.contains("FN_add"));
-        assert!(output.contains("addResult0% = addLeft0% + addRight0%"));
+        assert!(
+            output.contains("addResult0% = addLeft0% + addRight0%"),
+            "{output}"
+        );
     }
 
     #[test]
@@ -498,17 +1179,20 @@ end
     }
 
     #[test]
-    fn function_local_const_declares_and_reads_the_same_lowered_name() {
-        // A `const` declared inside a function/procedure body must be
-        // renamed to its local BASIC name (like `dim`/assignment already
-        // are) so the assignment and every later read of it agree --
-        // otherwise the declaration binds one name while reads resolve to a
-        // fresh, never-assigned local of a different name. Real MBASIC/
-        // BASCOM has no CONST statement at all, so `const` always lowers to
-        // a plain assignment, never a CONST line.
+    fn const_declares_and_reads_a_fixed_underscore_free_generated_name() {
+        // A `const`'s generated BASIC name is always `CONST` followed by
+        // its own name's words uppercased and run together (see
+        // `const_var_name`) -- never a camelCased rendering of the source
+        // spelling, which real BASCOM rejects outright whenever the
+        // source name contains an underscore (confirmed under real
+        // BASCOM/dosbox-x, even used only as an assignment target). This
+        // holds the same way whether the const is declared inside a
+        // function/procedure body or at the top level: `const` values
+        // always resolve globally either way (see `resolver::ConstInfo`'s
+        // own doc comment) -- there's no per-function local, ever.
         let source = r#"procedure show()
-    const n% = 5
-    print n%
+    const GREETING_WORD = 5
+    print GREETING_WORD
 end procedure
 
 show()
@@ -516,29 +1200,25 @@ end
 "#;
         let output = compile_source("const_local.bcl", source).expect("should compile");
         assert!(
-            !output.contains("CONST "),
-            "CONST isn't valid on real MBASIC/BASCOM:\n{output}"
+            output.contains("CONSTGREETINGWORD% = 5"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            output.contains("showN0% = 5"),
-            "unexpected const line:\n{output}"
-        );
-        assert!(
-            output.contains("PRINT showN0%"),
-            "PRINT should read back the same local name the const line declared:\n{output}"
+            output.contains("PRINT CONSTGREETINGWORD%"),
+            "PRINT should read back the const's generated name:\n{output}"
         );
     }
 
     #[test]
-    fn top_level_const_resolves_globally_inside_procedure() {
+    fn top_level_const_resolves_globally_inside_a_procedure() {
         // A top-level `const` referenced inside a `procedure` body must
-        // resolve to the real top-level name, not a fresh per-function
-        // local -- otherwise the reference reads an unassigned local
-        // instead of the actual constant.
-        let source = r#"const col% = 20
+        // resolve to the same generated name as everywhere else, not a
+        // fresh per-function local -- otherwise the reference reads an
+        // unassigned local instead of the actual constant.
+        let source = r#"const MAX_COL = 20
 
 procedure show()
-    locate 1, col%
+    locate 1, MAX_COL
 end procedure
 
 show()
@@ -546,11 +1226,15 @@ end
 "#;
         let output = compile_source("const_global_proc.bcl", source).expect("should compile");
         assert!(
-            output.contains("LOCATE 1, col%"),
-            "reference inside the procedure should resolve to the real top-level const, not a synthesized showCol-style local:\n{output}"
+            output.contains("CONSTMAXCOL% = 20"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            !output.contains("showCol"),
+            output.contains("LOCATE 1, CONSTMAXCOL%"),
+            "reference inside the procedure should resolve to the const's generated name, not a synthesized showMaxCol-style local:\n{output}"
+        );
+        assert!(
+            !output.contains("showMaxCol"),
             "no per-function local should be synthesized for a top-level const:\n{output}"
         );
     }
@@ -651,10 +1335,10 @@ end
         // both callable kinds -- ident() resolution doesn't distinguish
         // between them, but the regression this guards against was only
         // ever demonstrated against `procedure`.
-        let source = r#"const factor% = 3
+        let source = r#"const factor = 3
 
 function scale%(n%)
-    return n% * factor%
+    return n% * factor
 end function
 
 print scale%(5)
@@ -662,7 +1346,7 @@ end
 "#;
         let output = compile_source("const_global_func.bcl", source).expect("should compile");
         assert!(
-            output.contains("factor%"),
+            output.contains("CONSTFACTOR%"),
             "reference inside the function should resolve to the real top-level const:\n{output}"
         );
         assert!(
@@ -678,12 +1362,12 @@ end
         // interfere with each other -- the const resolves globally
         // without a `global` declaration, and the explicit global keeps
         // working exactly as before.
-        let source = r#"const limit% = 10
+        let source = r#"const limit = 10
 dim total%
 
 procedure accumulate()
     global total%
-    total% = total% + limit%
+    total% = total% + limit
 end procedure
 
 accumulate()
@@ -692,11 +1376,11 @@ end
 "#;
         let output = compile_source("const_and_global.bcl", source).expect("should compile");
         assert!(
-            output.contains("limit%"),
+            output.contains("CONSTLIMIT%"),
             "the const should still resolve to the real top-level name:\n{output}"
         );
         assert!(
-            output.contains("total% = total% + limit%"),
+            output.contains("total% = total% + CONSTLIMIT%"),
             "the explicit global and the const should resolve together correctly:\n{output}"
         );
     }
@@ -707,26 +1391,26 @@ end
         // different procedures in the same program must resolve to the
         // same real name everywhere -- no per-function duplication or
         // divergence.
-        let source = r#"const rate% = 7
+        let source = r#"const rate = 7
 
 procedure showA()
-    print rate%
+    print rate
 end procedure
 
 procedure showB()
-    print rate% * 2
+    print rate * 2
 end procedure
 
-print rate%
+print rate
 showA()
 showB()
 end
 "#;
         let output = compile_source("const_multi_proc.bcl", source).expect("should compile");
-        let occurrences = output.matches("rate%").count();
+        let occurrences = output.matches("CONSTRATE%").count();
         assert!(
             occurrences >= 4,
-            "every reference (top level + both procedures) should use the same real `rate%` name:\n{output}"
+            "every reference (top level + both procedures) should use the same real `CONSTRATE%` name:\n{output}"
         );
         assert!(
             !output.contains("showARate") && !output.contains("showBRate"),
@@ -799,14 +1483,20 @@ END
             "hardcoded BCC_COPY% loop var should not appear"
         );
         // sort_driver.bcl uses mixed-case `bubbleData%`; output normalises to lowercase.
-        assert!(output
-            .lines()
-            .any(|l| l.contains("bubblesortData0%(") && l.contains(") = bubbledata%(")));
-        assert!(output
-            .lines()
-            .any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesortData0%(")));
-        assert!(output
-            .contains("bubblesortData0%(bubblesortJ0%) = bubblesortData0%(bubblesortJ0% + 1)"));
+        assert!(
+            output
+                .lines()
+                .any(|l| l.contains("bubblesortData0%(") && l.contains(") = bubbledata%("))
+        );
+        assert!(
+            output
+                .lines()
+                .any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesortData0%("))
+        );
+        assert!(
+            output
+                .contains("bubblesortData0%(bubblesortJ0%) = bubblesortData0%(bubblesortJ0% + 1)")
+        );
         assert!(
             output.contains("quicksortData0%(quicksortWall0%) = quicksortData0%(quicksortQHigh0%)")
         );
@@ -832,7 +1522,8 @@ END
         let output =
             compile_file(&input, &CompileOptions::new()).expect("required method should compile");
         assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
-        assert!(output.contains("result$ = capitalizeResult0$"), "{output}");
+        assert!(output.contains("result$ = BCCT1$"), "{output}");
+        assert!(output.contains("BCCT1$ = capitalizeResult0$"), "{output}");
         let mut c_options = CompileOptions::new();
         c_options.target = Target::C;
         let c_output =
@@ -986,10 +1677,10 @@ end
             "program clean\n\
              declare score%, y%(20)\n\
              dim total%\n\
-             const bonus% = 5\n\
+             const bonus = 5\n\
              score% = 10\n\
              y%(1) = 5\n\
-             total% = score% + y%(1) + bonus%\n\
+             total% = score% + y%(1) + bonus\n\
              for i% = 1 to 5\n\
              \x20   print i%\n\
              end for\n\
@@ -1131,7 +1822,9 @@ end
             .into_iter()
             .map(|d| d.to_string())
             .collect::<String>();
-        assert!(msg.contains("cannot have both a `program` declaration and a `shared` declaration"));
+        assert!(
+            msg.contains("cannot have both a `program` declaration and a `shared` declaration")
+        );
     }
 
     #[test]
@@ -1163,6 +1856,18 @@ end
         let output = compile_source("dimarr.bcl", source).expect("should compile");
         assert!(output.contains("DIM x%\n"));
         assert!(output.contains("DIM arr%()"));
+        let module = semantic_ir::parse_and_adapt(source)
+            .expect("generated frontend parses empty array axes");
+        let semantic_ir::SemanticStatementKind::Line(line) = &module.statements[1].kind else {
+            panic!("second root should be a physical line: {:#?}", module.statements[1]);
+        };
+        let semantic_ir::SemanticStatementKind::Dim(dimensions) = &line[0].kind
+        else {
+            panic!("second statement should be a typed DIM: {:#?}", line[0]);
+        };
+        assert_eq!(dimensions[0].name, "arr%");
+        assert_eq!(dimensions[0].array_axes, 1);
+        assert_eq!(dimensions[0].dimensions, [semantic_ir::DimAxis::Inferred]);
     }
 
     #[test]
@@ -1240,13 +1945,41 @@ end
     }
 
     #[test]
+    fn record_file_lowering_retains_typed_callable_read_locals() {
+        let source = "program RecordLocals\nrecord Student\nid: int16\nname: string(8)\nend record\nfile db as Student = open(\"students.dat\")\nprocedure fetch()\nglobal db\nlet row = db[1]\nend procedure\nend\n";
+        let parsed = parse_source("record_locals.bcl".to_string(), source).unwrap();
+        let lowered = lower::lower(parsed).expect("record read lowers");
+        let locals = &lowered.lowered_record_files[0].record_locals;
+        let local = |name: &str| {
+            locals
+                .iter()
+                .find(|local| local.name.eq_ignore_ascii_case(name))
+                .expect("lowered record local metadata")
+        };
+
+        assert_eq!(
+            local("rowid").value_type,
+            crate::semantic_ir::SemanticValueType::Integer
+        );
+        assert_eq!(
+            local("rowname").value_type,
+            crate::semantic_ir::SemanticValueType::String
+        );
+        assert!(
+            locals
+                .iter()
+                .all(|local| local.owner.as_deref() == Some("fetch"))
+        );
+    }
+
+    #[test]
     fn record_whole_write_lowers_to_lset_and_put() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         // MKI$/MKL$/MKS$/MKD$ always return a string -- a destination-type
         // suffix like MKI% or MKD# isn't a real MBASIC/BASCOM function.
         assert!(output.contains("LSET dbIdBuf$ = MKI$(1)"));
         assert!(output.contains(r#"LSET dbNameBuf$ = "Alice""#));
-        assert!(output.contains("LSET dbScoreBuf$ = MKD$(95)"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(95"), "{output}");
         assert!(output.contains("PUT #1, 1"));
     }
 
@@ -1263,6 +1996,109 @@ end
         let output = compile_source("alignment.bcl", source).expect("should compile");
         assert!(output.contains("LSET dbLeftBuf$ = \"L\""), "{output}");
         assert!(output.contains("RSET dbRightBuf$ = \"R\""), "{output}");
+    }
+
+    #[test]
+    fn c_target_timer_reads_seconds_since_midnight() {
+        let source = "start# = timer\nelapsed# = timer - start#\nprint elapsed#\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("#include <time.h>"), "{output}");
+        assert!(output.contains("static double bcc_timer(void) {"), "{output}");
+        assert!(output.contains("bv_d_start = bcc_timer();"), "{output}");
+        assert!(output.contains("(bcc_timer() - bv_d_start)"), "{output}");
+        assert!(!output.contains("bv_f_timer"), "{output}");
+    }
+
+    #[test]
+    fn jvm_target_restores_the_terminal_before_system_and_stop() {
+        for exit in ["system", "stop"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("exit.bcl");
+            std::fs::write(
+                &path,
+                format!("program p\nk$ = inkey$\nif k$ = \"q\" then\n{exit}\nend if\nprint k$\nend\n"),
+            )
+            .unwrap();
+            let options = CompileOptions {
+                target: Target::Jvm,
+                ..CompileOptions::new()
+            };
+            let output = compile_file(&path, &options).expect("compiles for the JVM");
+            // `stty sane` restores the terminal (setup uses other arguments):
+            // once on the early-exit path and once on the normal end.
+            let restores = output.matches("ldc \"sane\"").count();
+            assert!(
+                restores >= 2,
+                "`{exit}` must restore the terminal before exiting ({restores} restore(s)):\n{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn jvm_target_timer_reads_seconds_since_midnight() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("timer.bcl");
+        std::fs::write(&path, "program p\nstart# = timer\nprint timer - start#\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::Jvm,
+            ..CompileOptions::new()
+        };
+        let output = compile_file(&path, &options).expect("timer compiles for the JVM");
+        assert!(
+            output.contains("java/time/LocalTime/toNanoOfDay ()J") && output.contains("ddiv"),
+            "{output}"
+        );
+    }
+
+    /// Every intrinsic function documented for MBASIC/BASCOM 2.00, written out
+    /// independently of `BASIC_BUILTINS`. A call to any of them must get past
+    /// the "unknown function" rule; whether a particular target can emit it is
+    /// a separate question.
+    #[test]
+    fn documented_basic_intrinsics_are_not_reported_as_unknown_functions() {
+        let calls = [
+            "abs(1)", "asc(\"a\")", "atn(1)", "cdbl(1)", "chr$(65)", "cint(1.5)", "clng(1)",
+            "cos(1)", "csng(1)", "cvd(\"12345678\")", "cvi(\"ab\")", "cvl(\"abcd\")",
+            "cvs(\"abcd\")", "environ$(\"PATH\")", "eof(1)", "exp(1)", "fix(1.5)", "fre(0)",
+            "hex$(255)", "inp(1)", "input$(1)", "instr(\"a\", \"b\")", "int(1.5)",
+            "left$(\"a\", 1)", "len(\"a\")", "loc(1)", "lof(1)", "log(1)", "lpos(0)",
+            "mid$(\"abc\", 1, 1)", "mkd$(1)", "mki$(1)", "mkl$(1)", "mks$(1)", "oct$(8)",
+            "peek(1)", "pos(0)", "point(1, 1)", "right$(\"a\", 1)", "rnd(1)", "screen(1, 1)",
+            "sgn(1)", "sin(1)", "space$(3)", "sqr(4)", "str$(1)", "string$(3, \"a\")",
+            "tan(1)", "usr(1)", "val(\"1\")", "varptr(x%)", "pen(0)", "stick(0)", "strig(0)",
+            "play(0)", "ioctl$(1)",
+        ];
+        let mut unknown = Vec::new();
+        for call in calls {
+            let source = format!("x = {call}\nend\n");
+            if let Err(diagnostics) = compile_source("intrinsic.bcl", &source) {
+                if diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("unknown function or array"))
+                {
+                    unknown.push(call);
+                }
+            }
+        }
+        assert!(
+            unknown.is_empty(),
+            "documented intrinsics reported as unknown functions: {unknown:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_does_not_declare_a_goto_label_as_a_variable() {
+        let source = "print \"a\"\ngoto done\nprint \"b\"\ndone:\nprint \"c\"\nrestore later\nend\nlater:\ndata 1\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("bcc_lbl_done:;"), "{output}");
+        assert!(!output.contains("bv_f_done"), "a label is not storage:\n{output}");
+        assert!(!output.contains("bv_f_later"), "a data label is not storage:\n{output}");
+    }
+
+    #[test]
+    fn c_target_without_timer_carries_no_timer_helper() {
+        let output = compile_source_via_c_target("print 1\nend\n");
+        assert!(!output.contains("bcc_timer"), "{output}");
     }
 
     #[test]
@@ -1290,18 +2126,64 @@ end
         assert!(output.contains("GET #1, i"));
         // CVI/CVL/CVS/CVD take no suffix at all on real MBASIC/BASCOM.
         assert!(output.contains("sid% = CVI(dbIdBuf$)"));
-        // RTRIM$ isn't a real MBASIC/BASCOM builtin either -- string fields
-        // are unpacked through an inline LEN/MID$/LEFT$ trim loop instead.
+        // RTRIM$ isn't a real MBASIC/BASCOM builtin either -- a left-aligned
+        // string field is unpacked through the com.bascal.stdlib rtrim method.
         assert!(
-            output.contains("snametrimi% = LEN(dbNameBuf$)"),
-            "string field unpacking should trim inline, not call RTRIM$:\n{output}"
+            output.contains("rtrimSelf0$ = dbNameBuf$"),
+            "string field unpacking should call the rtrim method:\n{output}"
         );
         assert!(
-            !output.to_ascii_uppercase().contains("RTRIM$"),
+            !output.lines().any(|line| {
+                !line.trim_start().trim_start_matches(|c: char| c.is_ascii_digit()).trim_start().starts_with('\'')
+                    && line.to_ascii_uppercase().contains("RTRIM$(")
+            }),
             "RTRIM$ isn't valid on real MBASIC/BASCOM:\n{output}"
         );
-        assert!(output.contains("sname$ = LEFT$(dbNameBuf$, snametrimi%)"));
         assert!(output.contains("sscore# = CVD(dbScoreBuf$)"));
+    }
+
+    #[test]
+    fn record_string_unpack_trims_the_side_its_alignment_pads() {
+        let source = r#"record R
+    name: string(8) lpad
+    tag: string(8) rpad
+end record
+file db as R = open("align.dat")
+let s = db[1]
+print s.name + s.tag
+end
+"#;
+        let output = compile_source("align.bcl", source).expect("should compile");
+        // A left-aligned (LSET) field is padded on the right, an RSET one on the left.
+        assert!(output.contains("rtrimSelf0$ = dbNameBuf$"), "{output}");
+        assert!(output.contains("ltrimSelf0$ = dbTagBuf$"), "{output}");
+        assert!(!output.contains("ltrimSelf0$ = dbNameBuf$"), "{output}");
+        assert!(!output.contains("rtrimSelf0$ = dbTagBuf$"), "{output}");
+    }
+
+    #[test]
+    fn record_programs_that_never_read_a_string_field_load_no_trim_library() {
+        let source = r#"record R
+    name: string(8)
+end record
+file db as R = open("write_only.dat")
+db[1] = { name: "ab" }
+end
+"#;
+        let output = compile_source("write_only.bcl", source).expect("should compile");
+        assert!(!output.to_ascii_lowercase().contains("trim"), "{output}");
+    }
+
+    #[test]
+    fn stdlib_strings_provides_ltrim_rtrim_and_trim_once() {
+        let source = "program strs\nrequire com.bascal.stdlib.strings\nrequire com.bascal.stdlib.ltrim\n\
+                      s$ = \"  hi  \"\nprint trim$(s$); s$.ltrim(); s$.rtrim()\nend\n";
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("strs.bcl");
+        std::fs::write(&input, source).unwrap();
+        let output = compile_file(&input, &CompileOptions::new()).expect("should compile");
+        assert_eq!(output.matches("' function ltrim$").count(), 1, "{output}");
+        assert_eq!(output.matches("' function trim$").count(), 1, "{output}");
     }
 
     #[test]
@@ -1373,9 +2255,9 @@ end
         );
         assert!(
             // RTRIM$ isn't a real MBASIC/BASCOM builtin -- string fields are
-            // unpacked through an inline LEN/MID$/LEFT$ trim loop instead,
-            // and CVI/CVL/CVS/CVD take no suffix at all.
-            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
+            // unpacked through the stdlib rtrim method instead, and
+            // CVI/CVL/CVS/CVD take no suffix at all.
+            output.contains("rtrimSelf0$ = itemsNameBuf$") && output.contains("CVI(itemsQtyBuf$)"),
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(
@@ -1431,7 +2313,7 @@ end
             "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
         );
         assert!(
-            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
+            output.contains("rtrimSelf0$ = itemsNameBuf$") && output.contains("CVI(itemsQtyBuf$)"),
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(
@@ -1490,9 +2372,22 @@ end
     }
 
     #[test]
+    fn do_loop_inside_a_function_resolves_its_top_label_to_a_line_number() {
+        let source = "function countUp%(limit%)\nn% = 0\ndo\nn% = n% + 1\nloop until n% >= limit%\nreturn n%\nend function\nprint countUp%(3)\nend\n";
+        let output = compile_source("callable_do.bcl", source).expect("should compile");
+        assert!(
+            !output.contains("DO_0"),
+            "a symbolic DO label survived numbering:\n{output}"
+        );
+    }
+
+    #[test]
     fn record_downto_lowers_to_step_negative_one() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
-        assert!(output.contains("FOR i = 3 TO 1 STEP -1"));
+        assert!(
+            output.contains("FOR i = 3 TO 1 STEP -1") || output.contains("FOR i! = 3 TO 1 STEP -1"),
+            "{output}"
+        );
     }
 
     #[test]
@@ -1658,8 +2553,14 @@ end
 "#;
         let output =
             compile_source("partial_exists.bcl", source).expect("partial update should compile");
+        // Either the single-line AST form or the typed block form is fine, as
+        // long as the guard precedes the GET.
+        let guard = output
+            .find("LOF(#1) < (2) * 50")
+            .or_else(|| output.find("LOF(1) < ((2) * 50)"));
+        let get = output.find("GET #1, 2");
         assert!(
-            output.contains("IF LOF(#1) < (2) * 50 THEN ERROR 63"),
+            guard.is_some() && output.contains("ERROR 63") && guard < get,
             "a partial update must reject a missing fixed-length record before GET:\n{output}"
         );
     }
@@ -1684,7 +2585,7 @@ end
         );
         assert!(output.contains("LSET dbIdBuf$ = MKI$(3)"));
         assert!(output.contains("LSET dbNameBuf$ = \"Carol\""));
-        assert!(output.contains("LSET dbScoreBuf$ = MKD$(78)"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(78"), "{output}");
         assert!(output.contains("PUT #1, 3"));
     }
 
@@ -1797,9 +2698,10 @@ end
 end
 "#;
         let err = compile_source("bad.bcl", source).expect_err("should reject unknown record type");
-        assert!(err
-            .iter()
-            .any(|d| d.message.contains("unknown record type")));
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("unknown record type"))
+        );
     }
 
     #[test]
@@ -1811,9 +2713,10 @@ db[1] = { n: 1 }
 end
 "#;
         let err = compile_source("bad.bcl", source).expect_err("should reject undeclared file var");
-        assert!(err
-            .iter()
-            .any(|d| d.message.contains("not a declared `file`")));
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("not a declared `file`"))
+        );
     }
 
     #[test]
@@ -1897,6 +2800,123 @@ end
                 "unexpected diagnostics for {source:?}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn goto_into_a_procedure_body_from_top_level_is_rejected() {
+        // See GitHub issue #149: a top-level GOTO into a label declared
+        // inside a procedure transpiles to a GOTO landing on code whose
+        // block ends in a bare RETURN, with no matching GOSUB call frame.
+        let source =
+            "procedure demo()\n    inside: print \"inside\"\nend procedure\ngoto inside\nend\n";
+        let err = compile_source("goto_into_proc.bcl", source)
+            .expect_err("a goto into a procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto inside`") && d.message.contains("top-level")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_a_different_procedures_body_is_rejected() {
+        let source = "procedure a()\n    gosub bTarget\nend procedure\nprocedure b()\n    bTarget: print \"in b\"\nend procedure\na()\nb()\nend\n";
+        let err = compile_source("gosub_cross_procedure.bcl", source)
+            .expect_err("a gosub reaching into a different procedure's label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub btarget`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_the_same_procedures_own_body_is_also_rejected() {
+        // A raw GOSUB into a function/procedure body is rejected even when
+        // it targets a label inside that very same function/procedure --
+        // that body is meant to be entered only through the compiler's own
+        // generated call sequence, not a second, uncontrolled way in.
+        let source = "procedure demo()\n    gosub inner\n    return\n    inner:\n    print \"inner\"\n    return\nend procedure\ndemo()\nend\n";
+        let err = compile_source("gosub_same_procedure.bcl", source)
+            .expect_err("a gosub into the same procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub inner`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_out_of_a_procedure_to_top_level_is_rejected() {
+        let source = "procedure demo()\n    goto outside\nend procedure\ndemo()\noutside: print \"outside\"\nend\n";
+        let err = compile_source("goto_out_of_proc.bcl", source).expect_err(
+            "a goto from inside a procedure out to a top-level label should be rejected",
+        );
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto outside`") && d.message.contains("`demo`")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_gosub_to_a_label_in_the_correct_scope_is_accepted() {
+        let source = r#"
+procedure demo()
+    goto inside
+    print "skipped"
+    inside: print "inside"
+end procedure
+demo()
+top: print "top"
+goto again
+again: print "again"
+end
+"#;
+        compile_source("goto_same_scope.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn gosub_to_a_top_level_label_is_accepted_from_top_level_and_from_inside_a_procedure() {
+        // A raw GOSUB to a top-level label is the one case the cross-scope
+        // check still allows regardless of where the GOSUB itself is
+        // written -- the classic BASIC "flat GOSUB subroutine" pattern,
+        // callable from anywhere, top-level code and procedure bodies
+        // alike, since the target was never inside a function/procedure
+        // body to begin with.
+        let source = r#"
+gosub topSub
+procedure demo()
+    gosub topSub
+end procedure
+demo()
+goto skip
+topSub:
+    print "in top-level subroutine"
+    return
+skip:
+end
+"#;
+        compile_source("gosub_top_level_target.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn on_error_goto_targeting_a_procedure_from_a_different_scope_is_still_allowed() {
+        // `on error goto` is exempt from the cross-scope check: its target
+        // may legitimately be a procedure declared anywhere in the
+        // program (see `error_handler_targets`), unlike a plain goto/gosub.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    resume next
+end procedure
+"#;
+        compile_source("on_error_goto_cross_scope_ok.bcl", source).expect("should compile");
     }
 
     #[test]
@@ -2007,6 +3027,95 @@ end
     }
 
     #[test]
+    fn bare_continue_resolves_to_the_innermost_enclosing_loop_kind() {
+        // A `for` has no native "skip to the increment" the way it has
+        // `EXIT FOR`, so even there `continue` must become a GOTO to a
+        // label placed right before `NEXT` (not `EXIT FOR`, which would
+        // wrongly end the loop instead of just skipping to its next
+        // iteration).
+        let source = r#"for i% = 1 to 5
+    do
+        print i%
+        continue
+    end do
+    if i% = 3 then
+        continue
+    end if
+end for
+end
+"#;
+        let output = compile_source("nested_continue.bcl", source).expect("should compile");
+        assert!(
+            !output.contains("EXIT FOR"),
+            "continue is never EXIT FOR -- it doesn't end the loop:\n{output}"
+        );
+        // Labels get renumbered to plain line numbers by the time this
+        // text is final (same as WHILE_/DO_ TOP/END already do), so the
+        // structural shape -- both continues became a GOTO to a label
+        // placed right before that loop's own back-edge/NEXT, not a
+        // shared one -- is checked behaviorally instead, in
+        // tests/examples.rs's freebasic_runs_continue_when_available.
+        assert_eq!(
+            output.matches("GOTO").count(),
+            4,
+            "one GOTO for each continue (for's and do's), plus the do's own \
+             unconditional back-edge and the if's own jump around the second \
+             continue:\n{output}"
+        );
+    }
+
+    #[test]
+    fn continue_in_a_post_condition_do_loop_does_not_skip_the_post_check() {
+        // Regression test: a do-loop's post-condition check (`loop
+        // until`/`loop while`) must still run on every iteration, even
+        // one that hit `continue` -- jumping straight back to the loop's
+        // own top label instead would skip that check entirely, turning
+        // this into an infinite loop. Found via the C backend specifically
+        // (`Statement::Do` always compiles to `while (1) { ...; guard }`,
+        // never a native `do { } while (...)`, so a bare C `continue;`
+        // would have exactly this bug) while adding `continue` -- checked
+        // here for both targets since the BASIC backend's own `do`
+        // codegen has the same "guard runs after the body" shape.
+        let source = r#"i% = 0
+total% = 0
+do
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+loop until i% >= 10
+print total%
+end
+"#;
+        let basic = compile_source("continue_post_condition.bcl", source)
+            .expect("should compile under --target basic");
+        // The loop's own top label gets numbered first (lowest line
+        // number of the two), and only its own post-condition recheck
+        // should ever jump back to it -- if `continue` incorrectly
+        // targeted the same line, "GOTO <top's line>" would appear twice.
+        let top_line = basic
+            .lines()
+            .find(|line| line.contains("i% = i% + 1"))
+            .and_then(|line| line.split_whitespace().next())
+            .expect("expected to find the loop's own top line");
+        assert_eq!(
+            basic.matches(&format!("GOTO {top_line}")).count(),
+            1,
+            "exactly one GOTO to the loop's own top line should exist -- the post-condition \
+             check's own back-edge. If continue also targeted it directly, that would skip the \
+             post-condition check on every continue, turning this into an infinite loop:\n{basic}"
+        );
+
+        let c = compile_source_via_c_target(source);
+        assert!(
+            c.contains("goto bcc_semantic_continue_"),
+            "a do-loop with a post-condition must use goto, not a bare C `continue;`, or the \
+             post-condition guard gets skipped on every `continue`:\n{c}"
+        );
+    }
+
+    #[test]
     fn exit_outside_any_loop_is_a_soft_warning_not_a_hard_error() {
         let source = "print \"before\"\nexit\nprint \"after\"\nend\n";
         let output = compile_source("bad_exit.bcl", source).expect("should compile");
@@ -2024,7 +3133,7 @@ end
         let source = "if x% > 100 then print \"big\" else print \"small\"\nend\n";
         let output = compile_source("single_line_else.bcl", source).expect("should compile");
         assert!(output.contains(r#"PRINT "big""#));
-        assert!(output.contains(r#"PRINT "small""#));
+        assert!(output.contains(r#"PRINT "small""#), "{output}");
         assert!(
             !output.contains("else"),
             "else must not leak into the generated output"
@@ -2054,7 +3163,7 @@ end
             "found% = TRUE\ndone% = FALSE\nif found% = TRUE then\n    print \"yes\"\nend if\nend\n";
         let output = compile_source("boolsugar.bcl", source).expect("should compile");
         assert!(output.contains("found% = -1"));
-        assert!(output.contains("done% = 0"));
+        assert!(output.contains("done% = 0"), "{output}");
         assert!(output.contains("(found% = -1)"));
     }
 
@@ -2075,8 +3184,7 @@ end
         // after the *first* dequeued statement, so a queued second/third
         // DIM used to leak out and attach to the wrong (outer) block instead
         // of staying inside the `if`.
-        let source =
-            "x% = 5\nif x% > 0 then dim p%, q% : p% = 1 : q% = 2 : print p% + q%\nprint \"after\"\nend\n";
+        let source = "x% = 5\nif x% > 0 then dim p%, q% : p% = 1 : q% = 2 : print p% + q%\nprint \"after\"\nend\n";
         let output = compile_source("dim_in_if.bcl", source).expect("should compile");
         let if_line = output
             .lines()
@@ -2152,10 +3260,9 @@ end
         // MID$(str$, start[, length]) = replacement$ -- same-length substring
         // replace. Real MBASIC/BASCOM 2.00 has no MID$ assignment statement
         // at all (it's a later QuickBASIC-era addition), so this must not
-        // pass through as raw `MID$(...) = ...` -- it needs to transpile to a
-        // call to BASCAL's own com.bascal.stdlib.midAssign helper, same as
-        // every other real-BASCOM incompatibility this transpiler works
-        // around.
+        // pass through as raw `MID$(...) = ...` -- the typed BASIC path emits
+        // an explicit same-length splice because real MBASIC/BASCOM has no
+        // MID$ assignment statement.
         let source = r#"s$ = "Hello World"
 mid$(s$, 7, 5) = "BASIC"
 mid$(s$, 1) = "Goodbye"
@@ -2169,33 +3276,20 @@ end
              MBASIC/BASCOM has no such statement:\n{output}"
         );
         assert!(
-            output.contains("' function midassign$"),
-            "expected the com.bascal.stdlib.midAssign helper to be auto-injected:\n{output}"
+            output.contains("LEFT$("),
+            "expected inline MID$ prefix splice:\n{output}"
         );
-        // Three-argument form.
-        assert!(output.contains("midassignTarget0$ = s$"));
-        assert!(output.contains("midassignStart0% = 7"));
-        assert!(output.contains("midassignLen0% = 5"));
-        assert!(output.contains(r#"midassignValue0$ = "BASIC""#));
-        assert!(output.contains("s$ = midassignResult0$"));
-        // Two-argument form: omitted length behaves as LEN(replacement$).
-        assert!(output.contains(r#"midassignLen0% = LEN("Goodbye")"#));
-        // Both call sites share the same GOSUB target -- one subroutine body.
-        let gosub_targets: std::collections::HashSet<&str> = output
-            .lines()
-            .filter_map(|l| l.trim().strip_prefix("GOSUB "))
-            .collect();
-        assert_eq!(
-            gosub_targets.len(),
-            1,
-            "expected one shared subroutine:\n{output}"
+        assert!(
+            output.contains("MID$("),
+            "expected inline MID$ suffix splice:\n{output}"
         );
-        assert_eq!(
-            output
-                .matches(&format!("GOSUB {}", gosub_targets.iter().next().unwrap()))
-                .count(),
-            2,
-            "expected both call sites to GOSUB the shared subroutine:\n{output}"
+        assert!(
+            output.contains("LEN(BCCT"),
+            "expected two-argument form to use LEN of the captured replacement:\n{output}"
+        );
+        assert!(
+            !output.contains("GOSUB "),
+            "semantic MID$ must emit inline without a helper call:\n{output}"
         );
     }
 
@@ -2203,9 +3297,8 @@ end
     fn mid_assign_target_index_is_evaluated_only_once() {
         // `target` may be an array element whose index has a side effect
         // (here, `nextIndex%()` advances a global counter each time it's
-        // called). MID$ assignment transpilation must evaluate that index
-        // exactly once -- reusing the already-rendered target text for
-        // both the helper call and the write-back -- not once per use.
+        // called). Typed MID$ emission evaluates the index once, snapshots
+        // it, and uses that same array element for the read and write-back.
         let source = r#"dim names$(3)
 names$(0) = "aaaaa"
 i% = 0
@@ -2242,17 +3335,18 @@ end
             "target's array index must be evaluated exactly once:\n{output}"
         );
 
-        // The same rendered index expression is reused verbatim for the
-        // write-back, not re-evaluated.
-        let target_text = "names$(nextindexResult0%)";
+        let target_read = output
+            .lines()
+            .find(|line| line.contains("= names$(BCCT"))
+            .expect("expected target value to use the captured array index");
+        let captured_index = target_read
+            .split("names$(")
+            .nth(1)
+            .and_then(|tail| tail.split(')').next())
+            .expect("captured array index missing");
         assert!(
-            output.contains(&format!("midassignTarget0$ = {target_text}")),
-            "expected the call argument to reuse the already-evaluated index:\n{output}"
-        );
-        assert!(
-            output.contains(&format!("{target_text} = midassignResult0$")),
-            "expected the write-back to reuse the already-evaluated index, not call \
-             nextIndex%() again:\n{output}"
+            output.contains(&format!("names$({captured_index}) = LEFT$(")),
+            "write-back did not reuse the captured array index:\n{output}"
         );
     }
 
@@ -3436,8 +4530,8 @@ function sumArr%(arr%(?))
   return total%
 end function
 
-const n% = 6
-dim data%(n%)
+const n = 6
+dim data%(n)
 dummy% = sumArr%(data%)
 end
 "#;
@@ -4541,9 +5635,9 @@ end
 
     #[test]
     fn c_target_supports_string_variables_const_and_assignment() {
-        let source = r#"const appName$ = "Grade Checker"
+        let source = r#"const appName = "Grade Checker"
 playerName$ = "Alice"
-print appName$
+print appName
 print "Player: "; playerName$
 end
 "#;
@@ -4701,11 +5795,11 @@ end
         // codegens exactly like an ordinary assignment, same as the BASIC
         // backend's own treatment of it (BASCAL's resolver, not codegen,
         // is what enforces a const is never reassigned).
-        let source = r#"const maxScore% = 100
-const rate! = 0.15
+        let source = r#"const maxScore = 100
+const rate = 0.15
 score% = 85
-print "Score: "; score%; " / "; maxScore%
-print "Bonus: "; score% * rate!
+print "Score: "; score%; " / "; maxScore
+print "Bonus: "; score% * rate
 end
 "#;
         let output = compile_source_via_c_target(source);
@@ -5051,6 +6145,55 @@ end
         assert!(
             output.contains("    break;\n"),
             "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_continue_uses_native_continue_except_for_a_do_post_condition() {
+        // A real for/while/do-with-no-post-condition is correctly served
+        // by a bare native `continue;` -- but `Statement::Do` always
+        // compiles to `while (1) { ...; guard }`, never a native `do { }
+        // while (...)`, so its post-condition guard sits *after* the
+        // body: a bare `continue;` there would jump to the `while (1)`'s
+        // own top and skip the guard entirely, silently turning `do ...
+        // loop until done` into an infinite loop. Only that one case
+        // needs `goto`.
+        let source = r#"for i% = 1 to 5
+    if i% = 2 then
+        continue
+    end if
+    print i%
+end for
+
+k% = 0
+do while k% < 3
+    k% = k% + 1
+    if k% = 2 then
+        continue
+    end if
+    print k%
+end do
+
+j% = 0
+do
+    j% = j% + 1
+    if j% = 2 then
+        continue
+    end if
+    print j%
+loop until j% >= 3
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.matches("continue;").count() == 2,
+            "the for loop and the pre-condition-only do loop should both use a bare native \
+             `continue;`:\n{output}"
+        );
+        assert!(
+            output.contains("goto bcc_semantic_continue_"),
+            "the post-condition do loop must goto a label placed after the body, not fall \
+             through to a bare `continue;` that would skip its own post-condition guard:\n{output}"
         );
     }
 
@@ -5683,7 +6826,13 @@ end
 
     #[test]
     fn c_target_rejects_gosub_inside_a_procedure() {
-        let source = "procedure p()\n    gosub top\nend procedure\np()\ntop:\nend\n";
+        // The label has to be inside the same procedure as the GOSUB (not
+        // top-level, like this test used to have it) -- otherwise
+        // resolver::reject_cross_scope_branch_targets rejects it first,
+        // for a different reason (a GOSUB can never reach a label in a
+        // different scope at all, on any target), before this C-target-
+        // specific "no GOSUB inside a procedure, full stop" rule ever runs.
+        let source = "procedure p()\n    gosub top\n    top:\nend procedure\np()\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
             diagnostics
@@ -5754,13 +6903,48 @@ end
 
     #[test]
     fn c_target_restore_to_a_label_rewinds_to_that_labels_data() {
-        let source =
-            "read first$\nrestore second\nread other$\nprint first$\nprint other$\nend\ndata \"a\"\nsecond:\ndata \"b\"\n";
+        let source = "read first$\nrestore second\nread other$\nprint first$\nprint other$\nend\ndata \"a\"\nsecond:\ndata \"b\"\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("bcc_data_ptr = 1;"),
             "RESTORE second should resolve to the compile-time item count before that label \
              (1 item -- \"a\" -- precedes it):\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_restore_resolves_a_label_whose_data_lives_inside_a_function() {
+        // A label declared inside a function/procedure body is invisible to
+        // a DATA/label collector that only walks top-level statements --
+        // `FunctionDef.body` is a separate `Vec<Stmt>`, not spliced into
+        // `Program.statements`. This must work even when the RESTORE
+        // targeting that label is inside the very same function.
+        let source = "function readItem%()\n    goto after\n    item:\n    data \"widget\"\n    after:\n    restore item\n    dim x$\n    read x$\n    print x$\n    return 0\nend function\nreadItem%()\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_DATA_COUNT 1")
+                && output.contains("static const char* bcc_data[BCC_DATA_COUNT] = { \"widget\" };"),
+            "DATA inside a function body should still be collected into the flat array:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_data_ptr = 0;"),
+            "RESTORE to a label declared inside a function should resolve to that label's offset:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_restore_resolves_a_top_level_label_whose_data_is_inside_a_function() {
+        // The reverse direction: DATA (and its label) live inside a
+        // function, but the RESTORE targeting it is at top level.
+        let source = "function stashData%()\n    stashed:\n    data \"x\", \"y\", \"z\"\n    return 0\nend function\ndim v$\nrestore stashed\nread v$\nprint v$\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_DATA_COUNT 3"),
+            "DATA inside a function body should still be collected into the flat array:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_data_ptr = 0;"),
+            "top-level RESTORE to a label declared inside a function should resolve to that label's offset:\n{output}"
         );
     }
 
@@ -5840,7 +7024,7 @@ end
         // `dim country$(numCapitals%)` -- a real C array needs a literal
         // size, so the const's own integer value must be recovered at
         // compile time, not treated as a runtime-only variable read.
-        let source = "const n% = 5\ndim arr%(n%)\narr%(0) = 1\nprint arr%(0)\nend\n";
+        let source = "const n = 5\ndim arr%(n)\narr%(0) = 1\nprint arr%(0)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("static int bv_i_arr[6] = {0};"),
@@ -5870,8 +7054,7 @@ end
         // `render_numeric_call`'s `sizeof` arm in codegen_c.rs). `OPTION
         // BASE` is rejected outright (see GitHub issue #50), so this is
         // the only supported indexing.
-        let source =
-            "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
+        let source = "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("printf(\"%d\\n\", 5)"),
@@ -6079,7 +7262,7 @@ end
             "a procedure should compile to a void C function:\n{output}"
         );
         assert!(
-            output.contains("    bf_i_showtotal(42.5);\n"),
+            output.contains("    float bt_arg_0 = 42.5;\n    bf_i_showtotal(bt_arg_0);\n"),
             "unexpected output:\n{output}"
         );
     }
@@ -6099,7 +7282,7 @@ end
         let source = "function larger%(a%, b%)\n    if a% > b% then\n        return a%\n    end if\n    return b%\nend function\nlarger%(3, 9)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("    bf_i_larger(3, 9);\n"),
+            output.contains("    (void)(bf_i_larger(3, 9));\n"),
             "a value-returning function called as a bare statement should still just call it, \
              discarding the result:\n{output}"
         );
@@ -6211,8 +7394,7 @@ end
         // A byval parameter forwarded to another byval parameter used to
         // require a globally inferred maximum capacity. C99 VLAs let each
         // invocation size its copy from the real hidden length instead.
-        let source =
-            "function inner%(arr%(?))\n    arr%(0) = 9\n    return arr%(0)\nend function\n\
+        let source = "function inner%(arr%(?))\n    arr%(0) = 9\n    return arr%(0)\nend function\n\
                        function outer%(arr%(?))\n    return inner%(arr%)\nend function\n\
                        dim data%(2)\n\
                        print outer%(data%)\n\
@@ -6243,7 +7425,10 @@ end
             output.contains("bv_i_grid[(1) * (bv_i_grid_len1) + (2)]"),
             "2-D parameter indexing should flatten with the passed stride:\n{output}"
         );
-        assert!(output.contains("bf_i_setcell(3, 4, &bv_i_grid[0][0])"), "the caller should pass the contiguous first element and both real axis lengths:\n{output}");
+        assert!(
+            output.contains("bf_i_setcell(3, 4, &bv_i_grid[0][0])"),
+            "the caller should pass the contiguous first element and both real axis lengths:\n{output}"
+        );
     }
 
     #[test]
@@ -6283,9 +7468,9 @@ end
                        print maybe%(5)\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.message.contains("must end with an explicit `return`")),
+            diagnostics.iter().any(|d| d
+                .message
+                .contains("return or terminate the process on every control-flow path")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -6351,9 +7536,18 @@ end
         // way reusing them for bitwise AND/OR would be.
         let source = "x% = 5\nif x% > 0 && x% < 10 then\n    print \"in range\"\nend if\nend\n";
         let output = compile_source_via_c_target(source);
+        let positive = output
+            .find("bv_i_x > 0")
+            .expect("first short-circuit operand is emitted");
+        let conjunction = output
+            .find("&&")
+            .expect("C short-circuit conjunction is emitted");
+        let upper_bound = output
+            .find("bv_i_x < 10")
+            .expect("second short-circuit operand is emitted");
         assert!(
-            output.contains("if (((-(bv_i_x > 0)) && (-(bv_i_x < 10)))) {"),
-            "unexpected output:\n{output}"
+            positive < conjunction && conjunction < upper_bound,
+            "operands are not emitted in short-circuit order:\n{output}"
         );
     }
 
@@ -6963,7 +8157,7 @@ end
         let basic = compile_source("no_source_binding.bcl", source)
             .expect("try/catch without source$ should compile");
         assert!(!basic.contains("BCC_RESOLVE_SOURCE_FILE"), "{basic}");
-        assert!(!basic.contains("BCC_SOURCE_FILE$"), "{basic}");
+        assert!(!basic.contains("BCCSOURCEFILE$"), "{basic}");
     }
 
     #[test]
@@ -6983,11 +8177,11 @@ end
         let basic = compile_source("issue_74.bcl", source)
             .expect("catch's optional source$ binding should compile");
         assert!(basic.contains("GOSUB"), "{basic}");
-        assert!(basic.contains("s$ = BCC_SOURCE_FILE$"), "{basic}");
+        assert!(basic.contains("s$ = BCCSOURCEFILE$"), "{basic}");
         // A single-file program collapses to one unconditional assignment,
         // no `IF ERL <= ...` boundary chain needed.
         assert!(
-            basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""),
+            basic.contains("BCCSOURCEFILE$ = \"issue_74.bcl\""),
             "{basic}"
         );
         assert!(!basic.contains("IF ERL <="), "{basic}");
@@ -7003,7 +8197,7 @@ end
         let lib_path = dir.path().join("helper.bcl");
         std::fs::write(
             &lib_path,
-            "library helper\n\nprocedure boom()\n    error 11\nend procedure\n",
+            "library helper\nprint 7\n\nprocedure boom()\n    error 11\nend procedure\n",
         )
         .unwrap();
         let main_path = dir.path().join("main.bcl");
@@ -7085,7 +8279,7 @@ end
         assert!(basic.contains("IF (ERR = 53) THEN GOTO"), "{basic}");
         assert!(basic.contains("PRINT \"cleanup\""), "{basic}");
         assert!(
-            basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"),
+            basic.contains("IF BCCTRY0001PENDING% <> 0 THEN ERROR BCCTRY0001PENDING%"),
             "{basic}"
         );
     }
@@ -7154,11 +8348,11 @@ end
         let basic = compile_source("try_finally_only.bcl", source)
             .expect("try/finally without catch should compile");
         assert!(
-            basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"),
+            basic.contains("BCCTRY") && basic.contains("PENDING% = ERR"),
             "{basic}"
         );
         assert!(
-            basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"),
+            basic.contains("THEN ERROR BCCTRY") && basic.contains("PENDING%"),
             "{basic}"
         );
 
@@ -7199,17 +8393,20 @@ end try
 end
 "#;
         let basic = compile_source("catch_err_erl.bcl", source).expect("should compile");
-        // `err% = ERR`/`erl% = ERL` (the catch block's own real read of
-        // the pseudo-variables) is correct and expected -- the bug was
-        // specifically in copying err%/erl% *into report()'s own call-
-        // argument locals*, which must read `= err%`/`= erl%`, not the
-        // literal (wrong) `= ERR%`/`= ERL%`.
-        assert!(basic.contains("err% = ERR"), "{basic}");
-        assert!(basic.contains("erl% = ERL"), "{basic}");
+        // `BCCERR% = ERR`/`BCCERL% = ERL` (the catch block's own real read
+        // of the pseudo-variables, into its top-level `err%`/`erl%`
+        // bindings' generated safe name -- see `ident()`'s real-BASCOM-
+        // reserved-word rename) is correct and expected -- the bug this
+        // test guards against was specifically in copying err%/erl% *into
+        // report()'s own call-argument locals*, which must read
+        // `= BCCERR%`/`= BCCERL%`, not the literal (wrong) `= ERR%`/
+        // `= ERL%`.
+        assert!(basic.contains("BCCERR% = ERR"), "{basic}");
+        assert!(basic.contains("BCCERL% = ERL"), "{basic}");
         assert!(!basic.contains("= ERR%"), "{basic}");
         assert!(!basic.contains("= ERL%"), "{basic}");
-        assert!(basic.contains("= err%"), "{basic}");
-        assert!(basic.contains("= erl%"), "{basic}");
+        assert!(basic.contains("= BCCERR%"), "{basic}");
+        assert!(basic.contains("= BCCERL%"), "{basic}");
     }
 
     #[test]
@@ -7639,7 +8836,7 @@ end
         let basic =
             compile_file(&path, &CompileOptions::new()).expect("nested try/catch should compile");
         assert!(basic.contains("ON ERROR GOTO 60"), "{basic}");
-        assert!(basic.contains("BCC_TRY_0002_PENDING%"), "{basic}");
+        assert!(basic.contains("BCCTRY0002PENDING%"), "{basic}");
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a
@@ -7676,5 +8873,124 @@ end
             ..CompileOptions::new()
         };
         compile_file(&path, &options).expect_err("should not compile")
+    }
+
+    /// GitHub issue #152: `Target::Fbc` generates identical BASIC to
+    /// `Target::Basic` (`codegen_basic` doesn't distinguish them), except
+    /// that it rejects `try`/`catch` -- see `driver.rs`'s
+    /// `reject_fbc_incompatible_constructs` doc comment and issue #153 for
+    /// why (real `fbc` rejects the `RESUME <lineno>` its generated BASIC
+    /// relies on, even though that's valid, real-BASCOM-verified BASIC).
+    #[test]
+    fn fbc_target_rejects_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\nif true then\ntry\n    print \"hi\"\ncatch e%, l%\nend try\n\
+             end if\nprocedure worker()\ntry\n    print \"worker\"\ncatch e%, l%\nend try\n\
+             end procedure\nend\n",
+        )
+        .unwrap();
+        let options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("--target fbc") && d.message.contains("#153")),
+            "try/catch should be rejected for --target fbc, referencing issue #153: {diagnostics:?}"
+        );
+        let try_lines = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.message.contains("--target fbc"))
+            .map(|diagnostic| {
+                assert_eq!(diagnostic.pos.column, 1, "{diagnostic:?}");
+                assert!(
+                    diagnostic.pos.filename.ends_with("try_catch.bcl"),
+                    "{diagnostic:?}"
+                );
+                diagnostic.pos.line
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(try_lines, [3, 9], "{diagnostics:?}");
+    }
+
+    /// `Target::C64` (Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md) reuses the
+    /// `c` backend end-to-end through the public `compile_file` API: an
+    /// all-integer program -- the subset the C64/`cc65` `CDialectProfile`
+    /// actually supports -- compiles to real C, the same as `Target::C`.
+    #[test]
+    fn c64_target_compiles_a_supported_integer_only_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hello.bcl");
+        std::fs::write(&path, "program p\nprint \"hi\"\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::C64,
+            ..CompileOptions::new()
+        };
+        let c = compile_file(&path, &options).expect("should compile for the c64 target");
+        assert!(c.contains("printf"), "{c}");
+    }
+
+    /// A program using a construct the C64/`cc65` dialect can't express
+    /// (here: `/`, always floating-point-producing -- see
+    /// `c_dialect.rs`'s own doc comment) is rejected with a clear
+    /// diagnostic naming the target, through the same public
+    /// `compile_file` API -- not just at `codegen_c::generate`'s own
+    /// internal level.
+    #[test]
+    fn c64_target_rejects_an_unsupported_float_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("division.bcl");
+        std::fs::write(&path, "program p\na% = 17 / 5\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::C64,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains('/') && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// Same source that `fbc_target_rejects_try_catch` rejects under
+    /// `Target::Fbc` still compiles under `Target::Basic` -- `try`/`catch`
+    /// remains fully supported there (verified against real BASCOM).
+    #[test]
+    fn basic_target_still_accepts_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\ntry\n    print \"hi\"\ncatch e%, l%\nend try\nend\n",
+        )
+        .unwrap();
+        let basic = compile_file(&path, &CompileOptions::new())
+            .expect("try/catch should compile under --target basic");
+        assert!(basic.contains("RESUME"), "{basic}");
+    }
+
+    /// `Target::Fbc` and `Target::Basic` produce identical output for a
+    /// program that doesn't use `try`/`catch` -- `codegen_basic` itself
+    /// doesn't distinguish the two targets at all; only `driver.rs`'s
+    /// pre-codegen check differs between them.
+    #[test]
+    fn fbc_target_matches_basic_target_output_without_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.bcl");
+        std::fs::write(&path, "program p\nprint \"hello\"\nend\n").unwrap();
+        let basic = compile_file(&path, &CompileOptions::new()).expect("should compile");
+        let fbc_options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let fbc = compile_file(&path, &fbc_options).expect("should compile");
+        assert_eq!(basic, fbc);
     }
 }
