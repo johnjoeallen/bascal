@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use bcc::{check_file, compile_file, default_output_path, format, CompileOptions, Target};
+use bcc::{
+    check_file, compile_file, default_output_path, format, source_dependencies, CompileOptions, Target,
+};
 use clap::Parser;
 
 
@@ -436,14 +438,26 @@ fn run(cli: Cli) -> Result<(), String> {
         })?;
     }
 
-    if !cli.clean && is_up_to_date(&cli.input, &output_path) {
+    let options = CompileOptions {
+        library_dirs: cli.library_dirs,
+        libraries: cli.libraries,
+        line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
+        target,
+        strict_vars: cli.strict_vars,
+        strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
+        lint: cli.lint,
+    };
+    let mut sources = vec![cli.input.clone()];
+    sources.extend(source_dependencies(&cli.input, &options));
+
+    if !cli.clean && is_up_to_date(&sources, &output_path) {
         verbose!(
-            "{} is up to date with {} and the compiler, skipping transpile (--clean forces it)",
+            "{} is up to date with {} (and its dependencies and the compiler), skipping transpile (--clean forces it)",
             output_path.display(),
             cli.input.display()
         );
         let binary_path = expected_binary_path(target, &output_path)?;
-        if want_binary && !is_up_to_date(&cli.input, &binary_path) {
+        if want_binary && !is_up_to_date(&sources, &binary_path) {
             let built = invoke_binary(target, &output_path)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
@@ -455,15 +469,6 @@ fn run(cli: Cli) -> Result<(), String> {
         };
     }
 
-    let options = CompileOptions {
-        library_dirs: cli.library_dirs,
-        libraries: cli.libraries,
-        line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
-        target,
-        strict_vars: cli.strict_vars,
-        strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
-        lint: cli.lint,
-    };
     verbose!(
         "transpiling {} (lexer, parser, resolver, {} code generator)",
         cli.input.display(),
@@ -564,20 +569,27 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether `output` is at least as new as both its `input` source and the
-/// running `bcc` executable itself: a rebuilt compiler can emit different
+/// Whether `output` is at least as new as every one of `sources` (the input
+/// `.bcl` plus every file it `require`s or shares, see `source_dependencies`)
+/// and the running `bcc` executable: a rebuilt compiler can emit different
 /// output for the same source, so output older than the compiler is stale.
-fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
-    is_up_to_date_against(input, output, env::current_exe().ok().as_deref())
+fn is_up_to_date(sources: &[PathBuf], output: &Path) -> bool {
+    is_up_to_date_against(sources, output, env::current_exe().ok().as_deref())
 }
 
-fn is_up_to_date_against(input: &Path, output: &Path, compiler: Option<&Path>) -> bool {
+fn is_up_to_date_against<P: AsRef<Path>>(sources: &[P], output: &Path, compiler: Option<&Path>) -> bool {
     let mtime = |path: &Path| fs::metadata(path).and_then(|meta| meta.modified()).ok();
-    let (Some(in_mtime), Some(out_mtime)) = (mtime(input), mtime(output)) else {
+    let Some(out_mtime) = mtime(output) else {
         return false;
     };
-    if out_mtime < in_mtime {
-        return false;
+    let newest_input = sources
+        .iter()
+        .map(|source| mtime(source.as_ref()))
+        .collect::<Option<Vec<_>>>()
+        .and_then(|times| times.into_iter().max());
+    match newest_input {
+        Some(newest) if out_mtime >= newest => {}
+        _ => return false,
     }
     match compiler.and_then(mtime) {
         Some(compiler_mtime) => out_mtime >= compiler_mtime,
@@ -1167,11 +1179,40 @@ mod tests {
         let output = set("out.j", 200);
         let old_compiler = set("old-bcc", 250);
         let new_compiler = set("new-bcc", 100);
-        assert!(is_up_to_date_against(&input, &output, Some(&old_compiler)));
-        assert!(!is_up_to_date_against(&input, &output, Some(&new_compiler)));
-        assert!(is_up_to_date_against(&input, &output, None));
+        assert!(is_up_to_date_against(&[&input], &output, Some(&old_compiler)));
+        assert!(!is_up_to_date_against(&[&input], &output, Some(&new_compiler)));
+        assert!(is_up_to_date_against(&[&input], &output, None));
         let newer_input = set("newer.bcl", 50);
-        assert!(!is_up_to_date_against(&newer_input, &output, Some(&old_compiler)));
+        assert!(!is_up_to_date_against(&[&newer_input], &output, Some(&old_compiler))
+        );
+        let newer_dependency = set("lib.bcl", 50);
+        assert!(
+            !is_up_to_date_against(&[&input, &newer_dependency], &output, Some(&old_compiler)));
+    }
+
+    #[test]
+    fn source_dependencies_follow_nested_requires() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, text: &str| fs::write(dir.path().join(name), text).unwrap();
+        write("main.bcl", "program main\nrequire outer\nprint 1\n");
+        write("outer.bcl", "library outer\nrequire inner\n");
+        write("inner.bcl", "library inner\n");
+        let options = CompileOptions {
+            library_dirs: Vec::new(),
+            libraries: Vec::new(),
+            line_numbers: false,
+            target: Target::Basic,
+            strict_vars: false,
+            strict_vars_warn: false,
+            lint: false,
+        };
+        let deps = source_dependencies(&dir.path().join("main.bcl"), &options);
+        let names: Vec<_> = deps
+            .iter()
+            .filter(|path| path.starts_with(dir.path()))
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["inner.bcl", "outer.bcl"]);
     }
 
     #[test]

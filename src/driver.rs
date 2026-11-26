@@ -2440,6 +2440,66 @@ pub(crate) fn resolve_shared_path(
     None
 }
 
+/// Every file besides `input` that a compile of it reads: the transitive
+/// `require`/`import` closure, the shared COMMON file the root program
+/// declares, and the implicit trim libraries the record DSL pulls in. Used
+/// by the up-to-date check, so it lists a file whenever it could change the
+/// generated output; a file that doesn't parse contributes no dependencies
+/// of its own (the real compile reports that error), and one that can't be
+/// resolved is skipped.
+pub fn source_dependencies(input: &Path, options: &CompileOptions) -> Vec<PathBuf> {
+    let mut options = options.clone();
+    if let Some(parent) = input.parent() {
+        let parent = parent.to_path_buf();
+        if !options.library_dirs.contains(&parent) {
+            options.library_dirs.insert(0, parent);
+        }
+    }
+    let root = normalize_path(input);
+    let mut seen: HashSet<PathBuf> = HashSet::from([root.clone()]);
+    let mut dependencies = Vec::new();
+    let mut pending = vec![root.clone()];
+    let note = |path: PathBuf,
+                    seen: &mut HashSet<PathBuf>,
+                    dependencies: &mut Vec<PathBuf>,
+                    pending: &mut Vec<PathBuf>| {
+        let path = normalize_path(&path);
+        if seen.insert(path.clone()) {
+            dependencies.push(path.clone());
+            pending.push(path);
+        }
+    };
+    for symbol in IMPLICIT_TRIM_LIBRARIES {
+        if let Ok(path) = resolve_required_symbol(symbol, &root, &options) {
+            note(path, &mut seen, &mut dependencies, &mut pending);
+        }
+    }
+    while let Some(file) = pending.pop() {
+        let Ok(source) = fs::read_to_string(&file) else {
+            continue;
+        };
+        let Ok(program) = parse_source(file.display().to_string(), &source) else {
+            continue;
+        };
+        for declaration in &program.declarations {
+            let (ast::DependencyDecl::Require(symbol) | ast::DependencyDecl::Import(symbol)) =
+                declaration;
+            if let Ok(path) = resolve_required_symbol(&symbol.raw, &file, &options) {
+                note(path, &mut seen, &mut dependencies, &mut pending);
+            }
+        }
+        if file == root {
+            if let Some(shared) = program_shared_name(&program, None) {
+                if let Some(path) = resolve_shared_path(&shared, &file, &options) {
+                    note(path, &mut seen, &mut dependencies, &mut pending);
+                }
+            }
+        }
+    }
+    dependencies.sort();
+    dependencies
+}
+
 pub(crate) fn resolve_required_symbol(
     raw: &str,
     source_file: &Path,
