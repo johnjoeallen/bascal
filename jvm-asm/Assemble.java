@@ -11,7 +11,7 @@ import java.util.*;
  * the JDK ClassFile API. Run as: java Assemble.java <in.j> <out.class> [<outdir>]
  *
  * Stack map frames and max_stack/max_locals are computed by the API, so the
- * listing's .version/.limit/.stack directives are accepted and ignored.
+ * listing has no .version/.limit/.stack directives (they are rejected).
  * Errors are reported as "<file>:<line>: <message>" with exit status 1.
  * The class name is taken from the .class directive; the class file is
  * written to <out.class>.
@@ -99,8 +99,6 @@ public final class Assemble {
             if (t.startsWith(".")) {
                 String[] tk = t.split("\\s+");
                 switch (tk[0]) {
-                    case ".version", ".limit" -> { }
-                    case ".stack" -> { } // frames are computed
                     case ".class" -> className = tk[tk.length - 1];
                     case ".super" -> superName = tk[1];
                     case ".field" -> {
@@ -120,22 +118,18 @@ public final class Assemble {
                         cur.name = tk[colon - 1]; cur.desc = tk[colon + 1];
                         members.add(cur);
                     }
-                    case ".end" -> { if (tk.length > 1 && tk[1].equals("method")) cur = null; }
+                    case ".end" -> {
+                        if (tk.length != 2 || !tk[1].equals("method")) throw new AsmError(no, "malformed .end");
+                        cur = null;
+                    }
                     case ".catch" -> {
                         // .catch <type> from <L> to <L> using <L>
                         if (cur == null || tk.length != 8 || !tk[2].equals("from") || !tk[4].equals("to") || !tk[6].equals("using"))
                             throw new AsmError(no, "malformed .catch");
                         cur.catches.add(new Catch(no, tk[1], tk[3], tk[5], tk[7]));
                     }
-                    default -> {
-                        if (cur != null && (tk[0].equals("locals") || tk[0].equals("stack"))) break;
-                        throw new AsmError(no, "unknown directive " + tk[0]);
-                    }
+                    default -> throw new AsmError(no, "unknown directive " + tk[0]);
                 }
-                continue;
-            }
-            // frame-body words of a .stack full block
-            if (cur != null && (t.startsWith("locals ") || t.equals("locals") || t.equals("stack") || t.startsWith("stack "))) {
                 continue;
             }
             if (cur == null) throw new AsmError(no, "instruction outside a method: " + t);

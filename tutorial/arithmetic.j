@@ -1,4 +1,3 @@
-.version 50 0
 .class public Arithmetic
 .super java/lang/Object
 
@@ -7,8 +6,6 @@
 .field public static g3 I
 .field public static g4 I
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -25,8 +22,6 @@
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     putstatic Arithmetic/g1 I

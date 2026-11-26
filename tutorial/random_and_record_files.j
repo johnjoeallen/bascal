@@ -1,4 +1,3 @@
-.version 50 0
 .class public RandomAndRecordFiles
 .super java/lang/Object
 
@@ -24,8 +23,6 @@
 .field public static bccBufs [[B
 .field public static bccRecLen [I
 .method public static ltrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -104,8 +101,6 @@ L_condition_1:
 .end method
 
 .method public static rtrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -182,8 +177,6 @@ L_condition_1:
 .end method
 
 .method public static trimmed : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -260,8 +253,6 @@ L_condition_1:
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -278,8 +269,6 @@ L_condition_1:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 31
 
     ldc ""
     putstatic RandomAndRecordFiles/g1 Ljava/lang/String;

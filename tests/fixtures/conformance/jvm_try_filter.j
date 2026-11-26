@@ -1,4 +1,3 @@
-.version 50 0
 .class public JvmTryFilter
 .super java/lang/Object
 
@@ -6,8 +5,6 @@
 .field public static g2 I
 .field public static g3 Ljava/lang/String;
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 4
 
     iconst_0
     putstatic JvmTryFilter/g1 I

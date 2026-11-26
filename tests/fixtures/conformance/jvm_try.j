@@ -1,12 +1,9 @@
-.version 50 0
 .class public JvmTry
 .super java/lang/Object
 
 .field public static g1 I
 .field public static g2 I
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 3
 
     iconst_0
     putstatic JvmTry/g1 I

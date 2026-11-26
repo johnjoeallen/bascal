@@ -1,4 +1,3 @@
-.version 50 0
 .class public PortableErrorHandling
 .super java/lang/Object
 
@@ -39,8 +38,6 @@
 .field public static g35 I
 .field public static g36 Ljava/lang/String;
 .method public static error : (I)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 1
 
     iload 0
     dup
@@ -424,8 +421,6 @@ L_select_0_end:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 37
 
     iconst_0
     putstatic PortableErrorHandling/g1 I

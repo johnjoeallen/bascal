@@ -1,4 +1,3 @@
-.version 50 0
 .class public Functions
 .super java/lang/Object
 
@@ -8,8 +7,6 @@
 .field public static g4 I
 .field public static g5 I
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     istore 1
@@ -98,8 +95,6 @@ L_for_0_end:
 .end method
 
 .method public static lcase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     istore 1
@@ -188,8 +183,6 @@ L_for_0_end:
 .end method
 
 .method public static max : (II)I
-    .limit stack 16
-    .limit locals 2
 
     iload 0
     iload 1
@@ -210,8 +203,6 @@ L_condition_1:
 .end method
 
 .method public static min : (II)I
-    .limit stack 16
-    .limit locals 2
 
     iload 0
     iload 1
@@ -231,8 +222,6 @@ L_condition_1:
 .end method
 
 .method public static clamp : (III)I
-    .limit stack 16
-    .limit locals 3
 
     ; Constrain value to [lo, hi].
     iload 1
@@ -246,8 +235,6 @@ L_condition_1:
 .end method
 
 .method public static repeat : (Ljava/lang/String;I)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 6
 
     ldc ""
     astore 2
@@ -289,8 +276,6 @@ L_for_0_end:
 .end method
 
 .method public static titleCase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 1
 
     ; Capitalise first letter, lowercase remainder.
     ; UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
@@ -335,8 +320,6 @@ L_condition_0:
 .end method
 
 .method public static sumTo : (I)I
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     istore 1
@@ -373,8 +356,6 @@ L_for_0_end:
 .end method
 
 .method public static productTo : (I)I
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     istore 1
@@ -411,8 +392,6 @@ L_for_0_end:
 .end method
 
 .method public static addToTotal : (I)I
-    .limit stack 16
-    .limit locals 1
 
     getstatic Functions/g5 I
     iload 0
@@ -425,8 +404,6 @@ L_for_0_end:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 6
 
     ldc ""
     putstatic Functions/g1 Ljava/lang/String;

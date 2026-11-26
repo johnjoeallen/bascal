@@ -1,12 +1,9 @@
-.version 50 0
 .class public RequireDemo
 .super java/lang/Object
 
 .field public static g1 I
 .field public static a0 [I
 .method public static mean : ([I)D
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     istore 1
@@ -64,8 +61,6 @@ L_for_0_end:
 .end method
 
 .method public static maximum : ([I)I
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     istore 1
@@ -123,8 +118,6 @@ L_for_0_end:
 .end method
 
 .method public static minimum : ([I)I
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     istore 1
@@ -181,8 +174,6 @@ L_for_0_end:
 .end method
 
 .method public static rangeOf : ([I)I
-    .limit stack 16
-    .limit locals 1
 
     aload 0
     bipush 1
@@ -202,8 +193,6 @@ L_for_0_end:
 .end method
 
 .method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;
-    .limit stack 5
-    .limit locals 5
 
     iload 1
     iconst_1
@@ -216,34 +205,26 @@ L_for_0_end:
         L_copy_object
     default : L_copy_invalid
 L_copy_int:
-    .stack full
-    locals Object java/lang/Object Integer Integer
-    stack
-    .end stack
     aload 0
     checkcast [I
     invokevirtual [I/clone ()Ljava/lang/Object;
     areturn
 L_copy_long:
-    .stack same
     aload 0
     checkcast [J
     invokevirtual [J/clone ()Ljava/lang/Object;
     areturn
 L_copy_double:
-    .stack same
     aload 0
     checkcast [D
     invokevirtual [D/clone ()Ljava/lang/Object;
     areturn
 L_copy_object:
-    .stack same
     aload 0
     checkcast [Ljava/lang/Object;
     invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
     areturn
 L_copy_nested:
-    .stack same
     aload 0
     checkcast [Ljava/lang/Object;
     invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
@@ -252,10 +233,6 @@ L_copy_nested:
     iconst_0
     istore 4
 L_copy_loop:
-    .stack full
-    locals Object java/lang/Object Integer Integer Object [Ljava/lang/Object; Integer
-    stack
-    .end stack
     iload 4
     aload 3
     arraylength
@@ -274,14 +251,9 @@ L_copy_loop:
     iinc 4 1
     goto L_copy_loop
 L_copy_done:
-    .stack same
     aload 3
     areturn
 L_copy_invalid:
-    .stack full
-    locals Object java/lang/Object Integer Integer
-    stack
-    .end stack
     new java/lang/IllegalArgumentException
     dup
     invokespecial java/lang/IllegalArgumentException/<init> ()V
@@ -289,8 +261,6 @@ L_copy_invalid:
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -307,8 +277,6 @@ L_copy_invalid:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 2
 
     iconst_0
     putstatic RequireDemo/g1 I

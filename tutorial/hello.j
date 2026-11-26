@@ -1,10 +1,7 @@
-.version 50 0
 .class public Hello
 .super java/lang/Object
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 1
 
     ; Tutorial — Hello, World
     ;
