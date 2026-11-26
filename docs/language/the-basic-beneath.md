@@ -5,8 +5,8 @@ backend, an early-stage `jvm` backend, and a `c64` backend that reuses the C
 backend for `cc65`. The BASIC backend transpiles to
 classic line-numbered Microsoft BASIC. The C backend transpiles to C source
 for a native compiler; use `--target c` to select it. The JVM backend,
-`--target jvm`, emits low-level [Krakatau](https://github.com/Storyyeller/Krakatau)
-assembly text, assembled into a `.class` and run on any JRE. It supports scalar
+`--target jvm`, emits a low-level assembly listing, assembled into a version-69 `.class`
+with the JDK 25 ClassFile API and run on JDK 25 or later. It supports scalar
 values, arithmetic, strings and concatenation, comparisons, structured
 branches and loops, and numeric/string `SELECT CASE`; functions and most I/O
 remain in progress.

@@ -78,18 +78,18 @@ program arithmetic
 /* Arithmetic — mix labels and numbers with ; */
 a% = 17
 b% = 5
-print a%; "+ "; b%; "="; a% + b%   // 17 + 5 = 22
-print a%; "- "; b%; "="; a% - b%   // 17 - 5 = 12
-print a%; "* "; b%; "="; a% * b%   // 17 * 5 = 85
-print a%; "/ "; b%; "="; a% / b%   // 17 / 5 = 3  (truncates)
+print a%; "+ "; b%; "="; a% + b% // 17 + 5 = 22
+print a%; "- "; b%; "="; a% - b% // 17 - 5 = 12
+print a%; "* "; b%; "="; a% * b% // 17 * 5 = 85
+print a%; "/ "; b%; "="; a% / b% // 17 / 5 = 3  (truncates)
 
 /* Integer division and MOD */
-print a%; "\ "; b%; "="; a% \ b%   // 17 \ 5 = 3  (integer quotient)
-print a%; "MOD "; b%; "="; a% mod b%  // 17 MOD 5 = 2  (remainder)
+print a%; "\ "; b%; "="; a% \ b% // 17 \ 5 = 3  (integer quotient)
+print a%; "MOD "; b%; "="; a% mod b% // 17 MOD 5 = 2  (remainder)
 
 /* Exponentiation — right-associative */
-print "2 ^ 8 ="; 2 ^ 8                   // 256
-print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2          // 512  (= 2 ^ (3^2) = 2^9)
+print "2 ^ 8 ="; 2 ^ 8 // 256
+print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2 // 512  (= 2 ^ (3^2) = 2^9)
 
 /* Precedence */
 print 2 + 3 * 4; " (expect 14 — * before +)"
@@ -98,7 +98,7 @@ print (2 + 3) * 4; " (expect 20 — parens first)"
 /* Comparison — -1 means true, 0 means false */
 print 10 > 3; " (expect -1)"
 print 10 < 3; " (expect  0)"
-print 7 = 7;  " (expect -1)"
+print 7 = 7; " (expect -1)"
 print 7 <> 8; " (expect -1)"
 
 /* Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values */
@@ -113,7 +113,7 @@ print "Hello" + ", " + "World" + "!"
 
 /* Unary negation */
 n% = 42
-print -n%              // -42
+print -n% // -42
 
 end
 
@@ -156,48 +156,48 @@ end
 220 '
 230 ' IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 240 ' Test for false with (expr) = 0, not NOT expr.
-
 250 ' Arithmetic — mix labels and numbers with ;
 260 a% = 17
 270 b% = 5
 280 PRINT a%; "+ "; b%; "="; a% + b%
-290 PRINT a%; "- "; b%; "="; a% - b%
-300 PRINT a%; "* "; b%; "="; a% * b%
-310 PRINT a%; "/ "; b%; "="; a% / b%
-
-320 ' Integer division and MOD
-330 PRINT a%; "\ "; b%; "="; a% \ b%
-340 PRINT a%; "MOD "; b%; "="; a% MOD b%
-
-350 ' Exponentiation — right-associative
-360 PRINT "2 ^ 8 ="; 2 ^ 8
-370 PRINT "2 ^ 3 ^ 2 ="; 2 ^ (3 ^ 2)
-
-380 ' Precedence
-390 PRINT 2 + (3 * 4); " (expect 14 — * before +)"
-400 PRINT (2 + 3) * 4; " (expect 20 — parens first)"
-
-410 ' Comparison — -1 means true, 0 means false
-420 PRINT 10 > 3; " (expect -1)"
-430 PRINT 10 < 3; " (expect  0)"
-440 PRINT 7 = 7; " (expect -1)"
-450 PRINT 7 <> 8; " (expect -1)"
-
-460 ' Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
-470 x% = 7
-480 IF ((x% > 0) AND (x% < 10)) = 0 THEN GOTO 500
-490     PRINT x%; "is in 1..9"
-500 REM END IF
-510 PRINT 6 XOR 3; " (expect 5 — 110 XOR 011 = 101)"
-
-520 ' String concatenation
-530 PRINT (("Hello" + ", ") + "World") + "!"
-
-540 ' Unary negation
-550 n% = 42
-560 PRINT -n%
-
-570 END
+290 ' 17 + 5 = 22
+300 PRINT a%; "- "; b%; "="; a% - b%
+310 ' 17 - 5 = 12
+320 PRINT a%; "* "; b%; "="; a% * b%
+330 ' 17 * 5 = 85
+340 PRINT a%; "/ "; b%; "="; a% / b%
+350 ' 17 / 5 = 3  (truncates)
+360 ' Integer division and MOD
+370 PRINT a%; "\ "; b%; "="; a% \ b%
+380 ' 17 \ 5 = 3  (integer quotient)
+390 PRINT a%; "MOD "; b%; "="; a% MOD b%
+400 ' 17 MOD 5 = 2  (remainder)
+410 ' Exponentiation — right-associative
+420 PRINT "2 ^ 8 ="; 2 ^ 8
+430 ' 256
+440 PRINT "2 ^ 3 ^ 2 ="; 2 ^ (3 ^ 2)
+450 ' 512  (= 2 ^ (3^2) = 2^9)
+460 ' Precedence
+470 PRINT 2 + (3 * 4); " (expect 14 — * before +)"
+480 PRINT (2 + 3) * 4; " (expect 20 — parens first)"
+490 ' Comparison — -1 means true, 0 means false
+500 PRINT 10 > 3; " (expect -1)"
+510 PRINT 10 < 3; " (expect  0)"
+520 PRINT 7 = 7; " (expect -1)"
+530 PRINT 7 <> 8; " (expect -1)"
+540 ' Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
+550 x% = 7
+560 IF ((x% > 0) AND (x% < 10)) = 0 THEN GOTO 580
+570     PRINT x%; "is in 1..9"
+580 REM END IF
+590 PRINT 6 XOR 3; " (expect 5 — 110 XOR 011 = 101)"
+600 ' String concatenation
+610 PRINT (("Hello" + ", ") + "World") + "!"
+620 ' Unary negation
+630 n% = 42
+640 PRINT -n%
+650 ' -42
+660 END
 
 ```
 
@@ -309,22 +309,39 @@ int main(void) {
 
 ```basic
 
-.version 50 0
 .class public Arithmetic
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 I
+.field public static g3 I
+.field public static g4 I
+.method public static bccStr : (D)Ljava/lang/String;
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
-    istore 1
+    putstatic Arithmetic/g1 I
     iconst_0
-    istore 2
+    putstatic Arithmetic/g2 I
     iconst_0
-    istore 3
+    putstatic Arithmetic/g3 I
     iconst_0
-    istore 4
+    putstatic Arithmetic/g4 I
     ; Tutorial — Operators and Expressions
     ;
     ; Arithmetic:   +  -  *  /  \  MOD  ^
@@ -347,98 +364,103 @@ int main(void) {
     ;
     ; IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
     ; Test for false with (expr) = 0, not NOT expr.
-
     ; Arithmetic — mix labels and numbers with ;
     ldc 17
-    istore 1
+    putstatic Arithmetic/g1 I
     ldc 5
-    istore 2
+    putstatic Arithmetic/g2 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "+ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     iadd
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 + 5 = 22
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "- "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     isub
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 - 5 = 12
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "* "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     imul
     invokevirtual java/io/PrintStream/println (I)V
+    ; 17 * 5 = 85
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "/ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     ddiv
-    invokevirtual java/io/PrintStream/println (D)V
-
+    d2f
+    f2d
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; 17 / 5 = 3  (truncates)
     ; Integer division and MOD
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "\\ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
     dup2
     ldc2_w 0.5
@@ -447,7 +469,7 @@ int main(void) {
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     dup2
     ldc2_w 0.5
@@ -458,20 +480,21 @@ int main(void) {
     d2l
     ldiv
     invokevirtual java/io/PrintStream/println (J)V
+    ; 17 \ 5 = 3  (integer quotient)
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "MOD "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
     dup2
     ldc2_w 0.5
@@ -480,7 +503,7 @@ int main(void) {
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     dup2
     ldc2_w 0.5
@@ -491,7 +514,7 @@ int main(void) {
     d2l
     lrem
     invokevirtual java/io/PrintStream/println (J)V
-
+    ; 17 MOD 5 = 2  (remainder)
     ; Exponentiation — right-associative
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "2 ^ 8 ="
@@ -502,7 +525,9 @@ int main(void) {
     ldc 8
     i2d
     invokestatic java/lang/Math/pow (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; 256
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "2 ^ 3 ^ 2 ="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -515,8 +540,9 @@ int main(void) {
     i2d
     invokestatic java/lang/Math/pow (DD)D
     invokestatic java/lang/Math/pow (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
-
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; 512  (= 2 ^ (3^2) = 2^9)
     ; Precedence
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 2
@@ -538,7 +564,6 @@ int main(void) {
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect 20 — parens first)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Comparison — -1 means true, 0 means false
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 10
@@ -591,11 +616,10 @@ int main(void) {
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect -1)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
     ldc 7
-    istore 4
-    iload 4
+    putstatic Arithmetic/g4 I
+    getstatic Arithmetic/g4 I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -609,7 +633,7 @@ int main(void) {
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 4
+    getstatic Arithmetic/g4 I
     ldc 10
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
@@ -625,14 +649,14 @@ int main(void) {
     land
     lconst_0
     lcmp
-    ifeq L_if_0_else
+    ifeq L_condition_0
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic Arithmetic/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is in 1..9"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_0_else:
+L_condition_0:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 6
     i2d
@@ -657,7 +681,6 @@ L_if_0_else:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc " (expect 5 — 110 XOR 011 = 101)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; String concatenation
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -683,15 +706,14 @@ L_if_0_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Unary negation
     ldc 42
-    istore 3
+    putstatic Arithmetic/g3 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Arithmetic/g3 I
     ineg
     invokevirtual java/io/PrintStream/println (I)V
-
+    ; -42
     return
 .end method
 

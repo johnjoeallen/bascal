@@ -57,7 +57,7 @@ def replacement(paths: list[str]) -> str:
 
 
 def main() -> None:
-    for page in sorted(TUTORIALS.glob("[0-9][0-9]_*.md")):
+    for page in sorted(TUTORIALS.glob("*.md")):
         text = page.read_text()
         existing = GENERATED.search(text)
         paths = list(

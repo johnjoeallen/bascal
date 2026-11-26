@@ -95,7 +95,7 @@ points% = 85
 if points% >= 90 then
     grade$ = "A"
 elseif points% >= 80 then
-    grade$ = "B"        // points% = 85 lands here
+    grade$ = "B" // points% = 85 lands here
 elseif points% >= 70 then
     grade$ = "C"
 elseif points% >= 60 then
@@ -124,7 +124,7 @@ if temperature% > 30 then print "Hot day (single-line)"
 if temperature% > 100 then print "Scorching" else print "Not scorching"
 
 /* Compound conditions */
-age%    = 25
+age% = 25
 income% = 45000
 if age% >= 18 and income% >= 30000 then
     print "Eligible"
@@ -168,77 +168,69 @@ end
 170 ' directly after `then` on the same line selects the single-line form
 180 ' instead -- that's the only difference. elseif isn't available
 190 ' single-line, same as classic BASIC.
-
 200 ' Simple IF
 210 temperature% = 23
 220 IF (temperature% > 30) = 0 THEN GOTO 240
 230     PRINT "Hot day"
 240 REM END IF
-
 250 ' IF / ELSE
 260 score% = 72
 270 IF (score% >= 60) = 0 THEN GOTO 300
 280     PRINT "Pass ("; score%; ")"
-290     GOTO 310
+290 GOTO 310
 300     PRINT "Fail ("; score%; ")"
 310 REM END IF
-
 320 ' IF / ELSEIF / ELSE — grade classification
 330 points% = 85
-
 340 IF (points% >= 90) = 0 THEN GOTO 370
 350     grade$ = "A"
-360     GOTO 500
-370     IF (points% >= 80) = 0 THEN GOTO 400
+360 GOTO 510
+370     IF (points% >= 80) = 0 THEN GOTO 410
 380         grade$ = "B"
-390         GOTO 490
-400         IF (points% >= 70) = 0 THEN GOTO 430
-410             grade$ = "C"
-420             GOTO 480
-430             IF (points% >= 60) = 0 THEN GOTO 460
-440                 grade$ = "D"
-450                 GOTO 470
-460                 grade$ = "F"
-470             REM END IF
-480         REM END IF
-490     REM END IF
-500 REM END IF
-
-510 PRINT "Grade: " + grade$
-
-520 ' Nested IF
-530 x% = 15
-540 IF (x% > 0) = 0 THEN GOTO 610
-550     IF (x% > 10) = 0 THEN GOTO 580
-560         PRINT x%; "is large and positive"
-570         GOTO 590
-580         PRINT x%; "is small and positive"
-590     REM END IF
-600     GOTO 620
-610     PRINT x%; "is not positive"
-620 REM END IF
-
-630 ' Single-line IF -- no end if needed
-640 temperature% = 23
-650 IF (temperature% > 30) = 0 THEN GOTO 670
-660     PRINT "Hot day (single-line)"
-670 REM END IF
-680 IF (temperature% > 100) = 0 THEN GOTO 710
-690     PRINT "Scorching"
-700     GOTO 720
-710     PRINT "Not scorching"
-720 REM END IF
-
-730 ' Compound conditions
-740 age% = 25
-750 income% = 45000
-760 IF ((age% >= 18) AND (income% >= 30000)) = 0 THEN GOTO 790
-770     PRINT "Eligible"
-780     GOTO 800
-790     PRINT "Not eligible"
-800 REM END IF
-
-810 END
+390         ' points% = 85 lands here
+400     GOTO 500
+410         IF (points% >= 70) = 0 THEN GOTO 440
+420             grade$ = "C"
+430         GOTO 490
+440             IF (points% >= 60) = 0 THEN GOTO 470
+450                 grade$ = "D"
+460             GOTO 480
+470                 grade$ = "F"
+480             REM END IF
+490         REM END IF
+500     REM END IF
+510 REM END IF
+520 PRINT "Grade: " + grade$
+530 ' Nested IF
+540 x% = 15
+550 IF (x% > 0) = 0 THEN GOTO 620
+560     IF (x% > 10) = 0 THEN GOTO 590
+570         PRINT x%; "is large and positive"
+580     GOTO 600
+590         PRINT x%; "is small and positive"
+600     REM END IF
+610 GOTO 630
+620     PRINT x%; "is not positive"
+630 REM END IF
+640 ' Single-line IF -- no end if needed
+650 temperature% = 23
+660 IF (temperature% > 30) = 0 THEN GOTO 680
+670     PRINT "Hot day (single-line)"
+680 REM END IF
+690 IF (temperature% > 100) = 0 THEN GOTO 720
+700     PRINT "Scorching"
+710 GOTO 730
+720     PRINT "Not scorching"
+730 REM END IF
+740 ' Compound conditions
+750 age% = 25
+760 income% = 45000
+770 IF ((age% >= 18) AND (income% >= 30000)) = 0 THEN GOTO 800
+780     PRINT "Eligible"
+790 GOTO 810
+800     PRINT "Not eligible"
+810 REM END IF
+820 END
 
 ```
 
@@ -307,6 +299,7 @@ int main(void) {
     } else {
         if ((-(bv_i_points >= 80))) {
             snprintf(bv_s_grade, sizeof(bv_s_grade), "%s", "B");
+            // points% = 85 lands here
         } else {
             if ((-(bv_i_points >= 70))) {
                 snprintf(bv_s_grade, sizeof(bv_s_grade), "%s", "C");
@@ -373,28 +366,32 @@ int main(void) {
 
 ```basic
 
-.version 50 0
 .class public Conditions
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
+.field public static g6 I
+.field public static g7 I
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 8
 
     iconst_0
-    istore 1
+    putstatic Conditions/g1 I
     ldc ""
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic Conditions/g3 I
     iconst_0
-    istore 4
+    putstatic Conditions/g4 I
     iconst_0
-    istore 5
+    putstatic Conditions/g5 I
     iconst_0
-    istore 6
+    putstatic Conditions/g6 I
     iconst_0
-    istore 7
+    putstatic Conditions/g7 I
     ; Tutorial — Conditions: IF / ELSEIF / ELSE / END IF
     ;
     ; BASCAL supports multi-line block IF statements.  The compiler transpiles
@@ -412,26 +409,24 @@ int main(void) {
     ; directly after `then` on the same line selects the single-line form
     ; instead -- that's the only difference. elseif isn't available
     ; single-line, same as classic BASIC.
-
     ; Simple IF
     ldc 23
-    istore 6
-    iload 6
+    putstatic Conditions/g6 I
+    getstatic Conditions/g6 I
     ldc 30
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Hot day"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_0_else:
-
+L_condition_0:
     ; IF / ELSE
     ldc 72
-    istore 5
-    iload 5
+    putstatic Conditions/g5 I
+    getstatic Conditions/g5 I
     ldc 60
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -439,34 +434,32 @@ L_if_0_else:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_2
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Pass ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 5
+    getstatic Conditions/g5 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc ")"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    goto L_if_1_end
-L_if_1_else:
+    goto L_condition_3
+L_condition_2:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Fail ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 5
+    getstatic Conditions/g5 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc ")"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_1_end:
-
+L_condition_3:
     ; IF / ELSEIF / ELSE — grade classification
     ldc 85
-    istore 4
-
-    iload 4
+    putstatic Conditions/g4 I
+    getstatic Conditions/g4 I
     ldc 90
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -474,12 +467,12 @@ L_if_1_end:
     isub
     bipush 31
     ishr
-    ifeq L_if_2_else
+    ifeq L_condition_4
     ldc "A"
-    astore 2
-    goto L_if_2_end
-L_if_2_else:
-    iload 4
+    putstatic Conditions/g2 Ljava/lang/String;
+    goto L_condition_5
+L_condition_4:
+    getstatic Conditions/g4 I
     ldc 80
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -487,12 +480,13 @@ L_if_2_else:
     isub
     bipush 31
     ishr
-    ifeq L_if_3_else
+    ifeq L_condition_6
     ldc "B"
-    astore 2
-    goto L_if_3_end
-L_if_3_else:
-    iload 4
+    putstatic Conditions/g2 Ljava/lang/String;
+    ; points% = 85 lands here
+    goto L_condition_7
+L_condition_6:
+    getstatic Conditions/g4 I
     ldc 70
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -500,12 +494,12 @@ L_if_3_else:
     isub
     bipush 31
     ishr
-    ifeq L_if_4_else
+    ifeq L_condition_8
     ldc "C"
-    astore 2
-    goto L_if_4_end
-L_if_4_else:
-    iload 4
+    putstatic Conditions/g2 Ljava/lang/String;
+    goto L_condition_9
+L_condition_8:
+    getstatic Conditions/g4 I
     ldc 60
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -513,108 +507,104 @@ L_if_4_else:
     isub
     bipush 31
     ishr
-    ifeq L_if_5_else
+    ifeq L_condition_10
     ldc "D"
-    astore 2
-    goto L_if_5_end
-L_if_5_else:
+    putstatic Conditions/g2 Ljava/lang/String;
+    goto L_condition_11
+L_condition_10:
     ldc "F"
-    astore 2
-L_if_5_end:
-L_if_4_end:
-L_if_3_end:
-L_if_2_end:
-
+    putstatic Conditions/g2 Ljava/lang/String;
+L_condition_11:
+L_condition_9:
+L_condition_7:
+L_condition_5:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Grade: "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 2
+    getstatic Conditions/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; Nested IF
     ldc 15
-    istore 7
-    iload 7
+    putstatic Conditions/g7 I
+    getstatic Conditions/g7 I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_6_else
-    iload 7
+    ifeq L_condition_12
+    getstatic Conditions/g7 I
     ldc 10
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_7_else
+    ifeq L_condition_14
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is large and positive"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    goto L_if_7_end
-L_if_7_else:
+    goto L_condition_15
+L_condition_14:
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is small and positive"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_7_end:
-    goto L_if_6_end
-L_if_6_else:
+L_condition_15:
+    goto L_condition_13
+L_condition_12:
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is not positive"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_6_end:
-
+L_condition_13:
     ; Single-line IF -- no end if needed
     ldc 23
-    istore 6
-    iload 6
+    putstatic Conditions/g6 I
+    getstatic Conditions/g6 I
     ldc 30
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_8_else
+    ifeq L_condition_16
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Hot day (single-line)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_8_else:
-    iload 6
+L_condition_16:
+    getstatic Conditions/g6 I
     ldc 100
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_9_else
+    ifeq L_condition_18
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Scorching"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    goto L_if_9_end
-L_if_9_else:
+    goto L_condition_19
+L_condition_18:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Not scorching"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_9_end:
-
+L_condition_19:
     ; Compound conditions
     ldc 25
-    istore 1
+    putstatic Conditions/g1 I
     ldc 45000
-    istore 3
-    iload 1
+    putstatic Conditions/g3 I
+    getstatic Conditions/g1 I
     ldc 18
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -630,7 +620,7 @@ L_if_9_end:
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 3
+    getstatic Conditions/g3 I
     ldc 30000
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -649,17 +639,16 @@ L_if_9_end:
     land
     lconst_0
     lcmp
-    ifeq L_if_10_else
+    ifeq L_condition_20
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Eligible"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    goto L_if_10_end
-L_if_10_else:
+    goto L_condition_21
+L_condition_20:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Not eligible"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_10_end:
-
+L_condition_21:
     return
 .end method
 

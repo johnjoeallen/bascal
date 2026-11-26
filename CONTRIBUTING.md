@@ -12,6 +12,9 @@ The standard test suite:
 - Unit-tests for lexer, parser, validation, and function transpilation
 - Transpiles every driver-style `tutorial/**/*.bcl` file (excluding `com/`
   dependency trees) and writes `.bas` output alongside the source
+- If `java` 25 or later is on `PATH`, assembles (with the JDK ClassFile API
+  helper in `jvm-asm/`) and runs the `--target jvm` conformance programs;
+  skipped cleanly otherwise
 - If `fbc` is installed, compiles and runs `sort_driver` and `remline`
   end-to-end
 - If `dosbox-x` is installed *and* `test-fixtures/ibm-basic-compiler/` has

@@ -73,14 +73,14 @@ let greeting$ = "Score is " + str$(score%)
 // so the intent is clear and the value lives in one place.
 program variables
 
-const MAX_SCORE  = 100
-const PASS_MARK  = 60
-const APP_NAME   = "Grade Checker"
-const TAX_RATE   = 0.2
+const MAX_SCORE = 100
+const PASS_MARK = 60
+const APP_NAME = "Grade Checker"
+const TAX_RATE = 0.2
 
 // Variable assignment uses =
-playerName$  = "Alice"
-score%       = 87
+playerName$ = "Alice"
+score% = 87
 temperature! = 36.6
 
 // print mixes strings and numbers directly with ; (no str$() needed)
@@ -132,29 +132,24 @@ end
 180 '
 190 ' const names a value that cannot change.  Use it for magic numbers
 200 ' so the intent is clear and the value lives in one place.
-
-210 maxSCORE% = 100
-220 passMARK% = 60
-230 appNAME$ = "Grade Checker"
-240 taxRATE! = 0.2
-
+210 CONSTMAXSCORE% = 100
+220 CONSTPASSMARK% = 60
+230 CONSTAPPNAME$ = "Grade Checker"
+240 CONSTTAXRATE! = 0.2
 250 ' Variable assignment uses =
 260 playername$ = "Alice"
 270 score% = 87
 280 temperature! = 36.6
-
 290 ' print mixes strings and numbers directly with ; (no str$() needed)
-300 PRINT appNAME$
+300 PRINT CONSTAPPNAME$
 310 PRINT "Player:      "; playername$
-320 PRINT "Score:       "; score%; "/ "; maxSCORE%
-330 PRINT "Pass mark:   "; passMARK%
+320 PRINT "Score:       "; score%; "/ "; CONSTMAXSCORE%
+330 PRINT "Pass mark:   "; CONSTPASSMARK%
 340 PRINT "Temperature: "; temperature!
-350 PRINT "Tax rate:    "; taxRATE!
-
+350 PRINT "Tax rate:    "; CONSTTAXRATE!
 360 ' str$() is still available when you need to build a string value
 370 greeting$ = "Score is " + STR$(score%)
 380 PRINT greeting$
-
 390 END
 
 ```
@@ -293,22 +288,51 @@ static const char* bcc_strd(double value) {
 
 ```basic
 
-.version 50 0
 .class public Variables
 .super java/lang/Object
 
+.field public static g1 Ljava/lang/String;
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
+.field public static g5 Ljava/lang/String;
+.field public static g6 I
+.field public static g7 D
+.field public static g9 D
+.method public static bccStr : (D)Ljava/lang/String;
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 6
 
     ldc ""
-    astore 1
+    putstatic Variables/g1 Ljava/lang/String;
     ldc ""
-    astore 2
+    putstatic Variables/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic Variables/g3 I
+    iconst_0
+    putstatic Variables/g4 I
+    ldc ""
+    putstatic Variables/g5 Ljava/lang/String;
+    iconst_0
+    putstatic Variables/g6 I
     dconst_0
-    dstore 4
+    putstatic Variables/g7 D
+    dconst_0
+    putstatic Variables/g9 D
     ; Tutorial — Variables and Constants
     ;
     ; Every name in BASCAL ends with a type suffix that tells the runtime
@@ -327,72 +351,83 @@ static const char* bcc_strd(double value) {
     ;
     ; const names a value that cannot change.  Use it for magic numbers
     ; so the intent is clear and the value lives in one place.
-
-
+    ldc 100
+    putstatic Variables/g3 I
+    ldc 60
+    putstatic Variables/g4 I
+    ldc "Grade Checker"
+    putstatic Variables/g1 Ljava/lang/String;
+    ldc2_w 0.2
+    putstatic Variables/g7 D
     ; Variable assignment uses =
     ldc "Alice"
-    astore 2
+    putstatic Variables/g5 Ljava/lang/String;
     ldc 87
-    istore 3
+    putstatic Variables/g6 I
     ldc2_w 36.6
-    dstore 4
-
+    d2f
+    f2d
+    putstatic Variables/g9 D
     ; print mixes strings and numbers directly with ; (no str$() needed)
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "Grade Checker"
+    getstatic Variables/g1 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Player:      "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    aload 2
+    getstatic Variables/g5 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Score:       "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Variables/g6 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "/ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc 100
+    getstatic Variables/g3 I
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Pass mark:   "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc 60
+    getstatic Variables/g4 I
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Temperature: "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    dload 4
-    invokevirtual java/io/PrintStream/println (D)V
+    getstatic Variables/g9 D
+    d2f
+    f2d
+    invokestatic Variables/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Tax rate:    "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc2_w 0.2
-    invokevirtual java/io/PrintStream/println (D)V
-
+    getstatic Variables/g7 D
+    d2f
+    f2d
+    invokestatic Variables/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ; str$() is still available when you need to build a string value
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Score is "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    iload 3
+    getstatic Variables/g6 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
-    astore 1
+    putstatic Variables/g2 Ljava/lang/String;
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    aload 1
+    getstatic Variables/g2 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     return
 .end method
 

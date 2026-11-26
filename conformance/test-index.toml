@@ -110,6 +110,15 @@ groups = ["basic"]
 expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
+id = "test.dosbox_conformance.control_loops_select_matches_real_bascom"
+kind = "test"
+source = "dosbox_conformance"
+name = "control_loops_select_matches_real_bascom"
+description = "control_loops_select_matches_real_bascom"
+groups = ["basic", "c"]
+expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+
+[[test]]
 id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"

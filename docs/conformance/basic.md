@@ -6,6 +6,7 @@
 | --- | :---: |
 | Scalar methods match BASCOM | PASS |
 | Constants and printing match BASCOM | PASS |
+| control_loops_select_matches_real_bascom | PASS |
 | MID$ assignment matches BASCOM | PASS |
 | nested_typed_on_gosub_matches_c_target | PASS |
 | String self-concatenation matches BASCOM | PASS |

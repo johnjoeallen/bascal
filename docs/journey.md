@@ -184,6 +184,16 @@ Krakatau's `v2` assembler in directly as a Rust library — via a small,
 upstream-proposed fork that exposes it as a reusable crate — so assembling
 JVM output needs no extra install step at all (`ee976d0`).
 
+That dependency was in turn replaced by the JDK's own ClassFile API
+(`java.lang.classfile`, final in JDK 24). A small helper, `jvm-asm/Assemble.java`,
+embedded in `bcc` and run under `java`, assembles the listing into a
+version-69 class file, with the stack map frames and `max_stack`/`max_locals`
+computed by the API rather than avoided by targeting an old class-file version.
+The JVM target therefore now needs JDK 25 or later, and the `krakatau2` crate
+and its `--krak-stack-size` setting are gone (PR #196). The same change made
+`bcc` regenerate output that is older than the compiler, its required
+libraries, or its shared file, and added blank-line rules to `bcc --format`.
+
 Today BASCAL is a Rust compiler for a structured BASIC-derived language with
 classic BASIC, C, and JVM targets. Its development has moved from making BASIC
 source more readable, through making its runtime translation trustworthy, to
