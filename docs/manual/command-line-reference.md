@@ -174,7 +174,7 @@ It emits an assembly listing (`.j`). With `--binary`/`--run`, `bcc` runs `jvm-as
 
 ### Up-to-Date Check
 
-Without `--clean`, `bcc` skips re-transpiling if the output `.bas` file is newer than all input `.bcl` files. With `--binary` (or `--run`, which implies it), a second up-to-date check covers the compiled binary — and with `--run`, the already-built binary still runs even when nothing needed rebuilding.
+Without `--clean`, `bcc` skips re-transpiling if the output file is at least as new as the input `.bcl` file and the running `bcc` executable (a rebuilt or upgraded compiler invalidates earlier output). With `--binary` (or `--run`, which implies it), a second up-to-date check covers the compiled binary — and with `--run`, the already-built binary still runs even when nothing needed rebuilding.
 
 ### Library Search Order
 

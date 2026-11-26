@@ -438,7 +438,7 @@ fn run(cli: Cli) -> Result<(), String> {
 
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
         verbose!(
-            "{} is newer than {}, skipping transpile (--clean forces it)",
+            "{} is up to date with {} and the compiler, skipping transpile (--clean forces it)",
             output_path.display(),
             cli.input.display()
         );
@@ -564,20 +564,25 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether `output` is at least as new as both its `input` source and the
+/// running `bcc` executable itself: a rebuilt compiler can emit different
+/// output for the same source, so output older than the compiler is stale.
 fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
-    let Ok(in_meta) = fs::metadata(input) else {
+    is_up_to_date_against(input, output, env::current_exe().ok().as_deref())
+}
+
+fn is_up_to_date_against(input: &Path, output: &Path, compiler: Option<&Path>) -> bool {
+    let mtime = |path: &Path| fs::metadata(path).and_then(|meta| meta.modified()).ok();
+    let (Some(in_mtime), Some(out_mtime)) = (mtime(input), mtime(output)) else {
         return false;
     };
-    let Ok(out_meta) = fs::metadata(output) else {
+    if out_mtime < in_mtime {
         return false;
-    };
-    let Ok(in_mtime) = in_meta.modified() else {
-        return false;
-    };
-    let Ok(out_mtime) = out_meta.modified() else {
-        return false;
-    };
-    out_mtime >= in_mtime
+    }
+    match compiler.and_then(mtime) {
+        Some(compiler_mtime) => out_mtime >= compiler_mtime,
+        None => true,
+    }
 }
 
 /// Compiles the transpiler's generated output down to a binary with
@@ -1146,6 +1151,27 @@ mod tests {
     fn parse_target_str_accepts_c64() {
         assert_eq!(parse_target_str("c64"), Some(Target::C64));
         assert_eq!(parse_target_str("C64"), Some(Target::C64));
+    }
+
+    #[test]
+    fn output_older_than_the_compiler_is_not_up_to_date() {
+        use std::time::{Duration, SystemTime};
+        let dir = tempfile::tempdir().unwrap();
+        let set = |name: &str, age_secs: u64| {
+            let path = dir.path().join(name);
+            let file = fs::File::create(&path).unwrap();
+            file.set_modified(SystemTime::now() - Duration::from_secs(age_secs)).unwrap();
+            path
+        };
+        let input = set("in.bcl", 300);
+        let output = set("out.j", 200);
+        let old_compiler = set("old-bcc", 250);
+        let new_compiler = set("new-bcc", 100);
+        assert!(is_up_to_date_against(&input, &output, Some(&old_compiler)));
+        assert!(!is_up_to_date_against(&input, &output, Some(&new_compiler)));
+        assert!(is_up_to_date_against(&input, &output, None));
+        let newer_input = set("newer.bcl", 50);
+        assert!(!is_up_to_date_against(&newer_input, &output, Some(&old_compiler)));
     }
 
     #[test]
