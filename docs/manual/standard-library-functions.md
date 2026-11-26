@@ -19,7 +19,7 @@ BASCAL recognises the classic BASIC functions below without a declaration or `re
 
 `LEFT$`, `RIGHT$`, `MID$`, `LEN`, and `INSTR` (string receiver), and `ABS`, `SQR`, `SIN`, `COS`, `TAN`, `INT`, `FIX`, and `SGN` (any numeric receiver) are also callable as scalar methods with no declaration needed — `s$.left(3)` is exactly the same call as `LEFT$(s$, 3)`. See [Built-in methods](../language/methods.md#calling-and-chaining) in the language book.
 
-### MID\$ assignment
+### MID$ assignment
 
 ```bascal
 MID$(target$, start[, len]) = replacement$
@@ -27,7 +27,7 @@ MID$(target$, start[, len]) = replacement$
 
 A same-length splice into `target$`, which keeps its original length — not a value-producing expression, and not the same thing as `MID$(...)` used to *read* a substring. `target$` must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).
 
-Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to the program (like any other `com.bascal.stdlib` symbol; see [String and error-message functions](#string-and-error-message-functions) below) the moment `MID$` assignment syntax appears anywhere, with no `require` line needed since nothing in your own source ever names the function:
+Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to the program (like any other `com.bascal.stdlib` symbol; see [String and error-message functions](#string-and-error-message-functions) below) the moment `MID$` assignment syntax appears anywhere, with no `require` line needed since nothing in your own source normally calls the function directly:
 
 ```bascal
 function midAssign$(target$, start%, len%, value$)

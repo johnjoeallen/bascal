@@ -12,7 +12,7 @@ Verified against real BASCOM 2.00 under dosbox-x: it compiles clean and links, b
 
 <div class="snippet" markdown="1">
 
-### The record/file DSL replaces fhb's manual FIELD layout and MKx\$/CVx\$ packing
+### The record/file DSL replaces fhb's manual FIELD layout and MKx$/CVx$ packing
 
 bcc computes the field widths and record `LEN` from the `record` declaration and emits the `FIELD` statement itself. Named field access (`p.flag`, `p.qty`, ...) and whole-record reads via `inv[n]` replace fhb's manual `GET`/`PUT` plus `LSET`/`RSET` and `MKI$`/`MKS$`/`CVI$`/`CVS$` packing.
 

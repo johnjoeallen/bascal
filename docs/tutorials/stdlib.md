@@ -29,7 +29,7 @@ print "QUIET THIS DOWN".lcase()
 
 <div class="snippet" markdown="1">
 
-### ERROR\$ maps a classic error code to a message
+### ERROR$ maps a classic error code to a message
 
 Pair it with ERR inside an ON ERROR GOTO handler in real code -- see [classic tutorial 17](labels_and_error_handling.md), or use [portable structured handling](portable_error_handling.md).
 

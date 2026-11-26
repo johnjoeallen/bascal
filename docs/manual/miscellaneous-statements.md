@@ -4,9 +4,9 @@
 
 <div class="prose" markdown="1">
 
-### MID\$ (statement form)
+### MID$ (statement form)
 
-Overwrites a run of characters inside a string with a same-length replacement — `target$` keeps its original length; see [MID\$ assignment](standard-library-functions.md#mid-assignment) for how this actually gets transpiled.
+Overwrites a run of characters inside a string with a same-length replacement — `target$` keeps its original length; see [MID$ assignment](standard-library-functions.md#mid-assignment) for how this actually gets transpiled.
 
 ```bascal
 mid$(target$, start[, length]) = replacement$

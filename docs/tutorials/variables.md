@@ -27,7 +27,7 @@ score%       = 87
 
 ### print mixes types directly with ;
 
-No str\$() needed just to print a number next to a label.
+No str$() needed just to print a number next to a label.
 
 ```bascal
 print "Score:       "; score%; "/ "; MAX_SCORE
