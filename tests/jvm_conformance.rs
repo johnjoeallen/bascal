@@ -1,11 +1,9 @@
 //! Opt-in end-to-end conformance tests for the bootstrap JVM target.
 //!
-//! `krakatau2::assemble` (linked directly into `bcc`, not a separate
-//! `krak2` binary/subprocess -- see `Cargo.toml`'s own comment) turns the
-//! Krakatau text emitted by `--target jvm` into a real `.class`, so
-//! assembly itself is always available once `bcc` builds. A JRE is still
-//! needed to actually *run* the resulting class, which is the one
-//! remaining external, opt-in prerequisite this suite skips rather than
+//! `bcc --binary` runs `jvm-asm/Assemble.java` under `java` to turn the
+//! listing emitted by `--target jvm` into a real `.class` with the JDK 25
+//! ClassFile API, and `java` then runs it. JDK 25+ on `PATH` is therefore
+//! the one external, opt-in prerequisite this suite skips rather than
 //! fails on.
 // Conformance groups: tutorials, jvm
 
@@ -21,7 +19,18 @@ fn repo_root() -> PathBuf {
 }
 
 fn java_available() -> bool {
-    Command::new("java").arg("-version").output().is_ok()
+    // The JVM target assembles with the JDK 25 ClassFile API and emits
+    // version-69 class files, so anything older than 25 can't run these.
+    Command::new("java")
+        .arg("-version")
+        .output()
+        .ok()
+        .and_then(|out| {
+            let text = String::from_utf8_lossy(&out.stderr).into_owned();
+            let major: u32 = text.split('"').nth(1)?.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+            Some(major >= 25)
+        })
+        .unwrap_or(false)
 }
 
 fn jvm_runtime_available() -> bool {
@@ -3311,9 +3320,8 @@ fn portable_error_handling_tutorial_runs_when_available() {
 }
 
 /// Compile `source_path` to a temporary `.j` file and assemble it. Assembly
-/// (`krakatau2::assemble`) is linked directly into `bcc` -- see
-/// `Cargo.toml`'s own comment -- so there's no external tool to be missing
-/// here; a failure is always a real test failure.
+/// runs through `bcc --binary` (JDK 25 ClassFile API helper); callers have
+/// already checked `java_available()`, so a failure is a real test failure.
 fn compile_and_assemble(source_path: &Path, output_dir: &Path) -> Option<PathBuf> {
     let mut output_arg = output_dir.as_os_str().to_owned();
     output_arg.push("/");

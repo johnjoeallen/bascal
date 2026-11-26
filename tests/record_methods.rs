@@ -749,11 +749,22 @@ fn run_c(generated_c: &str) -> String {
     String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n")
 }
 
-/// `krakatau2::assemble` is linked directly into `bcc` (see `Cargo.toml`'s
-/// own comment), so assembly itself needs no external tool; a JRE is the
-/// one remaining prerequisite to actually *run* a compiled JVM class.
+/// `bcc --binary` assembles the `.j` listing with the JDK 25 ClassFile API
+/// (`jvm-asm/Assemble.java`) and a JRE runs the class, so both need `java`
+/// 25 or later on `PATH`.
 fn java_available() -> bool {
-    Command::new("java").arg("-version").output().is_ok()
+    // The JVM target assembles with the JDK 25 ClassFile API and emits
+    // version-69 class files, so anything older than 25 can't run these.
+    Command::new("java")
+        .arg("-version")
+        .output()
+        .ok()
+        .and_then(|out| {
+            let text = String::from_utf8_lossy(&out.stderr).into_owned();
+            let major: u32 = text.split('"').nth(1)?.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+            Some(major >= 25)
+        })
+        .unwrap_or(false)
 }
 
 fn run_jvm_source(source: &str, class_name: &str) -> String {

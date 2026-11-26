@@ -8,21 +8,13 @@
 //! a "not supported yet" diagnostic rather than panicking or emitting wrong
 //! code -- a walking skeleton, not a real backend yet.
 //!
-//! Output is Krakatau assembly text (`.j`); the command-line driver also has a
-//! small internal class-file writer for return-only programs, while general
-//! output is assembled `.j` -> `.class` via the `krakatau2` crate (linked
-//! directly into `bcc`, not shelled out to a separate binary -- see
-//! `Cargo.toml`'s own comment and `main.rs`'s `invoke_krak2`), and run by any
-//! JRE's `java`. `krakatau2` is `Storyyeller/Krakatau`'s `v2` branch -- itself
-//! a Rust/Cargo project, pinned by commit since it has no versioned releases
-//! (confirmed working end to end with a hand-written `.j` file: `krak2 asm`
-//! + `java` before this codegen existed).
-//!
-//! The generated classes deliberately use class-file version 50.  That lets
-//! the JVM's legacy verifier infer frames for the supported `if` branches,
-//! instead of requiring StackMapTable emission before this backend has a full
-//! control-flow frame analyser. Scalar local slots are allocated up front and
-//! `.limit locals` is computed from them.
+//! Output is an assembly listing (`.j`) in the syntax `jvm-asm/Assemble.java`
+//! accepts; `main.rs`'s `invoke_classfile_assembler` runs that helper under
+//! `java` (JDK 25+), which builds the class with the JDK ClassFile API
+//! (`java.lang.classfile`). The API computes `StackMapTable` frames and
+//! `max_stack`/`max_locals`, so the listing's `.version`, `.limit` and
+//! `.stack` directives are legacy (from the Krakatau assembler this backend
+//! used before) and ignored; the generated classes are version 69.
 //!
 //! This module doc's opening two paragraphs describe the original bootstrap
 //! and are stale in the details (functions/procedures, `if`/`for`/`while`/
@@ -4844,7 +4836,7 @@ fn jvm_semantic_callable_statements_by_source<'a>(
 /// letter needs adjusting to match Java's PascalCase convention; this is
 /// cosmetic, not a correctness requirement, since the JVM itself accepts
 /// any name here). Falls back to `Program` when the source has no `program`
-/// declaration at all (it's optional in BASCAL). `main.rs`'s `invoke_krak2`
+/// declaration at all (it's optional in BASCAL). `main.rs`'s `invoke_classfile_assembler`
 /// recovers this same name back out of the emitted `.class public <name>`
 /// line rather than calling this directly -- `codegen_jvm` is a private
 /// module, not part of `bcc`'s public API surface `main.rs` (a separate

@@ -510,7 +510,7 @@ fn run(cli: Cli) -> Result<(), String> {
 /// it succeeded or not.
 fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     // A `--target jvm` "binary" is a `.class` file, not something the OS can
-    // exec directly -- `invoke_krak2` names it after the class it contains
+    // exec directly -- `invoke_classfile_assembler` names it after the class it contains
     // (see its own doc comment), so recovering that name back out of the
     // path and handing it to `java -cp` is exact, not a guess.
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("class") {
