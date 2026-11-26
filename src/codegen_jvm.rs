@@ -91,7 +91,7 @@
 //! and procedures example -- compiles and runs correctly end to end under
 //! `--target jvm` as of this paragraph, verified interactively (add an
 //! item, list it back, confirming the random-access write/read round-trip)
-//! with real `java` and `krak2`.
+//! with real `java`.
 //!
 //! Scalar `byref` parameters are emulated (the JVM has no scalar reference
 //! semantics the way C has pointers): each `byref` scalar argument is
@@ -11193,7 +11193,7 @@ fn emit_round_away_from_zero(out: &mut String) {
     );
 }
 
-/// Krakatau assembly string-literal escaping -- deliberately separate from
+/// JVM assembly listing string-literal escaping -- deliberately separate from
 /// both `codegen_basic::escape_string` (BASIC has no backslash escapes) and
 /// `codegen_c`'s `escape_c_string` (different escape set/target): a `.j`
 /// string constant follows Java's own escaping rules for `"` and `\`, plus

@@ -111,7 +111,7 @@ That made the multi-target nature of the language visible in its examples
 
 ## 25 August: a JVM backend and typed IR
 
-The JVM target began with target dispatch, Krakatau assembly for a minimal
+The JVM target began with target dispatch, assembly text for a minimal
 program, and `--run`/binary integration (`e5ce649`–`74127ef`). It then gained
 control flow, labels, scalar functions and procedures, scalar methods,
 standard-library functions, terminal operations, and output. JVM limitations
@@ -178,19 +178,18 @@ literal initialization, copying, and member reads/writes, verified across
 the BASIC, C, and JVM backends (`39749b2`–`ecb995c`).
 
 The JVM target's biggest remaining external dependency was then removed.
-Rather than shelling out to a separately installed `krak2` binary located
-via `PATH`, an environment variable, or a config file, `bcc` now links
-Krakatau's `v2` assembler in directly as a Rust library — via a small,
-upstream-proposed fork that exposes it as a reusable crate — so assembling
-JVM output needs no extra install step at all (`ee976d0`).
+Rather than shelling out to a separately installed assembler binary located
+via `PATH`, an environment variable, or a config file, `bcc` linked an
+assembler in directly as a Rust library, so assembling JVM output needed no
+extra install step at all (`ee976d0`).
 
-That dependency was in turn replaced by the JDK's own ClassFile API
+That library was in turn replaced by the JDK's own Java 25 ClassFile API
 (`java.lang.classfile`, final in JDK 24). A small helper, `jvm-asm/Assemble.java`,
 embedded in `bcc` and run under `java`, assembles the listing into a
 version-69 class file, with the stack map frames and `max_stack`/`max_locals`
 computed by the API rather than avoided by targeting an old class-file version.
-The JVM target therefore now needs JDK 25 or later, and the `krakatau2` crate
-and its `--krak-stack-size` setting are gone (PR #196). The same change made
+The JVM target therefore now needs JDK 25 or later, and the assembler crate
+and its stack-size setting are gone (PR #196). The same change made
 `bcc` regenerate output that is older than the compiler, its required
 libraries, or its shared file, and added blank-line rules to `bcc --format`.
 
