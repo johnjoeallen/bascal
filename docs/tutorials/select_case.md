@@ -65,7 +65,7 @@ select case score%
     case 90 to 99
         print "A  — Excellent"
     case 80 to 89
-        print "B  — Good"      // score% = 85 matches here
+        print "B  — Good" // score% = 85 matches here
     case 70 to 79
         print "C  — Satisfactory"
     case 60 to 69
@@ -83,7 +83,7 @@ select case day$
     case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
         print day$ + " is a weekday"
     case "Saturday", "Sunday"
-        print day$ + " is a weekend"   // matches here
+        print day$ + " is a weekend" // matches here
     case else
         print "Unknown day: " + day$
 end select
@@ -93,7 +93,7 @@ temp% = -3
 
 select case temp%
     case is < 0
-        print "Below freezing ("; temp%; "°)"  // matches here
+        print "Below freezing ("; temp%; "°)" // matches here
     case is < 10
         print "Cold ("; temp%; "°)"
     case is < 20
@@ -111,7 +111,7 @@ select case choice%
     case 1
         print "New game"
     case 2, 3
-        print "Load game"   // choice% = 2 matches
+        print "Load game" // choice% = 2 matches
     case 4
         print "Options"
     case else
@@ -149,85 +149,80 @@ end
 120 ' case low to high         — inclusive range
 130 ' case is <op> value       — comparison (=  <>  <  <=  >  >=)
 140 ' case else                — default; must be the last clause
-
 150 ' Integer select: convert numeric score to letter grade
 160 score% = 85
-
 170 BCCT2% = score%
 180 IF (BCCT2% = 100) <> 0 THEN GOTO 250
 190 IF (BCCT2% >= 90 AND BCCT2% <= 99) <> 0 THEN GOTO 270
 200 IF (BCCT2% >= 80 AND BCCT2% <= 89) <> 0 THEN GOTO 290
-210 IF (BCCT2% >= 70 AND BCCT2% <= 79) <> 0 THEN GOTO 310
-220 IF (BCCT2% >= 60 AND BCCT2% <= 69) <> 0 THEN GOTO 330
-230 IF (BCCT2% >= 0) <> 0 THEN GOTO 350
-240 GOTO 370
+210 IF (BCCT2% >= 70 AND BCCT2% <= 79) <> 0 THEN GOTO 320
+220 IF (BCCT2% >= 60 AND BCCT2% <= 69) <> 0 THEN GOTO 340
+230 IF (BCCT2% >= 0) <> 0 THEN GOTO 360
+240 GOTO 380
 250     PRINT "Perfect!"
-260     GOTO 380
+260     GOTO 390
 270     PRINT "A  — Excellent"
-280     GOTO 380
+280     GOTO 390
 290     PRINT "B  — Good"
-300     GOTO 380
-310     PRINT "C  — Satisfactory"
-320     GOTO 380
-330     PRINT "D  — Passing"
-340     GOTO 380
-350     PRINT "F  — Fail"
-360     GOTO 380
-370     PRINT "Invalid score"
-380 REM END SELECT
-
-390 ' String select: day-of-week classification
-400 day$ = "Saturday"
-
-410 BCCT4$ = day$
-420 IF (BCCT4$ = "Monday" OR BCCT4$ = "Tuesday" OR BCCT4$ = "Wednesday" OR BCCT4$ = "Thursday" OR BCCT4$ = "Friday") <> 0 THEN GOTO 450
-430 IF (BCCT4$ = "Saturday" OR BCCT4$ = "Sunday") <> 0 THEN GOTO 470
-440 GOTO 490
-450     PRINT day$ + " is a weekday"
-460     GOTO 500
-470     PRINT day$ + " is a weekend"
-480     GOTO 500
-490     PRINT "Unknown day: " + day$
-500 REM END SELECT
-
-510 ' IS comparisons on temperature
-520 temp% = -3
-
-530 BCCT6% = temp%
-540 IF (BCCT6% < 0) <> 0 THEN GOTO 590
-550 IF (BCCT6% < 10) <> 0 THEN GOTO 610
-560 IF (BCCT6% < 20) <> 0 THEN GOTO 630
-570 IF (BCCT6% < 30) <> 0 THEN GOTO 650
-580 GOTO 670
-590     PRINT "Below freezing ("; temp%; "°)"
-600     GOTO 680
-610     PRINT "Cold ("; temp%; "°)"
-620     GOTO 680
-630     PRINT "Cool ("; temp%; "°)"
-640     GOTO 680
-650     PRINT "Warm ("; temp%; "°)"
-660     GOTO 680
-670     PRINT "Hot ("; temp%; "°)"
-680 REM END SELECT
-
-690 ' Multi-value list on a menu choice
-700 choice% = 2
-
-710 BCCT8% = choice%
-720 IF (BCCT8% = 1) <> 0 THEN GOTO 760
-730 IF (BCCT8% = 2 OR BCCT8% = 3) <> 0 THEN GOTO 780
-740 IF (BCCT8% = 4) <> 0 THEN GOTO 800
-750 GOTO 820
-760     PRINT "New game"
-770     GOTO 830
-780     PRINT "Load game"
-790     GOTO 830
-800     PRINT "Options"
-810     GOTO 830
-820     PRINT "Quit"
-830 REM END SELECT
-
-840 END
+300     ' score% = 85 matches here
+310     GOTO 390
+320     PRINT "C  — Satisfactory"
+330     GOTO 390
+340     PRINT "D  — Passing"
+350     GOTO 390
+360     PRINT "F  — Fail"
+370     GOTO 390
+380     PRINT "Invalid score"
+390 REM END SELECT
+400 ' String select: day-of-week classification
+410 day$ = "Saturday"
+420 BCCT4$ = day$
+430 IF (BCCT4$ = "Monday" OR BCCT4$ = "Tuesday" OR BCCT4$ = "Wednesday" OR BCCT4$ = "Thursday" OR BCCT4$ = "Friday") <> 0 THEN GOTO 460
+440 IF (BCCT4$ = "Saturday" OR BCCT4$ = "Sunday") <> 0 THEN GOTO 480
+450 GOTO 510
+460     PRINT day$ + " is a weekday"
+470     GOTO 520
+480     PRINT day$ + " is a weekend"
+490     ' matches here
+500     GOTO 520
+510     PRINT "Unknown day: " + day$
+520 REM END SELECT
+530 ' IS comparisons on temperature
+540 temp% = -3
+550 BCCT6% = temp%
+560 IF (BCCT6% < 0) <> 0 THEN GOTO 610
+570 IF (BCCT6% < 10) <> 0 THEN GOTO 640
+580 IF (BCCT6% < 20) <> 0 THEN GOTO 660
+590 IF (BCCT6% < 30) <> 0 THEN GOTO 680
+600 GOTO 700
+610     PRINT "Below freezing ("; temp%; "°)"
+620     ' matches here
+630     GOTO 710
+640     PRINT "Cold ("; temp%; "°)"
+650     GOTO 710
+660     PRINT "Cool ("; temp%; "°)"
+670     GOTO 710
+680     PRINT "Warm ("; temp%; "°)"
+690     GOTO 710
+700     PRINT "Hot ("; temp%; "°)"
+710 REM END SELECT
+720 ' Multi-value list on a menu choice
+730 choice% = 2
+740 BCCT8% = choice%
+750 IF (BCCT8% = 1) <> 0 THEN GOTO 790
+760 IF (BCCT8% = 2 OR BCCT8% = 3) <> 0 THEN GOTO 810
+770 IF (BCCT8% = 4) <> 0 THEN GOTO 840
+780 GOTO 860
+790     PRINT "New game"
+800     GOTO 870
+810     PRINT "Load game"
+820     ' choice% = 2 matches
+830     GOTO 870
+840     PRINT "Options"
+850     GOTO 870
+860     PRINT "Quit"
+870 REM END SELECT
+880 END
 
 ```
 
@@ -288,6 +283,7 @@ int main(void) {
             if ((bt_sel_0 >= 80 && bt_sel_0 <= 89)) {
                 bt_sel_match_1 = 1;
                 printf("B  — Good\n");
+                // score% = 85 matches here
             }
         }
         if (!bt_sel_match_1) {
@@ -334,6 +330,7 @@ int main(void) {
                 char bt_s_5[256];
                 snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bv_s_day, " is a weekend");
                 printf("%s\n", bt_s_5);
+                // matches here
             }
         }
         if (!bt_sel_match_3) {
@@ -353,6 +350,7 @@ int main(void) {
             if ((bt_sel_7 < 0)) {
                 bt_sel_match_8 = 1;
                 printf("Below freezing (%d°)\n", bv_i_temp);
+                // matches here
             }
         }
         if (!bt_sel_match_8) {
@@ -394,6 +392,7 @@ int main(void) {
             if ((bt_sel_9 == 2) || (bt_sel_9 == 3)) {
                 bt_sel_match_10 = 1;
                 printf("Load game\n");
+                // choice% = 2 matches
             }
         }
         if (!bt_sel_match_10) {
@@ -424,22 +423,23 @@ int main(void) {
 
 ```basic
 
-.version 50 0
 .class public SelectCase
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
-    istore 1
+    putstatic SelectCase/g1 I
     ldc ""
-    astore 2
+    putstatic SelectCase/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic SelectCase/g3 I
     iconst_0
-    istore 4
+    putstatic SelectCase/g4 I
     ; Tutorial — SELECT CASE
     ;
     ; SELECT CASE tests one expression against multiple patterns.  The
@@ -452,12 +452,10 @@ int main(void) {
     ; case low to high         — inclusive range
     ; case is <op> value       — comparison (=  <>  <  <=  >  >=)
     ; case else                — default; must be the last clause
-
     ; Integer select: convert numeric score to letter grade
     ldc 85
-    istore 3
-
-    iload 3
+    putstatic SelectCase/g3 I
+    getstatic SelectCase/g3 I
     dup
     ldc 100
     isub
@@ -527,6 +525,7 @@ L_select_0_case_2:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "B  — Good"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; score% = 85 matches here
     goto L_select_0_end
 L_select_0_case_3:
     pop
@@ -547,12 +546,10 @@ L_select_0_case_5:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_0_end
 L_select_0_end:
-
     ; String select: day-of-week classification
     ldc "Saturday"
-    astore 2
-
-    aload 2
+    putstatic SelectCase/g2 Ljava/lang/String;
+    getstatic SelectCase/g2 Ljava/lang/String;
     dup
     ldc "Monday"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
@@ -592,7 +589,7 @@ L_select_1_next_1:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Unknown day: "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -603,7 +600,7 @@ L_select_1_case_0:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " is a weekday"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -616,21 +613,20 @@ L_select_1_case_1:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " is a weekend"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; matches here
     goto L_select_1_end
 L_select_1_end:
-
     ; IS comparisons on temperature
     ldc 3
     ineg
-    istore 4
-
-    iload 4
+    putstatic SelectCase/g4 I
+    getstatic SelectCase/g4 I
     dup
     ldc 0
     if_icmplt L_select_2_case_0
@@ -656,7 +652,7 @@ L_select_2_next_3:
     ldc "Hot ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -668,11 +664,12 @@ L_select_2_case_0:
     ldc "Below freezing ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; matches here
     goto L_select_2_end
 L_select_2_case_1:
     pop
@@ -680,7 +677,7 @@ L_select_2_case_1:
     ldc "Cold ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -692,7 +689,7 @@ L_select_2_case_2:
     ldc "Cool ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -704,19 +701,17 @@ L_select_2_case_3:
     ldc "Warm ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_2_end
 L_select_2_end:
-
     ; Multi-value list on a menu choice
     ldc 2
-    istore 1
-
-    iload 1
+    putstatic SelectCase/g1 I
+    getstatic SelectCase/g1 I
     dup
     ldc 1
     isub
@@ -755,6 +750,7 @@ L_select_3_case_1:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Load game"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; choice% = 2 matches
     goto L_select_3_end
 L_select_3_case_2:
     pop
@@ -763,7 +759,6 @@ L_select_3_case_2:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_select_3_end
 L_select_3_end:
-
     return
 .end method
 

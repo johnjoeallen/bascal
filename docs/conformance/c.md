@@ -7,6 +7,7 @@
 | Scalar methods match C output | PASS |
 | BASCOM creates file; target validates binary compatibility | PASS |
 | Target creates file; BASCOM validates binary compatibility | PASS |
+| control_loops_select_matches_real_bascom | PASS |
 | nested_typed_on_gosub_matches_c_target | PASS |
 | String self-concatenation matches C output | PASS |
 | Standard-library functions match C output | PASS |

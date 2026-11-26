@@ -99,7 +99,7 @@ csvFile$ = "tutorial_scores.csv"
 /* Write three records */
 open csvFile$ for output as #1
 write #1, "Alice", 95, "pass"
-write #1, "Bob",   54, "fail"
+write #1, "Bob", 54, "fail"
 write #1, "Carol", 78, "pass"
 close #1
 
@@ -209,49 +209,41 @@ end
 210 ' line input #n, var$     — read one complete line into var$
 220 ' input #n, var[, ...]    — read comma-delimited values (matches write)
 230 ' eof(n)                  — returns non-zero when file n is exhausted
-
 240 csvfile$ = "tutorial_scores.csv"
-
 250 ' ============================================================
 260 ' Part 1 — sequential files, written by hand
 270 ' ============================================================
-
 280 ' Write three records
 290 OPEN csvfile$ FOR OUTPUT AS #1
 300 WRITE #1, "Alice", 95, "pass"
 310 WRITE #1, "Bob", 54, "fail"
 320 WRITE #1, "Carol", 78, "pass"
 330 CLOSE #1
-
 340 ' Append a fourth record
 350 OPEN csvfile$ FOR APPEND AS #1
 360 WRITE #1, "Dave", 88, "pass"
 370 CLOSE #1
-
 380 ' Read and print every record
 390 PRINT ("Part 1 (hand-written) -- all records in " + csvfile$) + ":"
 400 OPEN csvfile$ FOR INPUT AS #1
 410 IF (EOF(1) = 0) = 0 THEN GOTO 450
 420     INPUT #1, name$, score%, result$
 430     PRINT ((((("  " + name$) + ": ") + STR$(score%)) + "  [") + result$) + "]"
-440     GOTO 410
+440 GOTO 410
 450 REM END WHILE
 460 CLOSE #1
-
 470 ' Read the file line by line using line input
 480 PRINT "Part 1 (hand-written) -- raw lines:"
 490 OPEN csvfile$ FOR INPUT AS #1
 500 IF (EOF(1) = 0) = 0 THEN GOTO 540
 510     LINE INPUT #1, line$
 520     PRINT "  " + line$
-530     GOTO 500
+530 GOTO 500
 540 REM END WHILE
 550 CLOSE #1
-
 560 ' ============================================================
 570 ' Part 2 — the same file, through the file-handle DSL
 580 ' ============================================================
-
 590 ' file <var> = open(<path>) for output/input/append
 600 ' Opens a file the same way `open ... for ... as #n` does, except the
 610 ' compiler picks the channel number for you and remembers it under
@@ -268,7 +260,6 @@ end
 720 ' transpile-time error, the same way a misspelled record field is: the
 730 ' compiler already knows which direction the file goes, so it checks
 740 ' for you instead of failing at runtime against real data.
-
 750 ' file out = open(...) for output
 760 OPEN csvfile$ FOR OUTPUT AS #1
 770 ' out.write(...)
@@ -279,14 +270,12 @@ end
 820 WRITE #1, "Carol", 78, "pass"
 830 ' out.close()
 840 CLOSE #1
-
 850 ' file appended = open(...) for append
 860 OPEN csvfile$ FOR APPEND AS #2
 870 ' appended.write(...)
 880 WRITE #2, "Dave", 88, "pass"
 890 ' appended.close()
 900 CLOSE #2
-
 910 PRINT ("Part 2 (file-handle DSL) -- all records in " + csvfile$) + ":"
 920 ' file dbFile = open(...) for input
 930 OPEN csvfile$ FOR INPUT AS #3
@@ -294,15 +283,13 @@ end
 950     ' dbFile.read(...)
 960     INPUT #3, name$, score%, result$
 970     PRINT ((((("  " + name$) + ": ") + STR$(score%)) + "  [") + result$) + "]"
-980     GOTO 940
+980 GOTO 940
 990 REM END WHILE
 1000 ' dbFile.close()
 1010 CLOSE #3
-
 1020 ' `line input`/`print #` don't have DSL sugar yet -- fall back to the
 1030 ' raw form from Part 1 for those; the DSL only replaces `open`, `write`,
 1040 ' `input`, `eof()`, and `close` so far.
-
 1050 END
 
 ```
@@ -342,6 +329,8 @@ static FILE* bcc_files[BCC_MAX_CHANNELS];
 
 static char bcc_file_field_buf[256];
 
+static char bcc_input_buf[256];
+
 static char* bcc_strbuf_take(void);
 static const char* bcc_mid(const char* s, int start, int length);
 static const char* bcc_chr(int code);
@@ -350,18 +339,19 @@ static const char* bcc_strd(double value);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
-static void bcc_mks(char* out, double value);
-static void bcc_mkd(char* out, double value);
 static int bcc_cvi(const char* s);
 static int bcc_cvl(const char* s);
-static float bcc_cvs(const char* s);
-static double bcc_cvd(const char* s);
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
 static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
 static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
 static int bcc_eof(FILE* file);
 static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
 static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_line(void);
 
 static int bv_i_score = 0;
 static char bv_s_csvfile[256] = {0};
@@ -634,15 +624,6 @@ static void bcc_mkl(char* out, int value) {
     memcpy(out, &v, 4);
 }
 
-static void bcc_mks(char* out, double value) {
-    float v = (float)value;
-    memcpy(out, &v, 4);
-}
-
-static void bcc_mkd(char* out, double value) {
-    memcpy(out, &value, 8);
-}
-
 static int bcc_cvi(const char* s) {
     int16_t v;
     memcpy(&v, s, 2);
@@ -653,18 +634,6 @@ static int bcc_cvl(const char* s) {
     int32_t v;
     memcpy(&v, s, 4);
     return (int)v;
-}
-
-static float bcc_cvs(const char* s) {
-    float v;
-    memcpy(&v, s, 4);
-    return v;
-}
-
-static double bcc_cvd(const char* s) {
-    double v;
-    memcpy(&v, s, 8);
-    return v;
 }
 
 static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
@@ -682,6 +651,27 @@ static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t 
     if (len > width) len = width;
     memcpy(dest, value, len);
     memset(dest + len, ' ', width - len);
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
 }
 
 static int bcc_eof(FILE* file) {
@@ -722,6 +712,14 @@ static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
         }
     }
     buf[len] = 0;
+}
+
+static void bcc_read_line(void) {
+    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {
+        bcc_input_buf[0] = 0;
+        return;
+    }
+    bcc_input_buf[strcspn(bcc_input_buf, "\r\n")] = 0;
 }
 
 

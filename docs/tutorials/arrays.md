@@ -86,7 +86,7 @@ data%(0) = 64
 data%(1) = 25
 data%(2) = 12
 data%(3) = 22
-data%(4) =  3
+data%(4) = 3
 data%(5) = 11
 
 /* Insertion sort — sorts data%() in place */
@@ -94,7 +94,7 @@ data%(5) = 11
 function insertionSort%(byref arr%(?))
     for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
-        j%   = i% - 1
+        j% = i% - 1
         while j% >= 0 && arr%(j%) > key%
             arr%(j% + 1) = arr%(j%)
             j% = j% - 1
@@ -203,29 +203,23 @@ end
 210 ' copy, and changes never reach the caller.  Write byref to copy the
 220 ' result back out after the call -- insertionSort% below needs it, since
 230 ' its whole job is to mutate the caller's array in place.
-
 240 ' Declare and populate
-250 n% = 6
-260 DIM data%(n%)
-270 BCCT1% = n%
-
+250 CONSTN% = 6
+260 DIM data%(CONSTN%)
+270 BCCT1% = CONSTN%
 280 data%(0) = 64
 290 data%(1) = 25
 300 data%(2) = 12
 310 data%(3) = 22
 320 data%(4) = 3
 330 data%(5) = 11
-
 340 ' Insertion sort — sorts data%() in place
 350 ' arr% -- array to sort; byref because it's mutated in place
-
 360 ' Linear search — returns index or -1
 370 ' arr%    -- array to search; byval, since indexOf% only reads it
 380 ' target% -- value to search for
-
 390 ' Print the array on one line as  [ a b c ... ]
 400 ' arr% -- array to print; byval, since printArray% only reads it
-
 410 ' Before sort
 420 PRINT "Before: "
 430 printarrayArrDim00% = BCCT1%
@@ -238,7 +232,6 @@ end
 
 490 GOSUB 1310
 500 dummy% = printarrayResult0%
-
 510 ' Sort and show
 520 insertionsortArrDim00% = BCCT1%
 530 IF insertionsortArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `insertionSort%` needs "; insertionsortArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
@@ -267,7 +260,6 @@ end
 
 710 GOSUB 1310
 720 dummy% = printarrayResult0%
-
 730 ' Search
 740 target% = 22
 750 indexofTarget0% = target%
@@ -283,27 +275,24 @@ end
 830 idx% = indexofResult0%
 840 IF (idx% >= 0) = 0 THEN GOTO 870
 850     PRINT (STR$(target%) + " found at index ") + STR$(idx%)
-860     GOTO 880
+860 GOTO 880
 870     PRINT STR$(target%) + " not found"
 880 REM END IF
-
 890 ' 2-D array — 3×3 identity matrix
 900 DIM identity%(2, 2)
 910 FOR r% = 0 TO 2
 920     FOR c% = 0 TO 2
 930         IF (r% = c%) = 0 THEN GOTO 960
 940             identity%(r%, c%) = 1
-950             GOTO 970
+950         GOTO 970
 960             identity%(r%, c%) = 0
 970         REM END IF
 980     NEXT c%
 990 NEXT r%
-
 1000 PRINT "Identity matrix:"
 1010 FOR r% = 0 TO 2
 1020     PRINT identity%(r%, 0); identity%(r%, 1); identity%(r%, 2)
 1030 NEXT r%
-
 1040 END
 
 1050 ' function insertionsort%(arr%)
@@ -314,7 +303,7 @@ end
 1100         IF (insertionsortArr0%(insertionsortJ0%) > insertionsortKey0%) = 0 THEN GOTO 1140
 1110             insertionsortArr0%(insertionsortJ0% + 1) = insertionsortArr0%(insertionsortJ0%)
 1120             insertionsortJ0% = insertionsortJ0% - 1
-1130             GOTO 1090
+1130         GOTO 1090
 1140         REM END WHILE
 1150         insertionsortArr0%(insertionsortJ0% + 1) = insertionsortKey0%
 1160     NEXT insertionsortI0%
@@ -389,12 +378,13 @@ int bf_i_insertionsort(int bv_i_arr_len0, int* bv_i_arr) {
     int bv_i_j = 0;
     int bv_i_key = 0;
 
+    int bt_start_0 = 1;
     int bt_lim_0 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_0 = 1;
-    for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bt_start_0; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_key = bv_i_arr[(bv_i_i)];
         bv_i_j = (bv_i_i - 1);
-        while (((-(bv_i_j >= 0)) && (-(bv_i_arr[(bv_i_j)] > bv_i_key)))) {
+        while ((-(((-(bv_i_j >= 0))) != 0 && ((-(bv_i_arr[(bv_i_j)] > bv_i_key))) != 0))) {
             bv_i_arr[((bv_i_j + 1))] = bv_i_arr[(bv_i_j)];
             bv_i_j = (bv_i_j - 1);
         }
@@ -408,9 +398,10 @@ int bf_i_indexof(int bv_i_arr_len0, int* bv_i_arr_in, int bv_i_target) {
     for (int bcc_i = 0; bcc_i < bv_i_arr_len0; bcc_i++) { bv_i_arr[bcc_i] = bv_i_arr_in[bcc_i]; }
     int bv_i_i = 0;
 
+    int bt_start_1 = 0;
     int bt_lim_1 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_1 = 1;
-    for (bv_i_i = 0; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
+    for (bv_i_i = bt_start_1; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
         if ((-(bv_i_arr[(bv_i_i)] == bv_i_target))) {
             return bv_i_i;
         }
@@ -425,9 +416,10 @@ int bf_i_printarray(int bv_i_arr_len0, int* bv_i_arr_in) {
     char bv_s_line[256] = {0};
 
     snprintf(bv_s_line, sizeof(bv_s_line), "%s", "[");
+    int bt_start_2 = 0;
     int bt_lim_2 = (((bv_i_arr_len0 - 1) + 1) - 1);
     int bt_step_2 = 1;
-    for (bv_i_i = 0; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
+    for (bv_i_i = bt_start_2; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
         char bt_s_3[256];
         snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bv_s_line, " ");
         char bt_s_4[256];
@@ -580,7 +572,6 @@ static const char* bcc_strd(double value) {
 
 ```basic
 
-.version 50 0
 .class public Arrays
 .super java/lang/Object
 
@@ -589,38 +580,40 @@ static const char* bcc_strd(double value) {
 .field public static g3 I
 .field public static g4 I
 .field public static g5 I
+.field public static g6 I
 .field public static a0 [I
 .field public static a1 [[I
-.method public static insertionSort : ()I
-    .limit stack 16
-    .limit locals 3
+.method public static insertionSort : ([I)I
 
     iconst_0
-    istore 0
-    iconst_0
     istore 1
     iconst_0
     istore 2
+    iconst_0
+    istore 3
     ldc 1
-    istore 0
+    istore 4
+    aload 0
+    arraylength
+    ldc 1
+    isub
+    istore 5
+    iload 4
+    istore 1
 L_for_0_top:
-    iload 0
-    ldc 6
-    iconst_1
-    iadd
-    ldc 1
-    isub
-    if_icmpgt L_for_0_end
-    getstatic Arrays/a0 [I
-    iload 0
-    iaload
-    istore 2
-    iload 0
-    ldc 1
-    isub
-    istore 1
-L_while_1_top:
     iload 1
+    iload 5
+    if_icmpgt L_for_0_end
+    aload 0
+    iload 1
+    iaload
+    istore 3
+    iload 1
+    ldc 1
+    isub
+    istore 2
+L_condition_1:
+    iload 2
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -628,40 +621,51 @@ L_while_1_top:
     isub
     bipush 31
     ishr
-    ifeq L_while_1_end
-    getstatic Arrays/a0 [I
-    iload 1
-    iaload
+    ifeq L_condition_3
+    aload 0
     iload 2
+    iaload
+    iload 3
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_while_1_end
-    getstatic Arrays/a0 [I
-    iload 1
+    ifne L_condition_5
+    iconst_0
+    goto L_condition_6
+L_condition_5:
+    iconst_m1
+L_condition_6:
+    goto L_condition_4
+L_condition_3:
+    iconst_0
+L_condition_4:
+    ifeq L_condition_2
+    aload 0
+    iload 2
     ldc 1
     iadd
-    getstatic Arrays/a0 [I
-    iload 1
+    aload 0
+    iload 2
     iaload
     iastore
-    iload 1
+    iload 2
     ldc 1
     isub
-    istore 1
-    goto L_while_1_top
-L_while_1_end:
-    getstatic Arrays/a0 [I
+    istore 2
+    goto L_condition_1
+L_condition_2:
+    aload 0
+    iload 2
+    ldc 1
+    iadd
+    iload 3
+    iastore
+L_for_0_continue:
     iload 1
     ldc 1
     iadd
-    iload 2
-    iastore
-    iload 0
-    ldc 1
-    iadd
-    istore 0
+    istore 1
     goto L_for_0_top
 L_for_0_end:
     ldc 0
@@ -670,26 +674,33 @@ L_for_0_end:
     ireturn
 .end method
 
-.method public static indexOf : (I)I
-    .limit stack 16
-    .limit locals 2
+.method public static indexOf : ([II)I
 
     iconst_0
-    istore 1
+    istore 2
+    aload 0
+    bipush 1
+    bipush 0
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    checkcast [I
+    astore 0
     ldc 0
-    istore 1
-L_for_0_top:
-    iload 1
-    ldc 6
-    iconst_1
-    iadd
+    istore 3
+    aload 0
+    arraylength
     ldc 1
     isub
+    istore 4
+    iload 3
+    istore 2
+L_for_0_top:
+    iload 2
+    iload 4
     if_icmpgt L_for_0_end
-    getstatic Arrays/a0 [I
-    iload 1
+    aload 0
+    iload 2
     iaload
-    iload 0
+    iload 1
     invokestatic java/lang/Integer/compare (II)I
     dup
     ineg
@@ -699,14 +710,15 @@ L_for_0_top:
     iconst_1
     ixor
     ineg
-    ifeq L_if_1_else
-    iload 1
+    ifeq L_condition_1
+    iload 2
     ireturn
-L_if_1_else:
-    iload 1
+L_condition_1:
+L_for_0_continue:
+    iload 2
     ldc 1
     iadd
-    istore 1
+    istore 2
     goto L_for_0_top
 L_for_0_end:
     ldc 1
@@ -716,25 +728,32 @@ L_for_0_end:
     ireturn
 .end method
 
-.method public static printArray : ()I
-    .limit stack 16
-    .limit locals 2
+.method public static printArray : ([I)I
 
     iconst_0
-    istore 0
+    istore 1
     ldc ""
-    astore 1
+    astore 2
+    aload 0
+    bipush 1
+    bipush 0
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    checkcast [I
+    astore 0
     ldc "["
-    astore 1
+    astore 2
     ldc 0
-    istore 0
-L_for_0_top:
-    iload 0
-    ldc 6
-    iconst_1
-    iadd
+    istore 3
+    aload 0
+    arraylength
     ldc 1
     isub
+    istore 4
+    iload 3
+    istore 1
+L_for_0_top:
+    iload 1
+    iload 4
     if_icmpgt L_for_0_end
     new java/lang/StringBuilder
     dup
@@ -742,30 +761,31 @@ L_for_0_top:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 1
+    aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    getstatic Arrays/a0 [I
-    iload 0
+    aload 0
+    iload 1
     iaload
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
-    astore 1
-    iload 0
+    astore 2
+L_for_0_continue:
+    iload 1
     ldc 1
     iadd
-    istore 0
+    istore 1
     goto L_for_0_top
 L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 1
+    aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " ]"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -777,9 +797,75 @@ L_for_0_end:
     ireturn
 .end method
 
+.method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;
+
+    iload 1
+    iconst_1
+    if_icmpne L_copy_nested
+    iload 2
+    tableswitch 0
+        L_copy_int
+        L_copy_long
+        L_copy_double
+        L_copy_object
+    default : L_copy_invalid
+L_copy_int:
+    aload 0
+    checkcast [I
+    invokevirtual [I/clone ()Ljava/lang/Object;
+    areturn
+L_copy_long:
+    aload 0
+    checkcast [J
+    invokevirtual [J/clone ()Ljava/lang/Object;
+    areturn
+L_copy_double:
+    aload 0
+    checkcast [D
+    invokevirtual [D/clone ()Ljava/lang/Object;
+    areturn
+L_copy_object:
+    aload 0
+    checkcast [Ljava/lang/Object;
+    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
+    areturn
+L_copy_nested:
+    aload 0
+    checkcast [Ljava/lang/Object;
+    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
+    checkcast [Ljava/lang/Object;
+    astore 3
+    iconst_0
+    istore 4
+L_copy_loop:
+    iload 4
+    aload 3
+    arraylength
+    if_icmpge L_copy_done
+    aload 3
+    iload 4
+    aload 3
+    iload 4
+    aaload
+    iload 1
+    iconst_1
+    isub
+    iload 2
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    aastore
+    iinc 4 1
+    goto L_copy_loop
+L_copy_done:
+    aload 3
+    areturn
+L_copy_invalid:
+    new java/lang/IllegalArgumentException
+    dup
+    invokespecial java/lang/IllegalArgumentException/<init> ()V
+    athrow
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     putstatic Arrays/g1 I
@@ -791,6 +877,8 @@ L_for_0_end:
     putstatic Arrays/g4 I
     iconst_0
     putstatic Arrays/g5 I
+    iconst_0
+    putstatic Arrays/g6 I
     ldc 6
     iconst_1
     iadd
@@ -821,9 +909,9 @@ L_for_0_end:
     ; copy, and changes never reach the caller.  Write byref to copy the
     ; result back out after the call -- insertionSort% below needs it, since
     ; its whole job is to mutate the caller's array in place.
-
     ; Declare and populate
-
+    ldc 6
+    putstatic Arrays/g4 I
     getstatic Arrays/a0 [I
     ldc 0
     ldc 64
@@ -848,38 +936,36 @@ L_for_0_end:
     ldc 5
     ldc 11
     iastore
-
     ; Insertion sort — sorts data%() in place
     ; arr% -- array to sort; byref because it's mutated in place
-
     ; Linear search — returns index or -1
     ; arr%    -- array to search; byval, since indexOf% only reads it
     ; target% -- value to search for
-
     ; Print the array on one line as  [ a b c ... ]
     ; arr% -- array to print; byval, since printArray% only reads it
-
     ; Before sort
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Before: "
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    invokestatic Arrays/printArray ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/printArray ([I)I
     putstatic Arrays/g2 I
-
     ; Sort and show
-    invokestatic Arrays/insertionSort ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/insertionSort ([I)I
     putstatic Arrays/g2 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "After:  "
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    invokestatic Arrays/printArray ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/printArray ([I)I
     putstatic Arrays/g2 I
-
     ; Search
     ldc 22
-    putstatic Arrays/g5 I
-    getstatic Arrays/g5 I
-    invokestatic Arrays/indexOf (I)I
+    putstatic Arrays/g6 I
+    getstatic Arrays/a0 [I
+    getstatic Arrays/g6 I
+    invokestatic Arrays/indexOf ([II)I
     putstatic Arrays/g3 I
     getstatic Arrays/g3 I
     ldc 0
@@ -889,7 +975,7 @@ L_for_0_end:
     isub
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -897,7 +983,7 @@ L_for_0_end:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    getstatic Arrays/g5 I
+    getstatic Arrays/g6 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " found at index "
@@ -909,35 +995,42 @@ L_for_0_end:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    goto L_if_0_end
-L_if_0_else:
+    goto L_condition_1
+L_condition_0:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    getstatic Arrays/g5 I
+    getstatic Arrays/g6 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " not found"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-L_if_0_end:
-
+L_condition_1:
     ; 2-D array — 3×3 identity matrix
     ldc 0
-    putstatic Arrays/g4 I
-L_for_1_top:
-    getstatic Arrays/g4 I
+    istore 7
     ldc 2
-    if_icmpgt L_for_1_end
-    ldc 0
-    putstatic Arrays/g1 I
+    istore 8
+    iload 7
+    putstatic Arrays/g5 I
 L_for_2_top:
-    getstatic Arrays/g1 I
-    ldc 2
+    getstatic Arrays/g5 I
+    iload 8
     if_icmpgt L_for_2_end
-    getstatic Arrays/g4 I
+    ldc 0
+    istore 9
+    ldc 2
+    istore 10
+    iload 9
+    putstatic Arrays/g1 I
+L_for_3_top:
+    getstatic Arrays/g1 I
+    iload 10
+    if_icmpgt L_for_3_end
+    getstatic Arrays/g5 I
     getstatic Arrays/g1 I
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -948,72 +1041,77 @@ L_for_2_top:
     iconst_1
     ixor
     ineg
-    ifeq L_if_3_else
+    ifeq L_condition_4
     getstatic Arrays/a1 [[I
-    getstatic Arrays/g4 I
+    getstatic Arrays/g5 I
     aaload
     getstatic Arrays/g1 I
     ldc 1
     iastore
-    goto L_if_3_end
-L_if_3_else:
+    goto L_condition_5
+L_condition_4:
     getstatic Arrays/a1 [[I
-    getstatic Arrays/g4 I
+    getstatic Arrays/g5 I
     aaload
     getstatic Arrays/g1 I
     ldc 0
     iastore
-L_if_3_end:
+L_condition_5:
+L_for_3_continue:
     getstatic Arrays/g1 I
     ldc 1
     iadd
     putstatic Arrays/g1 I
-    goto L_for_2_top
-L_for_2_end:
-    getstatic Arrays/g4 I
+    goto L_for_3_top
+L_for_3_end:
+L_for_2_continue:
+    getstatic Arrays/g5 I
     ldc 1
     iadd
-    putstatic Arrays/g4 I
-    goto L_for_1_top
-L_for_1_end:
-
+    putstatic Arrays/g5 I
+    goto L_for_2_top
+L_for_2_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Identity matrix:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 0
-    putstatic Arrays/g4 I
-L_for_4_top:
-    getstatic Arrays/g4 I
+    istore 11
     ldc 2
-    if_icmpgt L_for_4_end
+    istore 12
+    iload 11
+    putstatic Arrays/g5 I
+L_for_6_top:
+    getstatic Arrays/g5 I
+    iload 12
+    if_icmpgt L_for_6_end
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arrays/a1 [[I
-    getstatic Arrays/g4 I
+    getstatic Arrays/g5 I
     aaload
     ldc 0
     iaload
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arrays/a1 [[I
-    getstatic Arrays/g4 I
+    getstatic Arrays/g5 I
     aaload
     ldc 1
     iaload
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Arrays/a1 [[I
-    getstatic Arrays/g4 I
+    getstatic Arrays/g5 I
     aaload
     ldc 2
     iaload
     invokevirtual java/io/PrintStream/println (I)V
-    getstatic Arrays/g4 I
+L_for_6_continue:
+    getstatic Arrays/g5 I
     ldc 1
     iadd
-    putstatic Arrays/g4 I
-    goto L_for_4_top
-L_for_4_end:
-
+    putstatic Arrays/g5 I
+    goto L_for_6_top
+L_for_6_end:
     return
 .end method
 

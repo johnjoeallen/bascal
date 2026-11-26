@@ -2,6 +2,18 @@
 <title id="bascal-hero-title">A retro all-in-one computer with green phosphor BASIC code on its screen</title>
 
 <defs>
+  <style>
+    /* A terminal cursor: solid for half a second, off for half a second. */
+    .cursor { animation: cursor-blink 1.06s steps(1, end) infinite; }
+    @keyframes cursor-blink {
+      0%   { opacity: 1; }
+      50%  { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cursor { animation: none; }
+    }
+  </style>
   <radialGradient id="screenGlow" cx="50%" cy="42%" r="65%">
     <stop offset="0%" stop-color="#3ddc84" stop-opacity="0.35"/>
     <stop offset="100%" stop-color="#3ddc84" stop-opacity="0"/>
@@ -23,7 +35,7 @@
 
 <text x="140" y="118" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="17" fill="#3ddc84">10 PRINT "HELLO, WORLD"</text>
 <text x="140" y="144" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="17" fill="#3ddc84">20 GOTO 10</text>
-<rect x="140" y="158" width="12" height="18" fill="#c084fc"/>
+<rect class="cursor" x="140" y="158" width="12" height="18" fill="#c084fc"/>
 
 <rect x="94" y="40" width="34" height="3" fill="#16140f" opacity="0.3"/>
 <rect x="94" y="46" width="34" height="3" fill="#16140f" opacity="0.3"/>

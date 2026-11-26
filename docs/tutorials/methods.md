@@ -202,7 +202,7 @@ print "first three = "; firstThree$
 // Declared inline: the enclosing record supplies the receiver type, so
 // there is no `[Card]` bracket here at all.
 record Card
-    title:  string(40)
+    title: string(40)
     author: string(40)
     copies: int
 
@@ -273,7 +273,6 @@ end
 50 ' its own. Declared as a scalar method (see GitHub issue #41 and
 60 ' ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
 70 ' via ordinary-call syntax resolving to this same declaration.
-
 80 ' Tutorial — Methods
 90 '
 100 ' A method is a statically resolved callable with an implicit receiver,
@@ -291,180 +290,176 @@ end
 220 ' record itself. `self.field` is then ordinary field access against the
 230 ' receiver, and mutating it is visible to the caller once the call
 240 ' returns -- the receiver is passed by reference, not by copy.
-
 250 name$ = "bascal"
 260 surroundSelf0$ = name$
-270 surroundLeft0$ = "["
-280 surroundRight0$ = "]"
-290 GOSUB 1360
-300 result$ = surroundResult0$
-310 PRINT result$
-320 shoutSelf0$ = name$
-330 GOSUB 1280
-340 shoutresult$ = shoutResult0$
-350 length% = LEN(LEFT$(name$, 5))
-360 PRINT "length = "; length%
+270 BCCT1$ = "["
+280 surroundLeft0$ = BCCT1$
+290 BCCT2$ = "]"
+300 surroundRight0$ = BCCT2$
+310 GOSUB 1500
+320 BCCT3$ = surroundResult0$
+330 result$ = BCCT3$
+340 PRINT result$
+350 shoutSelf0$ = name$
+360 GOSUB 1430
+370 BCCT4$ = shoutResult0$
+380 shoutresult$ = BCCT4$
+390 length% = LEN(LEFT$(name$, 5))
+400 PRINT "length = "; length%
+410 score% = 125
+420 BCCT5$ = "clamped score = "
+430 clampSelf0% = score%
+440 BCCT6% = 0
+450 clampLow0% = BCCT6%
+460 BCCT7% = 100
+470 clampHigh0% = BCCT7%
+480 GOSUB 1540
+490 BCCT8% = clampResult0%
+500 BCCT9% = BCCT8%
+510 PRINT BCCT5$; BCCT9%
+520 price! = 80
+530 BCCT10$ = "discount amount = "
+540 percentSelf0! = price!
+550 BCCT11! = 15
+560 percentRate0! = BCCT11!
+570 GOSUB 1670
+580 BCCT12! = percentResult0!
+590 BCCT13! = BCCT12!
+600 PRINT BCCT10$; BCCT13!
+610 BCCT14$ = name$
+620 BCCT15% = 3
+630 BCCT16$ = LEFT$(BCCT14$, BCCT15%)
+640 ucaseSelf0$ = BCCT16$
+650 GOSUB 1300
+660 BCCT17$ = ucaseResult0$
+670 firstthree$ = BCCT17$
+680 PRINT "first three = "; firstthree$
+690 ' -------------------- Record methods --------------------
+700 ' Declared inline: the enclosing record supplies the receiver type, so
+710 ' there is no `[Card]` bracket here at all.
+720 ' Declared externally: same receiver, same callable identity as an
+730 ' inline method -- an external method just lets behavior be attached to
+740 ' a record without editing its own declaration.
+750 cardtitle$ = "Dune"
+760 cardauthor$ = "Frank Herbert"
+770 cardcopies& = 2
+780 carddisplaySelfTitle0$ = cardtitle$
+790 carddisplaySelfAuthor0$ = cardauthor$
+800 carddisplaySelfCopies0& = cardcopies&
+810 GOSUB 1790
+820 cardtitle$ = carddisplaySelfTitle0$
+830 cardauthor$ = carddisplaySelfAuthor0$
+840 cardcopies& = carddisplaySelfCopies0&
+850 PRINT carddisplayResult0$
+860 PRINT "copies on hand = "; cardcopies&
+870 cardrestockSelfTitle0$ = cardtitle$
+880 cardrestockSelfAuthor0$ = cardauthor$
+890 cardrestockSelfCopies0& = cardcopies&
+900 cardrestockAmount0% = 3
+910 GOSUB 1710
+920 cardtitle$ = cardrestockSelfTitle0$
+930 cardauthor$ = cardrestockSelfAuthor0$
+940 cardcopies& = cardrestockSelfCopies0&
+950 PRINT "copies after restock = "; cardcopies&
+960 ' `combines` is structural field composition only, not inheritance:
+970 ' SignedCard's own field list is Card's fields (title, author, copies)
+980 ' followed by its own (signature), so its record literal accepts all
+990 ' four -- but Card's methods aren't combined in. SignedCard needs its
+1000 ' own display() (below); calling signed.restock(...) without declaring
+1010 ' SignedCard's own restock() would be a compile error, since a method
+1020 ' is only ever visible for the exact record type it was declared for.
+1030 signedtitle$ = "Dune"
+1040 signedauthor$ = "Frank Herbert"
+1050 signedcopies& = 1
+1060 signedsignature$ = "F.H."
+1070 signedcarddisplaySelfTitle0$ = signedtitle$
+1080 signedcarddisplaySelfAuthor0$ = signedauthor$
+1090 signedcarddisplaySelfCopies0& = signedcopies&
+1100 signedcarddisplaySelfSignature0$ = signedsignature$
+1110 GOSUB 1830
+1120 signedtitle$ = signedcarddisplaySelfTitle0$
+1130 signedauthor$ = signedcarddisplaySelfAuthor0$
+1140 signedcopies& = signedcarddisplaySelfCopies0&
+1150 signedsignature$ = signedcarddisplaySelfSignature0$
+1160 PRINT signedcarddisplayResult0$
+1170 signedcardrestockSelfTitle0$ = signedtitle$
+1180 signedcardrestockSelfAuthor0$ = signedauthor$
+1190 signedcardrestockSelfCopies0& = signedcopies&
+1200 signedcardrestockSelfSignature0$ = signedsignature$
+1210 signedcardrestockAmount0% = 2
+1220 GOSUB 1750
+1230 signedtitle$ = signedcardrestockSelfTitle0$
+1240 signedauthor$ = signedcardrestockSelfAuthor0$
+1250 signedcopies& = signedcardrestockSelfCopies0&
+1260 signedsignature$ = signedcardrestockSelfSignature0$
+1270 PRINT "signed copies after restock = "; signedcopies&
+1280 END
 
-370 score% = 125
-380 clampSelf0% = score%
-390 clampLow0% = 0
-400 clampHigh0% = 100
-410 GOSUB 1420
-420 PRINT "clamped score = "; clampResult0%
+1290 ' function ucase$(self$)
+1300     ucaseOut0$ = ""
+1310     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
+1320         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
+1330         IF (ucaseC0% >= 97) = 0 THEN GOTO 1360
+1340         IF (ucaseC0% <= 122) = 0 THEN GOTO 1360
+1350             ucaseC0% = ucaseC0% - 32
+1360         REM END IF
+1370         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
+1380     NEXT ucaseI0%
+1390     ucaseResult0$ = ucaseOut0$
+1400     RETURN
+1410 ' end function ucase$
 
-430 price! = 80
-440 percentSelf0! = price!
-450 percentRate0! = 15
-460 GOSUB 1570
-470 PRINT "discount amount = "; percentResult0!
+1420 ' function shout$(self$)
+1430     ucaseSelf0$ = shoutSelf0$
+1440     GOSUB 1300
+1450     BCCT21$ = ucaseResult0$
+1460     shoutResult0$ = BCCT21$ + "!"
+1470     RETURN
+1480 ' end function shout$
 
-480 ucaseSelf0$ = LEFT$(name$, 3)
-490 GOSUB 1130
-500 firstthree$ = ucaseResult0$
-510 PRINT "first three = "; firstthree$
+1490 ' function surround$(self$, left$, right$)
+1500     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
+1510     RETURN
+1520 ' end function surround$
 
-520 ' -------------------- Record methods --------------------
-
-530 ' Declared inline: the enclosing record supplies the receiver type, so
-540 ' there is no `[Card]` bracket here at all.
-
-550 ' Declared externally: same receiver, same callable identity as an
-560 ' inline method -- an external method just lets behavior be attached to
-570 ' a record without editing its own declaration.
-
-580 cardtitle$ = "Dune"
-590 cardauthor$ = "Frank Herbert"
-600 cardcopies& = 2
-610 carddisplaySelfTitle0$ = cardtitle$
-620 carddisplaySelfAuthor0$ = cardauthor$
-630 carddisplaySelfCopies0& = cardcopies&
-640 GOSUB 1710
-650 cardtitle$ = carddisplaySelfTitle0$
-660 cardauthor$ = carddisplaySelfAuthor0$
-670 cardcopies& = carddisplaySelfCopies0&
-680 PRINT carddisplayResult0$
-690 PRINT "copies on hand = "; cardcopies&
-
-700 cardrestockSelfTitle0$ = cardtitle$
-710 cardrestockSelfAuthor0$ = cardauthor$
-720 cardrestockSelfCopies0& = cardcopies&
-730 cardrestockAmount0% = 3
-740 GOSUB 1630
-750 cardtitle$ = cardrestockSelfTitle0$
-760 cardauthor$ = cardrestockSelfAuthor0$
-770 cardcopies& = cardrestockSelfCopies0&
-780 PRINT "copies after restock = "; cardcopies&
-
-790 ' `combines` is structural field composition only, not inheritance:
-800 ' SignedCard's own field list is Card's fields (title, author, copies)
-810 ' followed by its own (signature), so its record literal accepts all
-820 ' four -- but Card's methods aren't combined in. SignedCard needs its
-830 ' own display() (below); calling signed.restock(...) without declaring
-840 ' SignedCard's own restock() would be a compile error, since a method
-850 ' is only ever visible for the exact record type it was declared for.
-
-860 signedtitle$ = "Dune"
-870 signedauthor$ = "Frank Herbert"
-880 signedcopies& = 1
-890 signedsignature$ = "F.H."
-900 signedcarddisplaySelfTitle0$ = signedtitle$
-910 signedcarddisplaySelfAuthor0$ = signedauthor$
-920 signedcarddisplaySelfCopies0& = signedcopies&
-930 signedcarddisplaySelfSignature0$ = signedsignature$
-940 GOSUB 1750
-950 signedtitle$ = signedcarddisplaySelfTitle0$
-960 signedauthor$ = signedcarddisplaySelfAuthor0$
-970 signedcopies& = signedcarddisplaySelfCopies0&
-980 signedsignature$ = signedcarddisplaySelfSignature0$
-990 PRINT signedcarddisplayResult0$
-1000 signedcardrestockSelfTitle0$ = signedtitle$
-1010 signedcardrestockSelfAuthor0$ = signedauthor$
-1020 signedcardrestockSelfCopies0& = signedcopies&
-1030 signedcardrestockSelfSignature0$ = signedsignature$
-1040 signedcardrestockAmount0% = 2
-1050 GOSUB 1670
-1060 signedtitle$ = signedcardrestockSelfTitle0$
-1070 signedauthor$ = signedcardrestockSelfAuthor0$
-1080 signedcopies& = signedcardrestockSelfCopies0&
-1090 signedsignature$ = signedcardrestockSelfSignature0$
-1100 PRINT "signed copies after restock = "; signedcopies&
-
-1110 END
-
-1120 ' function ucase$()
-1130     ucaseOut0$ = ""
-1140     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
-1150         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
-1160         IF (ucaseC0% >= 97) = 0 THEN GOTO 1190
-1170         IF (ucaseC0% <= 122) = 0 THEN GOTO 1190
-1180             ucaseC0% = ucaseC0% - 32
-1190         REM END IF
-1200         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
-1210     NEXT ucaseI0%
-1220     ucaseResult0$ = ucaseOut0$
-1230     RETURN
-1240     ucaseResult0$ = ucaseSelf0$
-1250     RETURN
-1260 ' end function ucase$
-
-1270 ' function shout$()
-1280     ucaseSelf0$ = shoutSelf0$
-1290     GOSUB 1130
-1300     shoutResult0$ = ucaseResult0$ + "!"
-1310     RETURN
-1320     shoutResult0$ = shoutSelf0$
-1330     RETURN
-1340 ' end function shout$
-
-1350 ' function surround$(left$, right$)
-1360     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
-1370     RETURN
-1380     surroundResult0$ = surroundSelf0$
-1390     RETURN
-1400 ' end function surround$
-
-1410 ' function clamp%(low%, high%)
-1420     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 1460
-1430         clampResult0% = clampLow0%
-1440         RETURN
-1450         GOTO 1500
-1460         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 1490
-1470             clampResult0% = clampHigh0%
-1480             RETURN
-1490         REM END IF
-1500     REM END IF
-1510     clampResult0% = clampSelf0%
-1520     RETURN
-1530     clampResult0% = clampSelf0%
-1540     RETURN
-1550 ' end function clamp%
-
-1560 ' function percent!(rate!)
-1570     percentResult0! = (percentSelf0! * percentRate0!) / 100
-1580     RETURN
-1590     percentResult0! = percentSelf0!
-1600     RETURN
-1610 ' end function percent!
-
-1620 ' procedure cardrestock(selftitle$, selfauthor$, selfcopies&, amount%)
-1630     cardrestockSelfCopies0& = cardrestockSelfCopies0& + cardrestockAmount0%
+1530 ' function clamp%(self%, low%, high%)
+1540     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 1580
+1550         clampResult0% = clampLow0%
+1560         RETURN
+1570     GOTO 1620
+1580         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 1610
+1590             clampResult0% = clampHigh0%
+1600             RETURN
+1610         REM END IF
+1620     REM END IF
+1630     clampResult0% = clampSelf0%
 1640     RETURN
-1650 ' end procedure cardrestock
+1650 ' end function clamp%
 
-1660 ' procedure signedcardrestock(selftitle$, selfauthor$, selfcopies&, selfsignature$, amount%)
-1670     signedcardrestockSelfCopies0& = signedcardrestockSelfCopies0& + signedcardrestockAmount0%
+1660 ' function percent!(self!, rate!)
+1670     percentResult0! = (percentSelf0! * percentRate0!) / 100
 1680     RETURN
-1690 ' end procedure signedcardrestock
+1690 ' end function percent!
 
-1700 ' function carddisplay$(selftitle$, selfauthor$, selfcopies&)
-1710     carddisplayResult0$ = (carddisplaySelfTitle0$ + " by ") + carddisplaySelfAuthor0$
+1700 ' procedure cardrestock(selfTitle$, selfAuthor$, selfCopies&, amount%)
+1710     cardrestockSelfCopies0& = cardrestockSelfCopies0& + cardrestockAmount0%
 1720     RETURN
-1730 ' end function carddisplay$
+1730 ' end procedure cardrestock
 
-1740 ' function signedcarddisplay$(selftitle$, selfauthor$, selfcopies&, selfsignature$)
-1750     signedcarddisplayResult0$ = (((signedcarddisplaySelfTitle0$ + " by ") + signedcarddisplaySelfAuthor0$) + ", signed ") + signedcarddisplaySelfSignature0$
+1740 ' procedure signedcardrestock(selfTitle$, selfAuthor$, selfCopies&, selfSignature$, amount%)
+1750     signedcardrestockSelfCopies0& = signedcardrestockSelfCopies0& + signedcardrestockAmount0%
 1760     RETURN
-1770 ' end function signedcarddisplay$
+1770 ' end procedure signedcardrestock
+
+1780 ' function carddisplay$(selfTitle$, selfAuthor$, selfCopies&)
+1790     carddisplayResult0$ = (carddisplaySelfTitle0$ + " by ") + carddisplaySelfAuthor0$
+1800     RETURN
+1810 ' end function carddisplay$
+
+1820 ' function signedcarddisplay$(selfTitle$, selfAuthor$, selfCopies&, selfSignature$)
+1830     signedcarddisplayResult0$ = (((signedcarddisplaySelfTitle0$ + " by ") + signedcarddisplaySelfAuthor0$) + ", signed ") + signedcarddisplaySelfSignature0$
+1840     RETURN
+1850 ' end function signedcarddisplay$
 
 ```
 
@@ -527,11 +522,12 @@ void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
+    int bt_start_0 = 1;
     int bt_lim_0 = ((int)strlen(bv_s_self));
     int bt_step_0 = 1;
-    for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bt_start_0; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
-        if (((-(bv_i_c >= 97)) && (-(bv_i_c <= 122)))) {
+        if ((-(((-(bv_i_c >= 97))) != 0 && ((-(bv_i_c <= 122))) != 0))) {
             bv_i_c = (bv_i_c - 32);
         }
         char bt_s_1[256];
@@ -539,8 +535,6 @@ void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
         snprintf(bv_s_out, sizeof(bv_s_out), "%s", bt_s_1);
     }
     snprintf(bcc_out, 256, "%s", bv_s_out);
-    return;
-    snprintf(bcc_out, 256, "%s", bv_s_self);
     return;
 }
 
@@ -553,8 +547,6 @@ void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out) {
     char bt_s_3[256];
     snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bt_s_2, "!");
     snprintf(bcc_out, 256, "%s", bt_s_3);
-    return;
-    snprintf(bcc_out, 256, "%s", bv_s_self);
     return;
 }
 
@@ -572,8 +564,6 @@ void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const c
     snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bt_s_4, bv_s_right);
     snprintf(bcc_out, 256, "%s", bt_s_5);
     return;
-    snprintf(bcc_out, 256, "%s", bv_s_self);
-    return;
 }
 
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high) {
@@ -585,12 +575,10 @@ int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high) {
         }
     }
     return bv_i_self;
-    return bv_i_self;
 }
 
 float bf_f_percent_f(float bv_f_self, float bv_f_rate) {
     return ((double)(bv_f_self * bv_f_rate) / (double)100);
-    return bv_f_self;
 }
 
 void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount) {
@@ -697,11 +685,6 @@ int main(void) {
     // receiver, and mutating it is visible to the caller once the call
     // returns -- the receiver is passed by reference, not by copy.
 
-
-
-
-
-
     snprintf(bv_s_name, sizeof(bv_s_name), "%s", "bascal");
     char bt_s_12[256];
     bf_s_surround_s(bv_s_name, "[", "]", bt_s_12);
@@ -741,7 +724,8 @@ int main(void) {
     printf("%s\n", bt_s_15);
     printf("copies on hand = %d\n", bv_l_cardcopies);
 
-    bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
+    int bt_arg_16 = 3;
+    bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_arg_16);
     printf("copies after restock = %d\n", bv_l_cardcopies);
 
     // `combines` is structural field composition only, not inheritance:
@@ -752,15 +736,15 @@ int main(void) {
     // SignedCard's own restock() would be a compile error, since a method
     // is only ever visible for the exact record type it was declared for.
 
-
     snprintf(bv_s_signedtitle, sizeof(bv_s_signedtitle), "%s", "Dune");
     snprintf(bv_s_signedauthor, sizeof(bv_s_signedauthor), "%s", "Frank Herbert");
     bv_l_signedcopies = 1;
     snprintf(bv_s_signedsignature, sizeof(bv_s_signedsignature), "%s", "F.H.");
-    char bt_s_16[256];
-    bf_s_signedcarddisplay(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, bt_s_16);
-    printf("%s\n", bt_s_16);
-    bf_i_signedcardrestock(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, 2);
+    char bt_s_17[256];
+    bf_s_signedcarddisplay(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, bt_s_17);
+    printf("%s\n", bt_s_17);
+    int bt_arg_18 = 2;
+    bf_i_signedcardrestock(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, bt_arg_18);
     printf("signed copies after restock = %d\n", bv_l_signedcopies);
 
     return 0;
@@ -818,7 +802,6 @@ static const char* bcc_strd(double value) {
 
 ```basic
 
-.version 50 0
 .class public Methods
 .super java/lang/Object
 
@@ -837,8 +820,6 @@ static const char* bcc_strd(double value) {
 .field public static g16 Ljava/lang/String;
 .field public static g17 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 8
 
     iconst_0
     istore 1
@@ -849,11 +830,15 @@ static const char* bcc_strd(double value) {
     ldc ""
     astore 3
     ldc 1
+    istore 8
+    aload 0
+    invokevirtual java/lang/String/length ()I
+    istore 9
+    iload 8
     istore 2
 L_for_0_top:
     iload 2
-    aload 0
-    invokevirtual java/lang/String/length ()I
+    iload 9
     if_icmpgt L_for_0_end
     aload 0
     iload 2
@@ -874,7 +859,7 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_1
     iload 1
     ldc 122
     invokestatic java/lang/Integer/compare (II)I
@@ -882,12 +867,22 @@ L_for_0_top:
     isub
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifne L_condition_3
+    iconst_0
+    goto L_condition_4
+L_condition_3:
+    iconst_m1
+L_condition_4:
+    goto L_condition_2
+L_condition_1:
+    iconst_0
+L_condition_2:
+    ifeq L_condition_5
     iload 1
     ldc 32
     isub
     istore 1
-L_if_1_else:
+L_condition_5:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
@@ -899,6 +894,7 @@ L_if_1_else:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     astore 3
+L_for_0_continue:
     iload 2
     ldc 1
     iadd
@@ -907,15 +903,11 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
 
 .method public static shout : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 5
 
     new java/lang/StringBuilder
     dup
@@ -927,15 +919,11 @@ L_for_0_end:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
 
 .method public static surround : (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 7
 
     new java/lang/StringBuilder
     dup
@@ -953,39 +941,33 @@ L_for_0_end:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     areturn
-    aload 0
-    areturn
     ldc ""
     areturn
 .end method
 
 .method public static clamp : (III)I
-    .limit stack 16
-    .limit locals 7
 
     iload 0
     iload 1
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
     ishr
-    ifeq L_if_0_else
+    ifeq L_condition_0
     iload 1
     ireturn
-    goto L_if_0_end
-L_if_0_else:
+    goto L_condition_1
+L_condition_0:
     iload 0
     iload 2
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
-    ifeq L_if_1_else
+    ifeq L_condition_2
     iload 2
     ireturn
-L_if_1_else:
-L_if_0_end:
-    iload 0
-    ireturn
+L_condition_2:
+L_condition_1:
     iload 0
     ireturn
     iconst_0
@@ -993,25 +975,27 @@ L_if_0_end:
 .end method
 
 .method public static percent : (DD)D
-    .limit stack 16
-    .limit locals 8
 
     dload 0
+    d2f
+    f2d
     dload 2
+    d2f
+    f2d
     dmul
+    d2f
+    f2d
     ldc 100
     i2d
     ddiv
-    dreturn
-    dload 0
+    d2f
+    f2d
     dreturn
     dconst_0
     dreturn
 .end method
 
 .method public static cardRestock : ([Ljava/lang/String;[Ljava/lang/String;[JI)V
-    .limit stack 16
-    .limit locals 12
 
     aload 0
     iconst_0
@@ -1046,8 +1030,6 @@ L_if_0_end:
 .end method
 
 .method public static signedcardRestock : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
-    .limit stack 16
-    .limit locals 14
 
     aload 0
     iconst_0
@@ -1090,8 +1072,6 @@ L_if_0_end:
 .end method
 
 .method public static cardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 11
 
     aload 0
     iconst_0
@@ -1150,8 +1130,6 @@ L_if_0_end:
 .end method
 
 .method public static signedcardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 13
 
     aload 0
     iconst_0
@@ -1236,8 +1214,6 @@ L_if_0_end:
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -1254,8 +1230,6 @@ L_if_0_end:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 22
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;
@@ -1290,7 +1264,6 @@ L_if_0_end:
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
-
     ; Tutorial — Methods
     ;
     ; A method is a statically resolved callable with an implicit receiver,
@@ -1308,12 +1281,6 @@ L_if_0_end:
     ; record itself. `self.field` is then ordinary field access against the
     ; receiver, and mutating it is visible to the caller once the call
     ; returns -- the receiver is passed by reference, not by copy.
-
-
-
-
-
-
     ldc "bascal"
     putstatic Methods/g7 Ljava/lang/String;
     getstatic Methods/g7 Ljava/lang/String;
@@ -1339,7 +1306,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g6 I
     invokevirtual java/io/PrintStream/println (I)V
-
     ldc 125
     putstatic Methods/g11 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -1351,21 +1317,25 @@ L_if_0_end:
     ldc 100
     invokestatic Methods/clamp (III)I
     invokevirtual java/io/PrintStream/println (I)V
-
     ldc 80
     i2d
+    d2f
+    f2d
     putstatic Methods/g8 D
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "discount amount = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g8 D
+    d2f
+    f2d
     ldc 15
     i2d
     invokestatic Methods/percent (DD)D
+    d2f
+    f2d
     invokestatic Methods/bccStr (D)Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     getstatic Methods/g7 Ljava/lang/String;
     iconst_0
     ldc 3
@@ -1378,16 +1348,12 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g5 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     ; -------------------- Record methods --------------------
-
     ; Declared inline: the enclosing record supplies the receiver type, so
     ; there is no `[Card]` bracket here at all.
-
     ; Declared externally: same receiver, same callable identity as an
     ; inline method -- an external method just lets behavior be attached to
     ; a record without editing its own declaration.
-
     ldc "Dune"
     putstatic Methods/g4 Ljava/lang/String;
     ldc "Frank Herbert"
@@ -1440,7 +1406,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
-
     iconst_1
     anewarray java/lang/String
     dup
@@ -1485,7 +1450,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
-
     ; `combines` is structural field composition only, not inheritance:
     ; SignedCard's own field list is Card's fields (title, author, copies)
     ; followed by its own (signature), so its record literal accepts all
@@ -1493,8 +1457,6 @@ L_if_0_end:
     ; own display() (below); calling signed.restock(...) without declaring
     ; SignedCard's own restock() would be a compile error, since a method
     ; is only ever visible for the exact record type it was declared for.
-
-
     ldc "Dune"
     putstatic Methods/g17 Ljava/lang/String;
     ldc "Frank Herbert"
@@ -1611,7 +1573,6 @@ L_if_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g14 J
     invokevirtual java/io/PrintStream/println (J)V
-
     return
 .end method
 

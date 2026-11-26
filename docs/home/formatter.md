@@ -199,6 +199,7 @@ if l1 <> 50 then printMessage(2) : return 0
 ```bascal
 if l1 <> 50 then
     printMessage(2)
+
     return 0
 end if
 ```
@@ -241,6 +242,7 @@ function f%()
     myTable:
         data 1, 2, 3
         data 4, 5, 6
+
     print "after"
 end function
 ```
@@ -280,6 +282,103 @@ function f%()
     loopStart: x% = 1
     y% = 2
 end function
+```
+
+</div>
+
+</div>
+
+</div>
+
+<div class="compare" markdown="1">
+
+### 8. Blank lines that set structure apart
+
+The formatter also decides where blank lines go, so the same shape reads the same way in every file:
+
+- a block `if`, `for`, `while`, `do`, `select case` or `try` has a blank line before and after it — except that none is allowed (an existing one is removed) where it is the first statement of its block, or the last one, right before the closing `end ...`, `else`, `case`, `catch` or `loop`;
+- a `return` inside a control structure has a blank line above it, unless it is that block's first statement; a `return` directly in a function, procedure or method body never does, even right after a structure;
+- every `case` except a `select case`'s first has a blank line above it;
+- `end function`, `end procedure` and `end method` are followed by a blank line, unless the file ends there;
+- a `data` block (a bare `label:` and its `data` lines) is followed by a blank line, unless the file ends there.
+
+Comment lines and a bare label directly above a structure, `return` or `case` belong to it, so the blank line goes above them. A single-line `if` is not a structure, and every other blank line is left exactly as written.
+
+<div class="compare-grid" markdown="1">
+
+<div class="pane old" markdown="1">
+
+<span class="tag">Before</span>
+
+```bascal
+function sign%(x%)
+dim result%
+result% = 0
+if x% > 0 then
+return 1
+elseif x% < 0 then
+result% = -1
+return result%
+end if
+for i% = 1 to 3
+print i%
+end for
+select case x%
+case 0
+print "zero"
+case else
+print "nonzero"
+end select
+return result%
+end function
+procedure showTable()
+restore squares
+print "squares"
+squares:
+data 1, 4, 9
+end procedure
+```
+
+</div>
+
+<div class="pane new" markdown="1">
+
+<span class="tag">After `bcc --format`</span>
+
+```bascal
+function sign%(x%)
+    dim result%
+    result% = 0
+
+    if x% > 0 then
+        return 1
+    elseif x% < 0 then
+        result% = -1
+
+        return result%
+    end if
+
+    for i% = 1 to 3
+        print i%
+    end for
+
+    select case x%
+        case 0
+            print "zero"
+
+        case else
+            print "nonzero"
+    end select
+    return result%
+end function
+
+procedure showTable()
+    restore squares
+    print "squares"
+    squares:
+        data 1, 4, 9
+
+end procedure
 ```
 
 </div>

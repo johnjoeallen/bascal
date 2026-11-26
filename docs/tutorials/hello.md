@@ -48,7 +48,7 @@ end
 //   /* ... */  block comment, each line becomes a ' comment in the output
 program hello
 
-print "Hello, World!"        // inline comment after a statement
+print "Hello, World!" // inline comment after a statement
 print "Welcome to BASCAL."
 ' print "This line is commented out."
 
@@ -86,16 +86,14 @@ end
 90 ' '  single-line (BASIC style, passed through to generated output)
 100 ' // single-line (C style, same behaviour as ')
 110 ' /* ... */  block comment, each line becomes a ' comment in the output
-
 120 PRINT "Hello, World!"
-130 PRINT "Welcome to BASCAL."
-140 ' print "This line is commented out."
-
-150 ' Expected output:
-160 ' Hello, World!
-170 ' Welcome to BASCAL.
-
-180 END
+130 ' inline comment after a statement
+140 PRINT "Welcome to BASCAL."
+150 ' print "This line is commented out."
+160 ' Expected output:
+170 ' Hello, World!
+180 ' Welcome to BASCAL.
+190 END
 
 ```
 
@@ -150,13 +148,10 @@ int main(void) {
 
 ```basic
 
-.version 50 0
 .class public Hello
 .super java/lang/Object
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 1
 
     ; Tutorial — Hello, World
     ;
@@ -167,19 +162,19 @@ int main(void) {
     ; '  single-line (BASIC style, passed through to generated output)
     ; // single-line (C style, same behaviour as ')
     ; /* ... */  block comment, each line becomes a ' comment in the output
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Hello, World!"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    ; inline comment after a statement
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Welcome to BASCAL."
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ; print "This line is commented out."
-
+    ;
     ; Expected output:
     ; Hello, World!
     ; Welcome to BASCAL.
-
+    ;
     return
 .end method
 

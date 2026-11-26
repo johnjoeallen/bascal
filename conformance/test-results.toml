@@ -25,6 +25,10 @@ id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
 observed = "PASS"
 
 [[result]]
+id = "test.dosbox_conformance.control_loops_select_matches_real_bascom"
+observed = "PASS"
+
+[[result]]
 id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
 observed = "PASS"
 
@@ -902,6 +906,10 @@ observed = "PASS"
 
 [[result]]
 id = "test.record_methods.zero_argument_record_method_compiles_and_runs"
+observed = "PASS"
+
+[[result]]
+id = "test.semantic_coverage.conformance_corpus_covers_every_statement_kind"
 observed = "PASS"
 
 [[result]]

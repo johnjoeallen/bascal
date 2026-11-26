@@ -8,7 +8,7 @@ It is a structured superset of BASIC, inspired mainly by Pascal. Blocks show cho
 
 The BASCAL compiler (`bcc`) compiles `.bcl` source for four targets. The
 `basic` and `c` backends transpile it to line-numbered Microsoft BASIC or C;
-the `jvm` backend emits low-level Krakatau assembly for a JVM class file; and
+the `jvm` backend emits a low-level assembly listing that is assembled into a JVM class file with the JDK 25 ClassFile API; and
 `c64` reuses the C backend to build a Commodore 64 program through `cc65`. The
 C and JVM backends have documented gaps. You can read, inspect, and compile or
 assemble the generated output with the appropriate toolchain.

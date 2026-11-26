@@ -242,7 +242,7 @@ fn parse_config_value(contents: &str, key: &str) -> Option<String> {
     None
 }
 
-/// Looks up `key` (e.g. `"target"`, `"krak_stack_size"`) across the three
+/// Looks up `key` (e.g. `"target"`) across the three
 /// places every `--<flag>`-with-a-config-fallback in this file shares,
 /// first match wins: the `BASCAL_<KEY>` environment variable (`key`
 /// upper-cased -- works the same on every platform, including Windows,
