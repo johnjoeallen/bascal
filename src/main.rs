@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use bcc::{check_file, compile_file, default_output_path, format, CompileOptions, Target};
+use bcc::{
+    check_file, compile_file, default_output_path, format, source_dependencies, CompileOptions, Target,
+};
 use clap::Parser;
 
-mod jvm_classfile;
 
 /// Set once from `--verbose`; every `verbose!` call checks it.
 static VERBOSE: AtomicBool = AtomicBool::new(false);
@@ -115,7 +116,7 @@ struct Cli {
     #[arg(long)]
     format: bool,
 
-    /// Compile the generated output to a binary in tmp/: for --target basic/bascom, real BASCOM under dosbox-x (needs dosbox-x on PATH plus a local BASCOM fixture -- see CONTRIBUTING.md), producing a DOS .EXE; fbc for --target fbc's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
+    /// Compile the generated output to a binary in tmp/: for --target basic/bascom, real BASCOM under dosbox-x (needs dosbox-x on PATH plus a local BASCOM fixture -- see CONTRIBUTING.md), producing a DOS .EXE; fbc for --target fbc's .bas, gcc for --target c's .c, the JDK 25 ClassFile API assembler (needs `java` 25+) for --target jvm's .j
     #[arg(short = 'b', long)]
     binary: bool,
 
@@ -139,10 +140,6 @@ struct Cli {
     #[arg(long)]
     lint: bool,
 
-    /// --target jvm only: stack size for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Plain bytes, or suffixed with k/kb, m/mb, g/gb (case-insensitive, powers of 1024 -- e.g. `64mb`, `256M`, `1gb`). Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
-    #[arg(long, value_name = "SIZE", value_parser = parse_byte_count_value)]
-    krak_stack_size: Option<usize>,
-
     /// Show each step the compiler takes on stderr: the resolved target and output paths, transpiling the .bcl, writing the generated .bas/.c/.j, and every external tool it then runs (fbc, gcc, BASCOM under dosbox-x, the .j to .class assembler, java) with its full command line and exit status
     #[arg(short = 'v', long)]
     verbose: bool,
@@ -153,14 +150,7 @@ Default target (used when --target isn't given), first match wins:
   1. BASCAL_TARGET environment variable
   2. ~/.config/bascal/config (\"target=c\", one setting per line)
   3. /etc/default/bascal (same format, system-wide)
-  4. basic, if none of the above are set
-
-KRAK_STACK_SIZE (used when --krak-stack-size isn't given, --target jvm only),
-same first-match-wins order as DEFAULT TARGET above:
-  1. BASCAL_KRAK_STACK_SIZE environment variable
-  2. ~/.config/bascal/config (\"krak_stack_size=64mb\", or a plain byte count)
-  3. /etc/default/bascal (same format, system-wide)
-  4. 33554432 (32 MiB), if none of the above are set";
+  4. basic, if none of the above are set";
 
 fn main() -> ExitCode {
     // -V/--version is intercepted here, ahead of clap, because clap 4's
@@ -227,49 +217,6 @@ fn parse_target_value(value: &str) -> Result<Target, String> {
         format!(
             "expected `basic` (alias `bascom`), `fbc`, `c`, `jvm`, or `c64` (case-insensitive), \
              got `{value}`"
-        )
-    })
-}
-
-/// Parses a byte-count value: plain digits (bytes), or digits followed by
-/// a case-insensitive `b`/`k`/`kb`/`m`/`mb`/`g`/`gb` unit (powers of 1024,
-/// not 1000 -- matching every other Unix disk/memory size convention this
-/// gets compared against) -- e.g. `"67108864"`, `"64mb"`, `"64M"`,
-/// `"1gb"`. Optional whitespace between the digits and the unit. Shared
-/// by the `--krak-stack-size` CLI flag's own `value_parser`
-/// (`parse_byte_count_value` below) and `BASCAL_KRAK_STACK_SIZE`/the
-/// config-file value (`resolve_default_krak_stack_size`), so all three
-/// accept exactly the same formats. `None` for anything else, including
-/// empty input, a bare unit with no digits, or a value that overflows
-/// `usize` once the unit's multiplied in.
-fn parse_byte_count(value: &str) -> Option<usize> {
-    let value = value.trim();
-    let split_at = value
-        .find(|ch: char| !ch.is_ascii_digit())
-        .unwrap_or(value.len());
-    let (digits, unit) = value.split_at(split_at);
-    if digits.is_empty() {
-        return None;
-    }
-    let number: usize = digits.parse().ok()?;
-    let multiplier: usize = match unit.trim().to_ascii_lowercase().as_str() {
-        "" | "b" => 1,
-        "k" | "kb" => 1024,
-        "m" | "mb" => 1024 * 1024,
-        "g" | "gb" => 1024 * 1024 * 1024,
-        _ => return None,
-    };
-    number.checked_mul(multiplier)
-}
-
-/// `clap`'s own `value_parser` for `--krak-stack-size` -- thin wrapper
-/// around `parse_byte_count` matching the `Fn(&str) -> Result<usize,
-/// String>` shape `clap` expects.
-fn parse_byte_count_value(value: &str) -> Result<usize, String> {
-    parse_byte_count(value).ok_or_else(|| {
-        format!(
-            "expected a byte count, optionally suffixed with b/k/kb/m/mb/g/gb (case-insensitive, \
-             e.g. `64mb`), got `{value}`"
         )
     })
 }
@@ -344,24 +291,6 @@ fn resolve_config_value<T>(key: &str, parse: impl Fn(&str) -> Option<T>) -> Opti
 /// always overrides whatever this returns -- see `run`.
 fn resolve_default_target() -> Target {
     resolve_config_value("target", parse_target_str).unwrap_or(Target::Basic)
-}
-
-/// The Krakatau assembler's own worker-thread stack size (bytes,
-/// `invoke_krak2`'s thread -- not the JVM's own runtime stack, `java
-/// -Xss`, which this has no connection to at all) to use when
-/// `--krak-stack-size` itself isn't given -- see `invoke_krak2`'s own doc
-/// comment for why `bcc` runs `krakatau2::assemble` on a dedicated thread
-/// with an explicit stack size at all. Same precedence order as
-/// `resolve_default_target` (`BASCAL_KRAK_STACK_SIZE` env var, user
-/// config, system config), via `resolve_config_value`. Falls back to
-/// 32 MiB if none of those are set, or set to something `parse_byte_
-/// count` doesn't accept -- confirmed empirically: even a trivial
-/// generated program can overflow a stack as small as 64 KiB (krak2's
-/// recursive stack-map-frame/control-flow analysis needs real headroom),
-/// so this default deliberately isn't a token/minimal value.
-fn resolve_default_krak_stack_size() -> usize {
-    const DEFAULT_KRAK_STACK_SIZE: usize = 32 * 1024 * 1024;
-    resolve_config_value("krak_stack_size", parse_byte_count).unwrap_or(DEFAULT_KRAK_STACK_SIZE)
 }
 
 /// The `-o` value's *effective* output path. `-o` only ever names a
@@ -466,9 +395,6 @@ fn run(cli: Cli) -> Result<(), String> {
         target_name(target),
         if cli.target.is_some() { "" } else { " (default)" }
     );
-    let krak_stack_size = cli
-        .krak_stack_size
-        .unwrap_or_else(resolve_default_krak_stack_size);
 
     if cli.check {
         verbose!("--check: parsing and validating only, no output is written");
@@ -512,15 +438,27 @@ fn run(cli: Cli) -> Result<(), String> {
         })?;
     }
 
-    if !cli.clean && is_up_to_date(&cli.input, &output_path) {
+    let options = CompileOptions {
+        library_dirs: cli.library_dirs,
+        libraries: cli.libraries,
+        line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
+        target,
+        strict_vars: cli.strict_vars,
+        strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
+        lint: cli.lint,
+    };
+    let mut sources = vec![cli.input.clone()];
+    sources.extend(source_dependencies(&cli.input, &options));
+
+    if !cli.clean && is_up_to_date(&sources, &output_path) {
         verbose!(
-            "{} is newer than {}, skipping transpile (--clean forces it)",
+            "{} is up to date with {} (and its dependencies and the compiler), skipping transpile (--clean forces it)",
             output_path.display(),
             cli.input.display()
         );
         let binary_path = expected_binary_path(target, &output_path)?;
-        if want_binary && !is_up_to_date(&cli.input, &binary_path) {
-            let built = invoke_binary(target, &output_path, krak_stack_size)?;
+        if want_binary && !is_up_to_date(&sources, &binary_path) {
+            let built = invoke_binary(target, &output_path)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
@@ -531,15 +469,6 @@ fn run(cli: Cli) -> Result<(), String> {
         };
     }
 
-    let options = CompileOptions {
-        library_dirs: cli.library_dirs,
-        libraries: cli.libraries,
-        line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
-        target,
-        strict_vars: cli.strict_vars,
-        strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
-        lint: cli.lint,
-    };
     verbose!(
         "transpiling {} (lexer, parser, resolver, {} code generator)",
         cli.input.display(),
@@ -569,7 +498,7 @@ fn run(cli: Cli) -> Result<(), String> {
     verbose!("wrote {}", output_path.display());
 
     if want_binary {
-        let built = invoke_binary(target, &output_path, krak_stack_size)?;
+        let built = invoke_binary(target, &output_path)?;
         if cli.run {
             return run_binary(&built);
         }
@@ -586,7 +515,7 @@ fn run(cli: Cli) -> Result<(), String> {
 /// it succeeded or not.
 fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     // A `--target jvm` "binary" is a `.class` file, not something the OS can
-    // exec directly -- `invoke_krak2` names it after the class it contains
+    // exec directly -- `invoke_classfile_assembler` names it after the class it contains
     // (see its own doc comment), so recovering that name back out of the
     // path and handing it to `java -cp` is exact, not a guess.
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("class") {
@@ -640,20 +569,32 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
-    let Ok(in_meta) = fs::metadata(input) else {
+/// Whether `output` is at least as new as every one of `sources` (the input
+/// `.bcl` plus every file it `require`s or shares, see `source_dependencies`)
+/// and the running `bcc` executable: a rebuilt compiler can emit different
+/// output for the same source, so output older than the compiler is stale.
+fn is_up_to_date(sources: &[PathBuf], output: &Path) -> bool {
+    is_up_to_date_against(sources, output, env::current_exe().ok().as_deref())
+}
+
+fn is_up_to_date_against<P: AsRef<Path>>(sources: &[P], output: &Path, compiler: Option<&Path>) -> bool {
+    let mtime = |path: &Path| fs::metadata(path).and_then(|meta| meta.modified()).ok();
+    let Some(out_mtime) = mtime(output) else {
         return false;
     };
-    let Ok(out_meta) = fs::metadata(output) else {
-        return false;
-    };
-    let Ok(in_mtime) = in_meta.modified() else {
-        return false;
-    };
-    let Ok(out_mtime) = out_meta.modified() else {
-        return false;
-    };
-    out_mtime >= in_mtime
+    let newest_input = sources
+        .iter()
+        .map(|source| mtime(source.as_ref()))
+        .collect::<Option<Vec<_>>>()
+        .and_then(|times| times.into_iter().max());
+    match newest_input {
+        Some(newest) if out_mtime >= newest => {}
+        _ => return false,
+    }
+    match compiler.and_then(mtime) {
+        Some(compiler_mtime) => out_mtime >= compiler_mtime,
+        None => true,
+    }
 }
 
 /// Compiles the transpiler's generated output down to a binary with
@@ -666,11 +607,7 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
 /// producing a DOS `.EXE` -- `run_binary` special-cases that extension the
 /// same way it already does JVM's `.class`, launching dosbox-x itself
 /// rather than exec'ing the file directly.
-fn invoke_binary(
-    target: Target,
-    output_path: &PathBuf,
-    krak_stack_size: usize,
-) -> Result<PathBuf, String> {
+fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
     verbose!(
         "building a binary from {} with {}",
         output_path.display(),
@@ -678,7 +615,7 @@ fn invoke_binary(
             Target::Basic => "real BASCOM under dosbox-x",
             Target::Fbc => "fbc (FreeBASIC)",
             Target::C => "gcc",
-            Target::Jvm => "the Krakatau assembler (.j to .class)",
+            Target::Jvm => "the JDK ClassFile API assembler (.j to .class)",
             Target::C64 => "cl65 (cc65)",
         }
     );
@@ -686,7 +623,7 @@ fn invoke_binary(
         Target::Basic => invoke_bascom(output_path),
         Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
-        Target::Jvm => invoke_krak2(output_path, krak_stack_size),
+        Target::Jvm => invoke_classfile_assembler(output_path),
         Target::C64 => invoke_cl65(output_path),
     }
 }
@@ -1098,17 +1035,60 @@ fn c64_prg_path_from_stem(directory: &Path, stem: &std::ffi::OsStr) -> PathBuf {
     directory.join(stem).with_extension("prg")
 }
 
-/// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` via
-/// `krakatau2::assemble` -- linked directly into `bcc` as a library (see
-/// `Cargo.toml`'s own comment on the pinned fork/upstream PR), not shelled
-/// out to a separate `krak2` binary/subprocess the way this used to work.
-/// Unlike `invoke_fbc`/`invoke_gcc`, the output's file name can't just be
-/// the input's stem: `java`'s launcher requires the `.class` file on disk
-/// to match the class's own simple name, so this reads that name back out
-/// of the `.j` text's `.class public <name>` line -- the same name
-/// `codegen_jvm::class_name_for` chose -- rather than assuming anything
-/// about the input path.
-fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, String> {
+/// The JVM listing assembler (`jvm-asm/Assemble.java`), embedded so `bcc`
+/// carries it everywhere. It is written next to the generated class and
+/// run as a JDK 25 single-file source program.
+const JVM_ASSEMBLER_SOURCE: &str = include_str!("../jvm-asm/Assemble.java");
+
+/// The minimum `java` major version the JVM target needs: the ClassFile API
+/// (`java.lang.classfile`) is final from JDK 24 and the emitted class files
+/// are version 69, which a JRE older than 25 refuses to load.
+const MIN_JAVA_MAJOR: u32 = 25;
+
+/// Parses the major version out of `java -version`'s first line, e.g.
+/// `openjdk version "25" 2025-09-16 LTS` or `java version "1.8.0_392"`.
+fn parse_java_major(version_output: &str) -> Option<u32> {
+    let quoted = version_output.split('"').nth(1)?;
+    let mut parts = quoted.split(|c: char| c == '.' || c == '-' || c == '+' || c == '_');
+    let first: u32 = parts.next()?.parse().ok()?;
+    if first == 1 {
+        parts.next()?.parse().ok()
+    } else {
+        Some(first)
+    }
+}
+
+/// Fails with a diagnostic unless `java` on `PATH` is `MIN_JAVA_MAJOR`+.
+fn require_java() -> Result<(), String> {
+    let output = Command::new("java").arg("-version").output().map_err(|err| {
+        format!(
+            "error: --target jvm needs `java` {MIN_JAVA_MAJOR} or later on PATH to assemble and \
+             run the class ({err})"
+        )
+    })?;
+    let text = String::from_utf8_lossy(&output.stderr);
+    match parse_java_major(&text) {
+        Some(major) if major >= MIN_JAVA_MAJOR => Ok(()),
+        Some(major) => Err(format!(
+            "error: --target jvm requires JDK {MIN_JAVA_MAJOR} or later (found Java {major})"
+        )),
+        None => Err(format!(
+            "error: could not determine the Java version from `java -version`: {}",
+            text.lines().next().unwrap_or("")
+        )),
+    }
+}
+
+/// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` by
+/// running `jvm-asm/Assemble.java` under `java`, which builds the class
+/// with the JDK ClassFile API (stack map frames and max_stack/max_locals
+/// are computed there). Unlike `invoke_fbc`/`invoke_gcc`, the output's
+/// file name can't just be the input's stem: `java`'s launcher requires
+/// the `.class` file on disk to match the class's own simple name, so this
+/// reads that name back out of the `.j` text's `.class public <name>` line
+/// -- the same name `codegen_jvm::class_name_for` chose -- rather than
+/// assuming anything about the input path.
+fn invoke_classfile_assembler(j_path: &PathBuf) -> Result<PathBuf, String> {
     let source = fs::read_to_string(j_path)
         .map_err(|err| format!("error: failed to read {}: {err}", j_path.display()))?;
     let class_name = source
@@ -1122,81 +1102,37 @@ fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, Str
                 j_path.display()
             )
         })?;
+    require_java()?;
 
     let binary_dir = PathBuf::from("tmp");
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let class_path = binary_dir.join(format!("{class_name}.class"));
+    let helper_dir = binary_dir.join(".jvm-asm");
+    fs::create_dir_all(&helper_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", helper_dir.display()))?;
+    let helper_path = helper_dir.join("Assemble.java");
+    if fs::read_to_string(&helper_path).ok().as_deref() != Some(JVM_ASSEMBLER_SOURCE) {
+        fs::write(&helper_path, JVM_ASSEMBLER_SOURCE)
+            .map_err(|err| format!("error: failed to write {}: {err}", helper_path.display()))?;
+    }
     verbose!(
-        "assembling {} into class {class_name} at {}",
+        "assembling {} into class {class_name} at {}: java {} {} {}",
+        j_path.display(),
+        class_path.display(),
+        helper_path.display(),
         j_path.display(),
         class_path.display()
     );
-
-    if let Some(bytes) = jvm_classfile::generate_return_only(&source) {
-        verbose!("program is trivial, writing the class file directly (no assembler)");
-        fs::write(&class_path, bytes)
-            .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
-        println!("binary: {} (generated internally)", class_path.display());
-        return Ok(class_path);
+    let status = Command::new("java")
+        .arg(&helper_path)
+        .arg(j_path)
+        .arg(&class_path)
+        .status()
+        .map_err(|err| format!("error: failed to run java: {err}"))?;
+    if !status.success() {
+        return Err(format!("error: failed to assemble {}", j_path.display()));
     }
-
-    // `krakatau2::assemble` runs on its own worker thread with an
-    // explicit, configurable stack size (`--krak-stack-size`/
-    // `KRAK_STACK_SIZE`, default 32 MiB -- see
-    // `resolve_default_krak_stack_size`) rather than whatever this
-    // process's own thread happens to have: its recursive stack-map-
-    // frame/control-flow analysis needs real headroom for a sufficiently
-    // large generated program (confirmed empirically -- even a trivial
-    // one can overflow a stack as small as 64 KiB), and
-    // upstream Krakatau declined to make this the library's own
-    // responsibility (see Cargo.toml's own comment on the pinned fork;
-    // GitHub PRs #217/#218 against Storyyeller/Krakatau, both closed
-    // unmerged, proposed exactly this inside the library itself). A
-    // genuine stack overflow can't be caught after the fact the way an
-    // ordinary panic can (it aborts the process outright) -- sizing the
-    // thread adequately up front, not catching the overflow, is the
-    // actual fix; `spawn`'s own `io::Result` and `join`'s own panic
-    // result are still handled below for whatever else might go wrong.
-    verbose!("running the Krakatau assembler on a {krak_stack_size}-byte stack");
-    let classes = std::thread::scope(|scope| -> Result<_, String> {
-        let handle = std::thread::Builder::new()
-            .stack_size(krak_stack_size)
-            .spawn_scoped(scope, || {
-                krakatau2::assemble(&source, krakatau2::AssemblerOptions {})
-            })
-            .map_err(|err| {
-                format!(
-                    "error: failed to spawn the assembler's worker thread (stack size \
-                     {krak_stack_size} bytes): {err}"
-                )
-            })?;
-        let result = handle.join().map_err(|_| {
-            format!(
-                "error: the assembler's worker thread panicked while assembling {} (stack \
-                 size {krak_stack_size} bytes) -- try a larger --krak-stack-size",
-                j_path.display()
-            )
-        })?;
-        result.map_err(|err| {
-            // `Error::display` is krakatau2's own pretty, source-excerpt-aware
-            // printer (writes straight to stderr) -- matches what the old
-            // subprocess's own inherited stdio would have shown; the `Result`
-            // this function returns only ever needs a short top-level summary
-            // on top of that, the same way a nonzero `krak2` exit status used
-            // to.
-            err.display(&j_path.display().to_string(), &source);
-            format!("error: failed to assemble {}", j_path.display())
-        })
-    })?;
-    let (_, bytes) = classes.into_iter().next().ok_or_else(|| {
-        format!(
-            "internal error: krakatau2::assemble produced no classes for {}",
-            j_path.display()
-        )
-    })?;
-    fs::write(&class_path, bytes)
-        .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
     println!("binary: {}", class_path.display());
     Ok(class_path)
 }
@@ -1230,28 +1166,62 @@ mod tests {
     }
 
     #[test]
-    fn parse_byte_count_accepts_plain_bytes_and_suffixed_sizes() {
-        assert_eq!(parse_byte_count("67108864"), Some(67108864));
-        assert_eq!(parse_byte_count("64mb"), Some(64 * 1024 * 1024));
-        assert_eq!(parse_byte_count("64MB"), Some(64 * 1024 * 1024));
-        assert_eq!(parse_byte_count("64M"), Some(64 * 1024 * 1024));
-        assert_eq!(parse_byte_count("256mb"), Some(256 * 1024 * 1024));
-        assert_eq!(parse_byte_count("1gb"), Some(1024 * 1024 * 1024));
-        assert_eq!(parse_byte_count("1g"), Some(1024 * 1024 * 1024));
-        assert_eq!(parse_byte_count("32kb"), Some(32 * 1024));
-        assert_eq!(parse_byte_count("32k"), Some(32 * 1024));
-        assert_eq!(parse_byte_count("100b"), Some(100));
-        assert_eq!(parse_byte_count("64 mb"), Some(64 * 1024 * 1024));
-        assert_eq!(parse_byte_count("  64mb  "), Some(64 * 1024 * 1024));
+    fn output_older_than_the_compiler_is_not_up_to_date() {
+        use std::time::{Duration, SystemTime};
+        let dir = tempfile::tempdir().unwrap();
+        let set = |name: &str, age_secs: u64| {
+            let path = dir.path().join(name);
+            let file = fs::File::create(&path).unwrap();
+            file.set_modified(SystemTime::now() - Duration::from_secs(age_secs)).unwrap();
+            path
+        };
+        let input = set("in.bcl", 300);
+        let output = set("out.j", 200);
+        let old_compiler = set("old-bcc", 250);
+        let new_compiler = set("new-bcc", 100);
+        assert!(is_up_to_date_against(&[&input], &output, Some(&old_compiler)));
+        assert!(!is_up_to_date_against(&[&input], &output, Some(&new_compiler)));
+        assert!(is_up_to_date_against(&[&input], &output, None));
+        let newer_input = set("newer.bcl", 50);
+        assert!(!is_up_to_date_against(&[&newer_input], &output, Some(&old_compiler))
+        );
+        let newer_dependency = set("lib.bcl", 50);
+        assert!(
+            !is_up_to_date_against(&[&input, &newer_dependency], &output, Some(&old_compiler)));
     }
 
     #[test]
-    fn parse_byte_count_rejects_garbage() {
-        assert_eq!(parse_byte_count(""), None);
-        assert_eq!(parse_byte_count("mb"), None);
-        assert_eq!(parse_byte_count("64tb"), None);
-        assert_eq!(parse_byte_count("sixty-four mb"), None);
-        assert_eq!(parse_byte_count("64.5mb"), None);
+    fn source_dependencies_follow_nested_requires() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, text: &str| fs::write(dir.path().join(name), text).unwrap();
+        write("main.bcl", "program main\nrequire outer\nprint 1\n");
+        write("outer.bcl", "library outer\nrequire inner\n");
+        write("inner.bcl", "library inner\n");
+        let options = CompileOptions {
+            library_dirs: Vec::new(),
+            libraries: Vec::new(),
+            line_numbers: false,
+            target: Target::Basic,
+            strict_vars: false,
+            strict_vars_warn: false,
+            lint: false,
+        };
+        let deps = source_dependencies(&dir.path().join("main.bcl"), &options);
+        let names: Vec<_> = deps
+            .iter()
+            .filter(|path| path.starts_with(dir.path()))
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["inner.bcl", "outer.bcl"]);
+    }
+
+    #[test]
+    fn parse_java_major_reads_modern_and_legacy_version_strings() {
+        assert_eq!(parse_java_major("openjdk version \"25\" 2025-09-16 LTS"), Some(25));
+        assert_eq!(parse_java_major("openjdk version \"25.0.1\" 2025-10-21"), Some(25));
+        assert_eq!(parse_java_major("openjdk version \"26-ea\" 2026-03-17"), Some(26));
+        assert_eq!(parse_java_major("java version \"1.8.0_392\""), Some(8));
+        assert_eq!(parse_java_major("not a version"), None);
     }
 
     #[test]
@@ -1358,7 +1328,6 @@ mod tests {
             strict_vars: false,
             strict_vars_warn: false,
             lint: false,
-            krak_stack_size: None,
             verbose: false,
         }
     }

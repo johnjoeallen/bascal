@@ -1,4 +1,3 @@
-.version 50 0
 .class public Methods
 .super java/lang/Object
 
@@ -17,8 +16,6 @@
 .field public static g16 Ljava/lang/String;
 .field public static g17 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 10
 
     iconst_0
     istore 1
@@ -107,8 +104,6 @@ L_for_0_end:
 .end method
 
 .method public static shout : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 5
 
     new java/lang/StringBuilder
     dup
@@ -125,8 +120,6 @@ L_for_0_end:
 .end method
 
 .method public static surround : (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 7
 
     new java/lang/StringBuilder
     dup
@@ -149,8 +142,6 @@ L_for_0_end:
 .end method
 
 .method public static clamp : (III)I
-    .limit stack 16
-    .limit locals 7
 
     iload 0
     iload 1
@@ -180,8 +171,6 @@ L_condition_1:
 .end method
 
 .method public static percent : (DD)D
-    .limit stack 16
-    .limit locals 8
 
     dload 0
     d2f
@@ -203,8 +192,6 @@ L_condition_1:
 .end method
 
 .method public static cardRestock : ([Ljava/lang/String;[Ljava/lang/String;[JI)V
-    .limit stack 16
-    .limit locals 12
 
     aload 0
     iconst_0
@@ -239,8 +226,6 @@ L_condition_1:
 .end method
 
 .method public static signedcardRestock : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
-    .limit stack 16
-    .limit locals 14
 
     aload 0
     iconst_0
@@ -283,8 +268,6 @@ L_condition_1:
 .end method
 
 .method public static cardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 11
 
     aload 0
     iconst_0
@@ -343,8 +326,6 @@ L_condition_1:
 .end method
 
 .method public static signedcardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 13
 
     aload 0
     iconst_0
@@ -429,8 +410,6 @@ L_condition_1:
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -447,8 +426,6 @@ L_condition_1:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 22
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;

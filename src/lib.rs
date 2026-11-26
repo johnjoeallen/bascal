@@ -27,7 +27,7 @@ mod driver;
 pub(crate) use driver::parse_source;
 #[doc(inline)]
 pub use driver::{
-    CompileOptions, Target, check_file, compile_file, compile_source, default_output_path,
+    CompileOptions, Target, check_file, compile_file, compile_source, default_output_path, source_dependencies,
 };
 
 #[cfg(test)]

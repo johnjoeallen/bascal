@@ -1,4 +1,3 @@
-.version 50 0
 .class public Conditions
 .super java/lang/Object
 
@@ -10,8 +9,6 @@
 .field public static g6 I
 .field public static g7 I
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 8
 
     iconst_0
     putstatic Conditions/g1 I

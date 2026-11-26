@@ -1,0 +1,77 @@
+// Structured control flow: while, do (pre- and post-test), exit, continue,
+// select case, and a forward goto. Deterministic stdout, no I/O.
+program controlLoops
+
+dim i% as integer
+dim total% as integer
+dim grade$ as string
+
+' while: test before the body
+i% = 0
+total% = 0
+while i% < 5
+    i% = i% + 1
+    total% = total% + i%
+end while
+if total% = 15 then print "while ok" else print "while FAIL"
+
+' do until: test before, zero iterations allowed
+i% = 10
+do until i% >= 5
+    print "never"
+    i% = i% + 1
+end do
+
+' do ... loop until: body runs once even though the condition already holds
+i% = 10
+do
+    print "once"
+    i% = i% + 1
+loop until i% >= 5
+
+' continue skips to the next iteration; exit leaves the innermost loop
+' (inside a while, so it transpiles to a portable GOTO, not EXIT FOR)
+total% = 0
+i% = 0
+while i% < 100
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    if i% > 7 then
+        exit
+    end if
+    total% = total% + i%
+end while
+if total% = 16 then print "exit/continue ok" else print "exit/continue FAIL"
+
+' select case: single value, list, range, relational, else
+for i% = 1 to 5
+    select case i%
+        case 1
+            grade$ = "one"
+        case 2, 3
+            grade$ = "two-three"
+        case 4 to 4
+            grade$ = "four"
+        case else
+            grade$ = "other"
+    end select
+    print grade$
+end for
+select case 85
+    case is >= 90
+        print "A"
+    case is >= 80
+        print "B"
+    case else
+        print "C"
+end select
+
+' forward goto over a statement
+goto afterSkip
+print "skipped"
+afterSkip:
+print "done"
+
+end

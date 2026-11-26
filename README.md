@@ -10,8 +10,8 @@ by Pascal. Its `bcc` compiler accepts readable `.bcl` source — structured
 control flow, functions and procedures, methods, typed records, and
 path-style `require` dependencies. The BASIC and C backends transpile it to
 plain 1980s BASIC (for a period compiler such as BASCOM or FreeBASIC's
-QB-compatible mode) or native C; the JVM backend emits low-level Krakatau
-assembly for a JVM class file.
+QB-compatible mode) or native C; the JVM backend emits a low-level assembly
+listing that is assembled into a JVM class file with the JDK 25 ClassFile API.
 
 *A fun project, built mostly to see what's possible — not really meant for
 building a real 2026 application. See
@@ -38,12 +38,6 @@ means that BASCAL source programs, generated BASIC or C, compiled binaries,
 and C runtime-support functions included in those binaries are not subject to
 the GPLv3 solely because BASCAL produced them. You may license them as you see
 fit.
-
-## Acknowledgments
-
-The JVM backend's assembler is [Krakatau](https://github.com/Storyyeller/Krakatau)'s
-`v2` (Rust) branch, linked directly into `bcc` as a library. Thanks to
-Storyyeller and the Krakatau project.
 
 ## Contributing
 

@@ -1,4 +1,3 @@
-.version 50 0
 .class public Loops
 .super java/lang/Object
 
@@ -8,8 +7,6 @@
 .field public static g4 I
 .field public static g5 I
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 12
 
     iconst_0
     putstatic Loops/g1 I

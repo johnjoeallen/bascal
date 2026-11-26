@@ -2907,7 +2907,7 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
         files.sort();
         assert_eq!(
             files.len(),
-            87,
+            88,
             "update the corpus expectation deliberately"
         );
         let output = std::process::Command::new(&binary)

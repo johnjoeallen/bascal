@@ -1,4 +1,3 @@
-.version 50 0
 .class public Inventory
 .super java/lang/Object
 
@@ -55,8 +54,6 @@
 .field public static bccRecLen [I
 .field public static bccStdin Ljava/io/BufferedReader;
 .method public static ltrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 18
 
     iconst_0
     istore 1
@@ -131,8 +128,6 @@ L_condition_1:
 .end method
 
 .method public static rtrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 18
 
     iconst_0
     istore 1
@@ -205,8 +200,6 @@ L_condition_1:
 .end method
 
 .method public static error : (I)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -610,8 +603,6 @@ L_select_0_end:
 .end method
 
 .method public static isEmpty : (Ljava/lang/String;)I
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -652,8 +643,6 @@ L_select_0_end:
 .end method
 
 .method public static partInRange : (I)I
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -712,8 +701,6 @@ L_condition_4:
 .end method
 
 .method public static readPartNumberInput : ()Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 0
@@ -806,8 +793,6 @@ L_condition_4:
 .end method
 
 .method public static readKey : ()Ljava/lang/String;
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 0
@@ -861,8 +846,6 @@ L_do_0_end:
 .end method
 
 .method public static waitAnyKey : ()V
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 0
@@ -934,8 +917,6 @@ L_do_0_end:
 .end method
 
 .method public static showMainMenu : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -1128,8 +1109,6 @@ L_do_0_end:
 .end method
 
 .method public static showBadPartNumber : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -1185,8 +1164,6 @@ L_do_0_end:
 .end method
 
 .method public static showRangeRetryMessage : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -1260,8 +1237,6 @@ L_do_0_end:
 .end method
 
 .method public static showNullEntryMessage : (Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -1320,8 +1295,6 @@ L_do_0_end:
 .end method
 
 .method public static showPartStatus : (ILjava/lang/String;IID)V
-    .limit stack 16
-    .limit locals 22
 
     ldc ""
     astore 6
@@ -1512,8 +1485,6 @@ L_do_0_end:
 .end method
 
 .method public static printListHeader : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -1586,8 +1557,6 @@ L_do_0_end:
 .end method
 
 .method public static printInventoryLine : (ILjava/lang/String;II)V
-    .limit stack 16
-    .limit locals 20
 
     ldc ""
     astore 4
@@ -1661,8 +1630,6 @@ L_do_0_end:
 .end method
 
 .method public static printReorderHeader : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -1737,8 +1704,6 @@ L_do_0_end:
 .end method
 
 .method public static printReorderLine : (ILjava/lang/String;II)V
-    .limit stack 16
-    .limit locals 20
 
     ldc ""
     astore 4
@@ -1819,8 +1784,6 @@ L_do_0_end:
 .end method
 
 .method public static gatherPartDetails : (I[Ljava/lang/String;[I[I[D)V
-    .limit stack 16
-    .limit locals 26
 
     ldc ""
     astore 10
@@ -2285,8 +2248,6 @@ L_do_0_end:
 .end method
 
 .method public static showAddStockScreen : (ILjava/lang/String;II)V
-    .limit stack 16
-    .limit locals 20
 
     ldc ""
     astore 4
@@ -2460,8 +2421,6 @@ L_do_0_end:
 .end method
 
 .method public static showNegativeQtyWarning : ()V
-    .limit stack 16
-    .limit locals 16
 
     ldc ""
     astore 0
@@ -2527,8 +2486,6 @@ L_do_0_end:
 .end method
 
 .method public static showSubtractStockScreen : (ILjava/lang/String;II)V
-    .limit stack 16
-    .limit locals 20
 
     ldc ""
     astore 4
@@ -2702,8 +2659,6 @@ L_do_0_end:
 .end method
 
 .method public static showOverSubtractWarning : (I)V
-    .limit stack 16
-    .limit locals 17
 
     ldc ""
     astore 1
@@ -2803,8 +2758,6 @@ L_do_0_end:
 .end method
 
 .method public static checkPart : ()V
-    .limit stack 16
-    .limit locals 18
 
     ldc ""
     astore 0
@@ -3031,8 +2984,6 @@ L_condition_2:
 .end method
 
 .method public static editRecord : ()V
-    .limit stack 16
-    .limit locals 24
 
     ldc ""
     astore 0
@@ -3545,8 +3496,6 @@ L_do_10_end:
 .end method
 
 .method public static listAll : ()V
-    .limit stack 16
-    .limit locals 20
 
     iconst_0
     istore 0
@@ -3739,8 +3688,6 @@ L_for_0_end:
 .end method
 
 .method public static addStock : ()V
-    .limit stack 16
-    .limit locals 21
 
     iconst_0
     istore 0
@@ -4279,8 +4226,6 @@ L_do_5_end:
 .end method
 
 .method public static subtractStock : ()V
-    .limit stack 16
-    .limit locals 22
 
     ldc ""
     astore 0
@@ -4920,8 +4865,6 @@ L_condition_16:
 .end method
 
 .method public static reorderReport : ()V
-    .limit stack 16
-    .limit locals 20
 
     iconst_0
     istore 0
@@ -5118,8 +5061,6 @@ L_for_0_end:
 .end method
 
 .method public static initializeInventoryFileIfNew : ()V
-    .limit stack 16
-    .limit locals 19
 
     iconst_0
     istore 0
@@ -5465,8 +5406,6 @@ L_condition_0:
 .end method
 
 .method public static reportInventoryError : (II)V
-    .limit stack 16
-    .limit locals 19
 
     ldc ""
     astore 2
@@ -5538,8 +5477,6 @@ L_condition_0:
 .end method
 
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -5556,8 +5493,6 @@ L_condition_0:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 55
 
     iconst_0
     putstatic Inventory/g1 I

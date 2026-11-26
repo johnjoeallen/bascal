@@ -29,9 +29,9 @@ toolchain for the target you need:
   BASCOM on the generated `.bas`. The same workflow works on Linux and macOS
   with DOSBox-X; see the [BASCOM fixture instructions](https://github.com/johnjoeallen/bascal/blob/main/test-fixtures/README.md)
   for the verified compiler setup and conformance command.
-- **JVM target:** install a Java runtime (Java 8 or newer is recommended) to
-  run the compiled class. The assembler itself (Krakatau's `krak2`) is linked
-  directly into `bcc.exe` -- no separate install or `PATH` entry needed.
+- **JVM target:** install JDK 25 or newer and put `java` on
+  `PATH`. `bcc.exe` runs it both to assemble the class (with the JDK ClassFile
+  API) and to run it.
 
 Check each installation from PowerShell:
 

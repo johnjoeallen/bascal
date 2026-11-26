@@ -1,4 +1,3 @@
-.version 50 0
 .class public Stdlib
 .super java/lang/Object
 
@@ -36,8 +35,6 @@
 .field public static g32 I
 .field public static g33 I
 .method public static ltrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 2
 
     iconst_0
     istore 1
@@ -92,8 +89,6 @@ L_condition_1:
 .end method
 
 .method public static rtrim : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 2
 
     iconst_0
     istore 1
@@ -146,8 +141,6 @@ L_condition_1:
 .end method
 
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     istore 1
@@ -236,8 +229,6 @@ L_for_0_end:
 .end method
 
 .method public static lcase : (Ljava/lang/String;)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     istore 1
@@ -326,8 +317,6 @@ L_for_0_end:
 .end method
 
 .method public static error : (I)Ljava/lang/String;
-    .limit stack 16
-    .limit locals 1
 
     iload 0
     dup
@@ -711,8 +700,6 @@ L_select_0_end:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 34
 
     iconst_0
     putstatic Stdlib/g1 I

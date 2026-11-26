@@ -99,6 +99,37 @@
 //!   rules -- it runs as its own pass, before every rule above, so its
 //!   own output (indentation aside) is exactly what those rules already
 //!   know how to handle.
+//! - **Blank line after a data block**: the last `data` line of a table
+//!   (a bare `label:` and its `data` lines, with any comments between them)
+//!   is followed by a blank line, unless the file ends there. Comments
+//!   directly after the last `data` line are separated from it.
+//! - **Blank line after a function**: `end function`, `end procedure` and
+//!   `end method` are followed by a blank line, unless the file ends there
+//!   or the next line is itself a closer (an enclosing record's `end
+//!   record`).
+//! - **Blank line before `case`**: every `case`/`case else` but a
+//!   `select case`'s first gets a blank line above it (above any comment
+//!   lines attached to it), even straight after a structure that ends the
+//!   previous case's body; the first `case` gets none, and an existing
+//!   blank line there is removed.
+//! - **Blank line before `return`**: a `return` inside a control structure
+//!   gets a blank line above it (above any comment lines attached to it),
+//!   unless it is that block's first statement -- right under its
+//!   `if`/`else`/`case`/loop header -- where an existing blank line is
+//!   removed instead. A `return` directly in a function, procedure or
+//!   method body never has a blank line above it, even straight after a
+//!   structure; an existing one is removed.
+//! - **Blank lines around control structures**: a block `if`, `for`,
+//!   `while`, `do`, `select case` or `try` gets exactly the separation
+//!   `normalize_blank_lines` describes -- at least one blank line before
+//!   and after it, except that none is allowed (an existing one is
+//!   removed) where the structure is the first statement of its enclosing
+//!   block (right after a `function`/`procedure`/`method` header or an
+//!   enclosing structure's own header, `else`, or `case`) or the last
+//!   (right before an `end ...`, `else`, `case`, `catch`, or `loop`).
+//!   Comment and bare-label lines directly above a structure belong to
+//!   it, so the blank line goes above them. Every other blank line is
+//!   left exactly as written.
 //!
 //! Multi-line `/* ... */` comments are a deliberate exception: only their
 //! opening line is reindented. Interior lines are often hand-aligned
@@ -838,6 +869,20 @@ enum Frame {
 /// slightly-unusual-but-valid source is worse than one that quietly
 /// leaves a corner case untouched.
 pub fn reindent(filename: &str, source: &str, library_dirs: &[PathBuf]) -> String {
+    // Inserting or removing a blank line can change how a later line indents
+    // (a blank line closes a `label:`/`data` block), so repeat until stable.
+    let mut text = reindent_pass(filename, source, library_dirs);
+    for _ in 0..4 {
+        let next = reindent_pass(filename, &text, library_dirs);
+        if next == text {
+            break;
+        }
+        text = next;
+    }
+    text
+}
+
+fn reindent_pass(filename: &str, source: &str, library_dirs: &[PathBuf]) -> String {
     let exploded = explode_multi_statement_lines(filename, source);
     let source = exploded.as_str();
     let tokens = Lexer::new(filename, source).lex();
@@ -1037,6 +1082,306 @@ pub fn reindent(filename: &str, source: &str, library_dirs: &[PathBuf]) -> Strin
         }
     }
 
+    let mut result = out.join("\n");
+    result.push('\n');
+    normalize_blank_lines(filename, &result)
+}
+
+/// What a formatted line is, for `normalize_blank_lines`'s purposes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineKind {
+    Blank,
+    /// A comment-only line, a bare `label:`, or the interior of a
+    /// multi-line `/* ... */` comment (never edited).
+    Attachable,
+    /// A block `if`/`for`/`while`/`do`/`select case`/`try` header.
+    Opener,
+    /// The matching `end if`/`end for`/.../`loop`.
+    Closer,
+    /// A `select case` header: an `Opener` whose first `case` is exempt from
+    /// the blank line every later `case` gets above it.
+    SelectOpener,
+    /// `else`/`elseif`/`catch`/`finally`: closes one body and opens the
+    /// next, so it never wants a blank line against its neighbours.
+    Branch,
+    /// A `case`/`case else` line: a `Branch` that, unless it is the
+    /// select's first, wants a blank line above it.
+    Case,
+    /// A `function`/`procedure`/`method`/`record` header.
+    Header,
+    /// The matching `end function`/`end procedure`/`end method`, which wants
+    /// a blank line after it unless the file ends there.
+    FunctionEnd,
+    /// The matching `end record`.
+    BlockEnd,
+    /// A `return` statement.
+    Return,
+    /// A `data` statement.
+    Data,
+    Other,
+}
+
+fn classify_line(text: &str, toks: &[&Token], in_block_comment: bool) -> LineKind {
+    if in_block_comment {
+        return LineKind::Attachable;
+    }
+    if text.trim().is_empty() {
+        return LineKind::Blank;
+    }
+    let has_leading_label = toks.len() >= 2
+        && matches!(toks[0].kind, TokenKind::Ident(_))
+        && matches!(toks[1].kind, TokenKind::Colon);
+    let effective: &[&Token] = if has_leading_label { &toks[2..] } else { toks };
+    let words: Vec<String> = effective
+        .iter()
+        .filter_map(|t| match &t.kind {
+            TokenKind::Ident(s) => Some(s.to_ascii_lowercase()),
+            _ => None,
+        })
+        .collect();
+    if words.is_empty() {
+        // Nothing but a comment, or a label with nothing after it.
+        return LineKind::Attachable;
+    }
+    let second = words.get(1).map(String::as_str);
+    let ends_with_then = effective
+        .iter()
+        .rev()
+        .find(|t| {
+            !matches!(
+                t.kind,
+                TokenKind::Comment(_) | TokenKind::BlockComment(_) | TokenKind::Newline
+            )
+        })
+        .map(|t| matches!(&t.kind, TokenKind::Ident(s) if s.eq_ignore_ascii_case("then")))
+        .unwrap_or(false);
+    match words[0].as_str() {
+        "if" if ends_with_then => LineKind::Opener,
+        "for" | "while" | "do" | "try" => LineKind::Opener,
+        "select" if second == Some("case") => LineKind::SelectOpener,
+        "end" => match second {
+            Some("if" | "for" | "while" | "do" | "select" | "try") => LineKind::Closer,
+            Some("function" | "procedure" | "method") => LineKind::FunctionEnd,
+            Some("record") => LineKind::BlockEnd,
+            _ => LineKind::Other,
+        },
+        "wend" | "loop" => LineKind::Closer,
+        "case" => LineKind::Case,
+        "else" | "elseif" | "catch" | "finally" => LineKind::Branch,
+        "function" | "procedure" | "method" | "record" => LineKind::Header,
+        "return" => LineKind::Return,
+        "data" => LineKind::Data,
+        _ => LineKind::Other,
+    }
+}
+
+/// Applies the blank-line rule described in this module's doc comment to
+/// already-reindented `source`. Works on the gap between each pair of
+/// consecutive non-blank lines: the gap *before* a structure or a `return`
+/// inside a control structure (including the comment/label lines directly
+/// above it) must hold a blank line, unless the line above opens the
+/// enclosing block -- so it is that block's first statement -- in which
+/// case it must hold none, as it must before a `return` directly in a
+/// function body; the gap *after* a structure's closer must hold a blank line,
+/// unless what follows closes the enclosing block, in which case it must
+/// hold none. Gaps no structure borders are left exactly as written.
+fn normalize_blank_lines(filename: &str, source: &str) -> String {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Gap {
+        Free,
+        Require,
+        Forbid,
+    }
+
+    let lines: Vec<&str> = source.lines().collect();
+    let tokens = Lexer::new(filename, source).lex();
+    let mut by_line: BTreeMap<usize, Vec<&Token>> = BTreeMap::new();
+    for t in &tokens {
+        by_line.entry(t.pos.line).or_default().push(t);
+    }
+
+    let mut kinds = Vec::with_capacity(lines.len());
+    let mut is_label: Vec<bool> = Vec::with_capacity(lines.len());
+    let mut verbatim_until = 0usize;
+    for (i, text) in lines.iter().enumerate() {
+        let lineno = i + 1;
+        let toks: Vec<&Token> = by_line.get(&lineno).cloned().unwrap_or_default();
+        let inside = lineno <= verbatim_until;
+        if !inside {
+            if let Some(TokenKind::BlockComment(text)) = toks.first().map(|t| &t.kind) {
+                verbatim_until = lineno + text.matches('\n').count();
+            }
+        }
+        kinds.push(classify_line(text, &toks, inside));
+        // A bare `label:` (nothing after the colon but a comment).
+        is_label.push(
+            !inside
+                && toks.len() >= 2
+                && matches!(toks[0].kind, TokenKind::Ident(_))
+                && matches!(toks[1].kind, TokenKind::Colon)
+                && !toks[2..].iter().any(|t| matches!(t.kind, TokenKind::Ident(_))),
+        );
+    }
+
+    // Whether each line sits directly in a `function`/`procedure`/`method`
+    // body (rather than inside a control structure, or outside any
+    // function): the innermost open block is a `Header`.
+    let mut directly_in_function = vec![false; lines.len()];
+    {
+        let mut open: Vec<LineKind> = Vec::new();
+        for (i, &kind) in kinds.iter().enumerate() {
+            directly_in_function[i] = open.last() == Some(&LineKind::Header);
+            match kind {
+                LineKind::Header | LineKind::Opener | LineKind::SelectOpener => open.push(kind),
+                LineKind::Closer => {
+                    if matches!(open.last(), Some(LineKind::Opener | LineKind::SelectOpener)) {
+                        open.pop();
+                    }
+                }
+                LineKind::FunctionEnd | LineKind::BlockEnd => {
+                    while let Some(top) = open.pop() {
+                        if top == LineKind::Header {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Indices of the non-blank lines, in order.
+    let code: Vec<usize> = (0..lines.len())
+        .filter(|&i| kinds[i] != LineKind::Blank)
+        .collect();
+    let closes_block = |k: LineKind| {
+        matches!(
+            k,
+            LineKind::Closer
+                | LineKind::Branch
+                | LineKind::Case
+                | LineKind::FunctionEnd
+                | LineKind::BlockEnd
+        )
+    };
+    let opens_block = |k: LineKind| {
+        matches!(
+            k,
+            LineKind::Opener | LineKind::SelectOpener | LineKind::Branch | LineKind::Case | LineKind::Header
+        )
+    };
+
+    let mut gaps: Vec<Gap> = vec![Gap::Free; code.len()];
+    for n in 1..code.len() {
+        let (a, b) = (code[n - 1], code[n]);
+        let (ka, kb) = (kinds[a], kinds[b]);
+        // `b` starts a structure: it's an opener, or the first line of an
+        // unbroken run of comment/label lines that ends in one.
+        let inside_run = ka == LineKind::Attachable && a + 1 == b;
+        // What that run (or `b` itself) ends in, and where that is.
+        let (run_end, run_end_line) = {
+            let mut j = n;
+            while j + 1 < code.len()
+                && kinds[code[j]] == LineKind::Attachable
+                && code[j + 1] == code[j] + 1
+            {
+                j += 1;
+            }
+            (kinds[code[j]], code[j])
+        };
+        let b_starts_structure = !inside_run
+            && matches!(
+                run_end,
+                LineKind::Opener | LineKind::SelectOpener | LineKind::Return | LineKind::Case
+            )
+            && matches!(
+                kb,
+                LineKind::Opener
+                    | LineKind::SelectOpener
+                    | LineKind::Return
+                    | LineKind::Case
+                    | LineKind::Attachable
+            );
+        gaps[n] = if ka == LineKind::Data {
+            // The end of a data table (more `data` lines, possibly after a
+            // comment inside the table, keep it going) is followed by a
+            // blank line; at the end of the file there is no gap to hold one.
+            // A bare label starts the next table, so it is not "inside" one.
+            let label_in_run = (a + 1..=run_end_line).any(|i| is_label[i]);
+            if run_end == LineKind::Data && !label_in_run {
+                Gap::Free
+            } else {
+                Gap::Require
+            }
+        } else if b_starts_structure
+            && run_end == LineKind::Return
+            && directly_in_function[run_end_line]
+        {
+            // A function-level `return` closes the function out: never a
+            // blank line above it, even straight after a structure.
+            Gap::Forbid
+        } else if ka == LineKind::FunctionEnd {
+            // A function ends a section: blank line after it (the end of
+            // the file has no gap to hold one), unless what follows is
+            // itself a closer such as an enclosing record's `end record`.
+            if closes_block(kb) {
+                Gap::Free
+            } else {
+                Gap::Require
+            }
+        } else if b_starts_structure && run_end == LineKind::Case {
+            // Every `case` but a select's first has a blank line above it,
+            // even right after a structure that would otherwise be "ending
+            // its block".
+            if ka == LineKind::SelectOpener {
+                Gap::Forbid
+            } else {
+                Gap::Require
+            }
+        } else if ka == LineKind::Closer {
+            if closes_block(kb) {
+                Gap::Forbid
+            } else {
+                // Look past comments to see whether the block ends next.
+                let next_code = code[n..]
+                    .iter()
+                    .map(|&i| kinds[i])
+                    .find(|&k| k != LineKind::Attachable);
+                match next_code {
+                    Some(k) if closes_block(k) => Gap::Free,
+                    _ => Gap::Require,
+                }
+            }
+        } else if b_starts_structure {
+            if opens_block(ka) {
+                Gap::Forbid
+            } else {
+                Gap::Require
+            }
+        } else {
+            Gap::Free
+        };
+    }
+
+    let mut out: Vec<&str> = Vec::with_capacity(lines.len());
+    for (n, &i) in code.iter().enumerate() {
+        let prev_end = if n == 0 { 0 } else { code[n - 1] + 1 };
+        let existing_blanks = i - prev_end;
+        let keep = match gaps[n] {
+            _ if n == 0 => existing_blanks,
+            Gap::Free => existing_blanks,
+            Gap::Forbid => 0,
+            Gap::Require => existing_blanks.max(1),
+        };
+        for _ in 0..keep {
+            out.push("");
+        }
+        out.push(lines[i]);
+    }
+    // Trailing blank lines after the last code line are left as written.
+    for _ in (code.last().map_or(0, |&i| i + 1))..lines.len() {
+        out.push("");
+    }
     let mut result = out.join("\n");
     result.push('\n');
     result
@@ -1313,6 +1658,7 @@ function f%()
     else
         print \"other\"
     end if
+
     for i% = 1 to 3
         print i%
     end for
@@ -1321,6 +1667,334 @@ end function
 ";
         assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
+    }
+
+    fn blanks(source: &str) -> String {
+        let out = reindent("test.bcl", source, &[]);
+        assert_eq!(out, reindent("test.bcl", &out, &[]), "blank-line pass must be idempotent");
+        out
+    }
+
+    #[test]
+    fn blank_lines_surround_a_structure_in_the_middle_of_a_function() {
+        let source = "\
+function f%()
+dim x%
+x% = 1
+if x% = 1 then
+print \"one\"
+end if
+print \"done\"
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    dim x%
+    x% = 1
+
+    if x% = 1 then
+        print \"one\"
+    end if
+
+    print \"done\"
+    return 0
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn no_blank_line_when_a_structure_opens_or_closes_its_block() {
+        let source = "\
+function f%()
+
+for i% = 1 to 3
+
+if i% = 2 then
+print i%
+end if
+
+end for
+
+end function
+";
+        let expected = "\
+function f%()
+    for i% = 1 to 3
+        if i% = 2 then
+            print i%
+        end if
+    end for
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn blank_line_goes_above_a_comment_attached_to_a_structure() {
+        let source = "\
+function f%()
+x% = 1
+// loop it
+for i% = 1 to 3
+print i%
+end for
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    x% = 1
+
+    // loop it
+    for i% = 1 to 3
+        print i%
+    end for
+    return 0
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn consecutive_structures_get_one_blank_line_and_branches_get_none() {
+        let source = "\
+function f%()
+if a% = 1 then
+print 1
+else
+print 2
+end if
+while b% < 3
+b% = b% + 1
+end while
+select case b%
+case 1
+print 1
+case else
+print 2
+end select
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    if a% = 1 then
+        print 1
+    else
+        print 2
+    end if
+
+    while b% < 3
+        b% = b% + 1
+    end while
+
+    select case b%
+        case 1
+            print 1
+
+        case else
+            print 2
+    end select
+    return 0
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn return_in_a_control_block_gets_a_blank_line_unless_first_but_never_at_function_level() {
+        let source = "\
+function f%(x%)
+if x% = 1 then
+return 1
+end if
+if x% = 2 then
+print \"two\"
+return 2
+else
+return 3
+end if
+
+x% = x% + 1
+
+// the fallback
+return 0
+end function
+
+function g%(x%)
+while x% > 0
+x% = x% - 1
+end while
+
+return x%
+end function
+
+function h%()
+return 9
+end function
+";
+        let expected = "\
+function f%(x%)
+    if x% = 1 then
+        return 1
+    end if
+
+    if x% = 2 then
+        print \"two\"
+
+        return 2
+    else
+        return 3
+    end if
+
+    x% = x% + 1
+    // the fallback
+    return 0
+end function
+
+function g%(x%)
+    while x% > 0
+        x% = x% - 1
+    end while
+    return x%
+end function
+
+function h%()
+    return 9
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn every_case_but_the_first_gets_a_blank_line_above_it() {
+        let source = "\
+function f%(x%)
+select case x%
+
+case 1
+if x% > 0 then
+print 1
+end if
+case 2
+print 2
+// the rest
+case else
+print 3
+end select
+return 0
+end function
+";
+        let expected = "\
+function f%(x%)
+    select case x%
+        case 1
+            if x% > 0 then
+                print 1
+            end if
+
+        case 2
+            print 2
+
+            // the rest
+        case else
+            print 3
+    end select
+    return 0
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn a_function_end_is_followed_by_a_blank_line_unless_the_file_ends_there() {
+        let source = "\
+function f%()
+return 1
+end function
+procedure p()
+print 1
+end procedure
+// about g
+function g%()
+return 2
+end function
+";
+        let expected = "\
+function f%()
+    return 1
+end function
+
+procedure p()
+    print 1
+end procedure
+
+// about g
+function g%()
+    return 2
+end function
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn a_data_block_is_followed_by_a_blank_line_unless_the_file_ends_there() {
+        let source = "\
+print 1
+first:
+data 1, 2
+// still the first table
+data 3, 4
+second:
+data 5
+// not part of any table
+print 2
+last:
+data 6
+";
+        let expected = "\
+print 1
+first:
+    data 1, 2
+    // still the first table
+    data 3, 4
+
+second:
+    data 5
+
+// not part of any table
+print 2
+last:
+    data 6
+";
+        assert_eq!(blanks(source), expected);
+    }
+
+    #[test]
+    fn single_line_if_and_unrelated_blank_lines_are_left_alone() {
+        let source = "\
+function f%()
+x% = 1
+if x% = 1 then return 0
+
+
+y% = 2
+return 1
+end function
+";
+        let expected = "\
+function f%()
+    x% = 1
+    if x% = 1 then return 0
+
+
+    y% = 2
+    return 1
+end function
+";
+        assert_eq!(blanks(source), expected);
     }
 
     #[test]
@@ -1359,8 +2033,10 @@ function f%()
     select case x%
         case 1
             return 1
+
         case 2
             return 2
+
         case else
             return 0
     end select
@@ -1414,6 +2090,7 @@ function f%()
         ' a comment about the table
         data 1, 2, 3
         data 4, 5, 6
+
     print \"after\"
 end function
 ";
@@ -1435,8 +2112,10 @@ end function
 function f%()
     firstTable:
         data 1, 2, 3
+
     secondTable:
         data 4, 5, 6
+
 end function
 ";
         assert_eq!(reindent("test.bcl", source, &[]), expected);
@@ -1597,6 +2276,7 @@ end function
 function f%()
     y% = total% - 1
     if y% < 0 then return -1
+
     for i% = 10 to -5 step -1
     end for
 end function
@@ -1630,6 +2310,7 @@ function f%()
     while x% < 10
         x% = x% + 1
     end while
+
     while x% > 0
         x% = x% - 1
     end while ' done
@@ -1656,6 +2337,7 @@ function f%()
     do
         x% = x% + 1
     end do
+
     do
         x% = x% - 1
     loop until x% = 0
@@ -1998,6 +2680,7 @@ end function
         let expected = "\
 function f%()
     x% = 0
+
     if y% > 0 then
         p% = 1
         q% = 2

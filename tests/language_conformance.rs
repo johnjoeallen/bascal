@@ -19,6 +19,7 @@ fn conformance_fixtures_transpile_on_their_supported_backends() {
     // capability boundary, not an accidental omission from the suite.
     let cases: &[(&str, &[&str])] = &[
         ("const_and_print", &["basic", "c", "jvm"]),
+        ("control_loops_select", &["basic", "c", "jvm"]),
         ("stdlib_functions", &["basic", "c", "jvm"]),
         ("tie_break_rounding", &["basic", "c", "jvm"]),
         ("string_self_concat", &["basic", "c"]),

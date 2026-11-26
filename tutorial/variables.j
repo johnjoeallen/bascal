@@ -1,4 +1,3 @@
-.version 50 0
 .class public Variables
 .super java/lang/Object
 
@@ -11,8 +10,6 @@
 .field public static g7 D
 .field public static g9 D
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -29,8 +26,6 @@
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 11
 
     ldc ""
     putstatic Variables/g1 Ljava/lang/String;

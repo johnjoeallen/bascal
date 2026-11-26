@@ -8,21 +8,12 @@
 //! a "not supported yet" diagnostic rather than panicking or emitting wrong
 //! code -- a walking skeleton, not a real backend yet.
 //!
-//! Output is Krakatau assembly text (`.j`); the command-line driver also has a
-//! small internal class-file writer for return-only programs, while general
-//! output is assembled `.j` -> `.class` via the `krakatau2` crate (linked
-//! directly into `bcc`, not shelled out to a separate binary -- see
-//! `Cargo.toml`'s own comment and `main.rs`'s `invoke_krak2`), and run by any
-//! JRE's `java`. `krakatau2` is `Storyyeller/Krakatau`'s `v2` branch -- itself
-//! a Rust/Cargo project, pinned by commit since it has no versioned releases
-//! (confirmed working end to end with a hand-written `.j` file: `krak2 asm`
-//! + `java` before this codegen existed).
-//!
-//! The generated classes deliberately use class-file version 50.  That lets
-//! the JVM's legacy verifier infer frames for the supported `if` branches,
-//! instead of requiring StackMapTable emission before this backend has a full
-//! control-flow frame analyser. Scalar local slots are allocated up front and
-//! `.limit locals` is computed from them.
+//! Output is an assembly listing (`.j`) in the syntax `jvm-asm/Assemble.java`
+//! accepts; `main.rs`'s `invoke_classfile_assembler` runs that helper under
+//! `java` (JDK 25+), which builds the class with the JDK ClassFile API
+//! (`java.lang.classfile`). The API computes `StackMapTable` frames and
+//! `max_stack`/`max_locals`, so the listing carries no version, limit or
+//! frame directives; the generated classes are version 69.
 //!
 //! This module doc's opening two paragraphs describe the original bootstrap
 //! and are stale in the details (functions/procedures, `if`/`for`/`while`/
@@ -736,12 +727,10 @@ pub(crate) fn generate(
         methods.push_str(&emit_double_str_helper());
     }
     Ok(format!(
-        ".version 50 0\n.class public {class_name}\n.super java/lang/Object\n\n{}{methods}\
-         .method public static main : ([Ljava/lang/String;)V\n    \
-         .limit stack 16\n    .limit locals {}\n\n\
+        ".class public {class_name}\n.super java/lang/Object\n\n{}{methods}\
+         .method public static main : ([Ljava/lang/String;)V\n\n\
          {body}{handlers}.end method\n",
         emit_fields(&context),
-        context.local_count(),
     ))
 }
 
@@ -1164,7 +1153,7 @@ fn emit_jvm_semantic_read(
 
 fn emit_data_read_helper(class_name: &str) -> String {
     format!(
-        ".method private static bccReadData : ()Ljava/lang/String;\n    .limit stack 3\n    .limit locals 0\n\n    getstatic {class_name}/bccDataPtr I\n    getstatic {class_name}/bccData [Ljava/lang/String;\n    arraylength\n    if_icmplt L_bcc_data_available\n    new java/lang/IllegalStateException\n    dup\n    ldc \"Out of DATA\"\n    invokespecial java/lang/IllegalStateException/<init> (Ljava/lang/String;)V\n    athrow\nL_bcc_data_available:\n    getstatic {class_name}/bccData [Ljava/lang/String;\n    getstatic {class_name}/bccDataPtr I\n    aaload\n    getstatic {class_name}/bccDataPtr I\n    iconst_1\n    iadd\n    putstatic {class_name}/bccDataPtr I\n    areturn\n.end method\n\n"
+        ".method private static bccReadData : ()Ljava/lang/String;\n\n    getstatic {class_name}/bccDataPtr I\n    getstatic {class_name}/bccData [Ljava/lang/String;\n    arraylength\n    if_icmplt L_bcc_data_available\n    new java/lang/IllegalStateException\n    dup\n    ldc \"Out of DATA\"\n    invokespecial java/lang/IllegalStateException/<init> (Ljava/lang/String;)V\n    athrow\nL_bcc_data_available:\n    getstatic {class_name}/bccData [Ljava/lang/String;\n    getstatic {class_name}/bccDataPtr I\n    aaload\n    getstatic {class_name}/bccDataPtr I\n    iconst_1\n    iadd\n    putstatic {class_name}/bccDataPtr I\n    areturn\n.end method\n\n"
     )
 }
 
@@ -1409,8 +1398,6 @@ fn emit_jvm_semantic_seek(
 
 fn emit_mid_assign_helper() -> String {
     r#".method private static bccMidAssign : (Ljava/lang/String;IIZLjava/lang/String;)Ljava/lang/String;
-    .limit stack 4
-    .limit locals 9
 
     aload 4
     invokevirtual java/lang/String/length ()I
@@ -3410,7 +3397,7 @@ fn emit_jvm_semantic_palette_value(
 
 fn emit_ansi_palette_helper(name: &str, values: &[i32], mask: i32) -> String {
     let mut out = format!(
-        ".method private static {name} : (I)I\n    .limit stack 3\n    .limit locals 1\n\n    iload 0\n    bipush {mask}\n    iand\n"
+        ".method private static {name} : (I)I\n\n    iload 0\n    bipush {mask}\n    iand\n"
     );
     for index in 0..values.len() - 1 {
         out.push_str(&format!(
@@ -4844,7 +4831,7 @@ fn jvm_semantic_callable_statements_by_source<'a>(
 /// letter needs adjusting to match Java's PascalCase convention; this is
 /// cosmetic, not a correctness requirement, since the JVM itself accepts
 /// any name here). Falls back to `Program` when the source has no `program`
-/// declaration at all (it's optional in BASCAL). `main.rs`'s `invoke_krak2`
+/// declaration at all (it's optional in BASCAL). `main.rs`'s `invoke_classfile_assembler`
 /// recovers this same name back out of the emitted `.class public <name>`
 /// line rather than calling this directly -- `codegen_jvm` is a private
 /// module, not part of `bcc`'s public API surface `main.rs` (a separate
@@ -5244,7 +5231,7 @@ fn emit_inkey_restore(context: &JvmContext, out: &mut String) {
 /// recursive replacement of every child preserves the concrete array class.
 fn emit_array_copy_helper(class_name: &str) -> String {
     format!(
-        ".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n    .limit stack 5\n    .limit locals 5\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\n    default : L_copy_invalid\nL_copy_int:\n    .stack full\n    locals Object java/lang/Object Integer Integer\n    stack\n    .end stack\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    .stack same\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    .stack same\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    .stack same\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    .stack same\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    .stack full\n    locals Object java/lang/Object Integer Integer Object [Ljava/lang/Object; Integer\n    stack\n    .end stack\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    .stack same\n    aload 3\n    areturn\nL_copy_invalid:\n    .stack full\n    locals Object java/lang/Object Integer Integer\n    stack\n    .end stack\n    new java/lang/IllegalArgumentException\n    dup\n    invokespecial java/lang/IllegalArgumentException/<init> ()V\n    athrow\n.end method\n\n"
+        ".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\n    default : L_copy_invalid\nL_copy_int:\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    aload 3\n    areturn\nL_copy_invalid:\n    new java/lang/IllegalArgumentException\n    dup\n    invokespecial java/lang/IllegalArgumentException/<init> ()V\n    athrow\n.end method\n\n"
     )
 }
 
@@ -5269,8 +5256,6 @@ fn emit_array_copy_helper(class_name: &str) -> String {
 fn emit_double_str_helper() -> String {
     "\
 .method public static bccStr : (D)Ljava/lang/String;
-    .limit stack 6
-    .limit locals 2
 
     new java/math/BigDecimal
     dup
@@ -7649,10 +7634,9 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         })
         .collect::<String>();
     Ok(format!(
-        ".method public static {} : ({args}){}\n    .limit stack 16\n    .limit locals {}\n\n{body}{handlers}.end method\n\n",
+        ".method public static {} : ({args}){}\n\n{body}{handlers}.end method\n\n",
         signature.source_name,
         result,
-        context.local_count()
     ))
 }
 
@@ -9635,10 +9619,6 @@ impl JvmContext {
             function_global_declarations: parent.function_global_declarations.clone(),
             byref_scratch_base,
         }
-    }
-
-    fn local_count(&self) -> usize {
-        self.local_count.get()
     }
 
     fn reserve_semantic_int_local(&self) -> Variable {

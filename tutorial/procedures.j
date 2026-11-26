@@ -1,4 +1,3 @@
-.version 50 0
 .class public Procedures
 .super java/lang/Object
 
@@ -7,8 +6,6 @@
 .field public static g3 I
 .field public static a0 [I
 .method public static printSeparator : ()V
-    .limit stack 16
-    .limit locals 0
 
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "----------------------------"
@@ -17,8 +14,6 @@
 .end method
 
 .method public static printScore : (Ljava/lang/String;I)V
-    .limit stack 16
-    .limit locals 2
 
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
@@ -42,8 +37,6 @@
 .end method
 
 .method public static printIfPass : (Ljava/lang/String;I)V
-    .limit stack 16
-    .limit locals 2
 
     iload 1
     ldc 60
@@ -76,8 +69,6 @@ L_condition_0:
 .end method
 
 .method public static fillRange : ([II)V
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     istore 2
@@ -109,8 +100,6 @@ L_for_0_end:
 .end method
 
 .method public static increment : ()V
-    .limit stack 16
-    .limit locals 0
 
     getstatic Procedures/g1 I
     ldc 1
@@ -120,8 +109,6 @@ L_for_0_end:
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 6
 
     iconst_0
     putstatic Procedures/g1 I

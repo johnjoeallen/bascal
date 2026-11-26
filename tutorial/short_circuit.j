@@ -1,4 +1,3 @@
-.version 50 0
 .class public ShortCircuit
 .super java/lang/Object
 
@@ -8,8 +7,6 @@
 .field public static g4 I
 .field public static a0 [I
 .method public static isPositive : (I)I
-    .limit stack 16
-    .limit locals 1
 
     ; A visible side effect, so the tutorial's own output proves whether
     ; this actually got called.
@@ -23,8 +20,6 @@
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
-    .limit stack 16
-    .limit locals 5
 
     iconst_0
     putstatic ShortCircuit/g1 I
