@@ -15,25 +15,25 @@ end for
 
 `if`, `elseif`, `else`, and `end if` make a selection one unit; `for`/`end for`, `while`/`end while`, and `do`/`loop` make repetition one unit. The target BASIC still uses its branches, but they are generated from the structure rather than maintained by hand — nothing renumbers a hand-written `GOTO` when a line is inserted above it.
 
-## Four ways to repeat, chosen by when the test runs
+## Four ways to repeat, chosen by when the condition is evaluated
 
-`for` counts; the rest test a condition, and differ only in *when* that test runs and which way it points.
+`for` counts; the rest check a condition, and differ only in *when* that condition is evaluated and which way it points.
 
 ```bascal
-while attempts% < maxAttempts%       ' test before, "while true"
+while attempts% < maxAttempts%       ' check before, "while true"
     attempts% = attempts% + 1
 end while
 
-do until attempts% >= maxAttempts%   ' test before, "until true"
+do until attempts% >= maxAttempts%   ' check before, "until true"
     attempts% = attempts% + 1
 end do
 
-do                                    ' test after, so the body
+do                                    ' check after, so the body
     attempts% = attempts% + 1        ' always runs at least once
 loop until attempts% >= maxAttempts%
 ```
 
-`while` and `do until` both test before the body runs, so the body may execute zero times; they differ only in which way the condition points (keep going *while* true, versus keep going *until* true). `do ... loop until` tests after, so the body is guaranteed to run once even if the condition was already satisfied going in — the natural shape for “read a line, then decide whether to read another.” `exit` leaves the innermost loop early from anywhere in its body, replacing a hand-aimed `GOTO` past the loop’s end.
+`while` and `do until` both check the condition before the body runs, so the body may execute zero times; they differ only in which way the condition points (keep going *while* true, versus keep going *until* true). `do ... loop until` checks it after, so the body is guaranteed to run once even if the condition was already satisfied going in — the natural shape for “read a line, then decide whether to read another.” `exit` leaves the innermost loop early from anywhere in its body, replacing a hand-aimed `GOTO` past the loop’s end.
 
 ## Choose among many cases
 
