@@ -1522,7 +1522,7 @@ int main(void) {
                         // 7, returning to the interpreter's command prompt
                         // rather than exiting to DOS) -- dropped here: a
                         // compiled program has no interpreter to return to,
-                        // so it was never anything but a second spelling of
+                        // so it was never anything but a second syntax for
                         // this same close-and-exit action.
                         // inv.close()
                         fclose(bcc_files[0]);

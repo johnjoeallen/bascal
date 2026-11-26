@@ -213,7 +213,7 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 
 ### 6. Batched update via read → mutate → write back
 
-Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write-back instead — useful when the new values aren't just one-line literals. `s.field = value` alone is pure in-memory assignment; nothing touches disk until the final write-back.
+Same one-`GET`-one-`PUT` shape as `?{ ... }` above, written as read/mutate/write-back instead — useful when the new values aren't just one-line literals. `s.field = value` alone is pure in-memory assignment; nothing touches disk until the final write-back.
 
 <div class="compare-grid" markdown="1">
 

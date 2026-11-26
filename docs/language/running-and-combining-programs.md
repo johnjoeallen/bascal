@@ -12,7 +12,7 @@ bcc hello.bcl --target c --binary   # transpile to C and compile it with gcc
 bcc hello.bcl --target jvm --run    # emit JVM assembly, assemble, and run it
 ```
 
-`-o` always names a directory — existing, or just written with a trailing slash for one that doesn’t exist yet — never an exact output file path to spell out by hand. The file inside it is auto-named the same way an omitted `-o` would: the source’s own name, with the target’s extension. Missing parent directories are created along the way.
+`-o` always names a directory — existing, or just written with a trailing slash for one that doesn’t exist yet — never an exact output file path. The file inside it is auto-named the same way an omitted `-o` would: the source’s own name, with the target’s extension. Missing parent directories are created along the way.
 
 `-L dir` adds a directory `require` searches, beyond the source file’s own directory; repeat it for more than one.
 
@@ -71,4 +71,4 @@ end
 
 A shared file declares nothing but variables — no functions, no executable statements — and its `shared <name>` header must match its own filename. Any program that wants those variables declares them with `program name shared sharedname`; the compiler emits one matching `COMMON` statement at the very top of the generated BASIC, ahead of everything else, so every program sharing that file agrees on the same layout.
 
-`CHAIN "show"` — the classic statement that actually transfers control from one compiled program to another, carrying the `COMMON` block’s values across — isn’t a BASCAL statement in its own right; add it directly to the generated BASIC where a genuine handoff between two separately-run programs is needed. It names the compiled program, not the `.bas` it was compiled from: verified against real BASCOM 2.00 under DOSBox-X, `CHAIN "show.bas"` tries to run the source text itself and corrupts, while `CHAIN "show"` (or, spelled out, `CHAIN "show.exe"`) correctly runs the compiled program. BASCAL’s own part of the job is keeping both programs’ view of the shared variables honest, not deciding when to jump between them.
+`CHAIN "show"` — the classic statement that actually transfers control from one compiled program to another, carrying the `COMMON` block’s values across — isn’t a BASCAL statement in its own right; add it directly to the generated BASIC where a genuine handoff between two separately-run programs is needed. It names the compiled program, not the `.bas` it was compiled from: verified against real BASCOM 2.00 under DOSBox-X, `CHAIN "show.bas"` tries to run the source text itself and corrupts, while `CHAIN "show"` (or, with the extension, `CHAIN "show.exe"`) correctly runs the compiled program. BASCAL’s own part of the job is keeping both programs’ view of the shared variables honest, not deciding when to jump between them.

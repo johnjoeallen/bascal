@@ -653,7 +653,7 @@ do
                     // 7, returning to the interpreter's command prompt
                     // rather than exiting to DOS) -- dropped here: a
                     // compiled program has no interpreter to return to,
-                    // so it was never anything but a second spelling of
+                    // so it was never anything but a second syntax for
                     // this same close-and-exit action.
                     inv.close()
                     color 7, 0
@@ -958,7 +958,7 @@ end procedure
 2570             ' 7, returning to the interpreter's command prompt
 2580             ' rather than exiting to DOS) -- dropped here: a
 2590             ' compiled program has no interpreter to return to,
-2600             ' so it was never anything but a second spelling of
+2600             ' so it was never anything but a second syntax for
 2610             ' this same close-and-exit action.
 2620             ' inv.close()
 2630             CLOSE #1
@@ -3296,7 +3296,7 @@ int main(void) {
                         // 7, returning to the interpreter's command prompt
                         // rather than exiting to DOS) -- dropped here: a
                         // compiled program has no interpreter to return to,
-                        // so it was never anything but a second spelling of
+                        // so it was never anything but a second syntax for
                         // this same close-and-exit action.
                         // inv.close()
                         fclose(bcc_files[0]);

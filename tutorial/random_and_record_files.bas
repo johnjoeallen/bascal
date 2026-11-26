@@ -215,7 +215,7 @@
 2140 ' time* by comparing the given field names against the record's declared
 2150 ' fields: some fields missing -> GET first, LSET just those fields, then
 2160 ' PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-2170 ' spelled out by hand); every field given anyway -> no GET, same as a
+2170 ' written out by hand); every field given anyway -> no GET, same as a
 2180 ' plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
 2190 ' compile-time error — only *missing* fields are allowed, not misspelled
 2200 ' ones.
@@ -226,7 +226,7 @@
 2250 ' Batched update: the `let` does one GET; each `<var>.<field> = value` is
 2260 ' a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
 2270 ' packs every field from `<var>` and does one PUT. This is Carol's update
-2280 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+2280 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just written as
 2290 ' read-mutate-write instead of a single literal, useful when the new
 2300 ' values come from more than a one-line expression.
 2310 ' 
@@ -301,7 +301,7 @@
 3000 PUT #1, 1
 3010 ' ---- Batched update: read once, mutate twice, write back once ----
 3020 ' Carol changed her name and improved her score — the read-mutate-write
-3030 ' spelling of the same one-GET-one-PUT update, useful when the new values
+3030 ' form of the same one-GET-one-PUT update, useful when the new values
 3040 ' aren't just a couple of literals.
 3050 ' let carol = db[...]  (whole-record read)
 3060 GET #1, 3

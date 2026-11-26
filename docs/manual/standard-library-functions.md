@@ -27,7 +27,7 @@ MID$(target$, start[, len]) = replacement$
 
 A same-length splice into `target$`, which keeps its original length — not a value-producing expression, and not the same thing as `MID$(...)` used to *read* a substring. `target$` must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).
 
-Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to the program (like any other `com.bascal.stdlib` symbol; see [String and error-message functions](#string-and-error-message-functions) below) the moment `MID$` assignment syntax appears anywhere, with no `require` line needed since nothing in your own source ever spells the function's name:
+Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to the program (like any other `com.bascal.stdlib` symbol; see [String and error-message functions](#string-and-error-message-functions) below) the moment `MID$` assignment syntax appears anywhere, with no `require` line needed since nothing in your own source ever names the function:
 
 ```bascal
 function midAssign$(target$, start%, len%, value$)

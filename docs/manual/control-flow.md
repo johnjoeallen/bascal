@@ -153,7 +153,7 @@ do
 loop [while/until condition]
 ```
 
-`end do` (bare `end` also works) closes a **pre-check** loop: the optional `while`/`until` clause tests the condition *before* each iteration, so the body may run zero times. `loop [while/until condition]` closes a **post-check** loop instead: the condition is tested *after* the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages spell `repeat`/`until`. A bare `do ... loop` with no condition on either end is a plain infinite loop, same as bare `do ... end do`; both need `exit` to terminate.
+`end do` (bare `end` also works) closes a **pre-check** loop: the optional `while`/`until` clause tests the condition *before* each iteration, so the body may run zero times. `loop [while/until condition]` closes a **post-check** loop instead: the condition is tested *after* the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages write as `repeat`/`until`. A bare `do ... loop` with no condition on either end is a plain infinite loop, same as bare `do ... end do`; both need `exit` to terminate.
 
 From `tutorial/loops.bcl`:
 

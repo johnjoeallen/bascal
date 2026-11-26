@@ -118,7 +118,7 @@ wend
 
 ### 3. DO WHILE / DO UNTIL
 
-Same pre-check shape as `WHILE`, spelled two ways depending on whether the loop-continues condition reads more naturally as a "while" or an "until".
+Same pre-check shape as `WHILE`, with two forms depending on whether the loop-continues condition reads more naturally as a "while" or an "until".
 
 <div class="compare-grid" markdown="1">
 
@@ -341,7 +341,7 @@ end
 
 ### The one exception: `for`/`next`
 
-Every loop above transpiles to a guarded `GOTO` chain with a local label. `for`/`next` doesn't need that trick: BASIC already has a native counted loop, so BASCAL transpiles straight to it. `exit` is spelled the same everywhere in BASCAL source — no `exit for`, just `exit` — but here it becomes BASIC's own `EXIT FOR` instead of a `GOTO`, because the transpiler knows this `exit` is inside a native `FOR`, not a GOTO-chain loop.
+Every loop above transpiles to a guarded `GOTO` chain with a local label. `for`/`next` doesn't need that trick: BASIC already has a native counted loop, so BASCAL transpiles straight to it. `exit` has the same syntax everywhere in BASCAL source — no `exit for`, just `exit` — but here it becomes BASIC's own `EXIT FOR` instead of a `GOTO`, because the transpiler knows this `exit` is inside a native `FOR`, not a GOTO-chain loop.
 
 <div class="compare-grid" markdown="1">
 

@@ -474,7 +474,7 @@ int main(void) {
     // time* by comparing the given field names against the record's declared
     // fields: some fields missing -> GET first, LSET just those fields, then
     // PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-    // spelled out by hand); every field given anyway -> no GET, same as a
+    // written out by hand); every field given anyway -> no GET, same as a
     // plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
     // compile-time error — only *missing* fields are allowed, not misspelled
     // ones.
@@ -485,7 +485,7 @@ int main(void) {
     // Batched update: the `let` does one GET; each `<var>.<field> = value` is
     // a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
     // packs every field from `<var>` and does one PUT. This is Carol's update
-    // from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+    // from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just written as
     // read-mutate-write instead of a single literal, useful when the new
     // values come from more than a one-line expression.
     //
@@ -588,7 +588,7 @@ int main(void) {
     // ---- Batched update: read once, mutate twice, write back once ----
 
     // Carol changed her name and improved her score — the read-mutate-write
-    // spelling of the same one-GET-one-PUT update, useful when the new values
+    // form of the same one-GET-one-PUT update, useful when the new values
     // aren't just a couple of literals.
     // let carol = db[...]  (whole-record read)
     bcc_get_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);

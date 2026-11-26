@@ -29,7 +29,7 @@ file db as Student = open("students.dat")
 
 ### A partial update, still one GET and one PUT
 
-See the homepage for why this is spelled ?{ ... }.
+See the homepage for why this uses the `?{ ... }` syntax.
 
 ```bascal
 db[1] = ?{ name: "Alice Smith", score: 91.0 }
@@ -275,7 +275,7 @@ close #1
 //   time* by comparing the given field names against the record's declared
 //   fields: some fields missing -> GET first, LSET just those fields, then
 //   PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-//   spelled out by hand); every field given anyway -> no GET, same as a
+//   written out by hand); every field given anyway -> no GET, same as a
 //   plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
 //   compile-time error — only *missing* fields are allowed, not misspelled
 //   ones.
@@ -286,7 +286,7 @@ close #1
 //   Batched update: the `let` does one GET; each `<var>.<field> = value` is
 //   a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
 //   packs every field from `<var>` and does one PUT. This is Carol's update
-//   from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+//   from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just written as
 //   read-mutate-write instead of a single literal, useful when the new
 //   values come from more than a one-line expression.
 //
@@ -345,7 +345,7 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 /* ---- Batched update: read once, mutate twice, write back once ---- */
 
 // Carol changed her name and improved her score — the read-mutate-write
-// spelling of the same one-GET-one-PUT update, useful when the new values
+// form of the same one-GET-one-PUT update, useful when the new values
 // aren't just a couple of literals.
 let carol = db[3]
 carol.name = "Carol Jones"
@@ -609,7 +609,7 @@ end
 2140 ' time* by comparing the given field names against the record's declared
 2150 ' fields: some fields missing -> GET first, LSET just those fields, then
 2160 ' PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-2170 ' spelled out by hand); every field given anyway -> no GET, same as a
+2170 ' written out by hand); every field given anyway -> no GET, same as a
 2180 ' plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
 2190 ' compile-time error — only *missing* fields are allowed, not misspelled
 2200 ' ones.
@@ -620,7 +620,7 @@ end
 2250 ' Batched update: the `let` does one GET; each `<var>.<field> = value` is
 2260 ' a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
 2270 ' packs every field from `<var>` and does one PUT. This is Carol's update
-2280 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+2280 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just written as
 2290 ' read-mutate-write instead of a single literal, useful when the new
 2300 ' values come from more than a one-line expression.
 2310 '
@@ -695,7 +695,7 @@ end
 3000 PUT #1, 1
 3010 ' ---- Batched update: read once, mutate twice, write back once ----
 3020 ' Carol changed her name and improved her score — the read-mutate-write
-3030 ' spelling of the same one-GET-one-PUT update, useful when the new values
+3030 ' form of the same one-GET-one-PUT update, useful when the new values
 3040 ' aren't just a couple of literals.
 3050 ' let carol = db[...]  (whole-record read)
 3060 GET #1, 3
@@ -1282,7 +1282,7 @@ int main(void) {
     // time* by comparing the given field names against the record's declared
     // fields: some fields missing -> GET first, LSET just those fields, then
     // PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-    // spelled out by hand); every field given anyway -> no GET, same as a
+    // written out by hand); every field given anyway -> no GET, same as a
     // plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
     // compile-time error — only *missing* fields are allowed, not misspelled
     // ones.
@@ -1293,7 +1293,7 @@ int main(void) {
     // Batched update: the `let` does one GET; each `<var>.<field> = value` is
     // a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
     // packs every field from `<var>` and does one PUT. This is Carol's update
-    // from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+    // from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just written as
     // read-mutate-write instead of a single literal, useful when the new
     // values come from more than a one-line expression.
     //
@@ -1396,7 +1396,7 @@ int main(void) {
     // ---- Batched update: read once, mutate twice, write back once ----
 
     // Carol changed her name and improved her score — the read-mutate-write
-    // spelling of the same one-GET-one-PUT update, useful when the new values
+    // form of the same one-GET-one-PUT update, useful when the new values
     // aren't just a couple of literals.
     // let carol = db[...]  (whole-record read)
     bcc_get_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);

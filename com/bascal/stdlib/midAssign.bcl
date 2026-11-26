@@ -4,7 +4,7 @@
 // into a call to this function and auto-adds it to the program whenever the
 // syntax is used, resolved the same way any other com.bascal.stdlib
 // require is, just without a `require` line for the user to write --
-// nobody ever spells this function's name themselves, since the compiler
+// nobody ever writes this function's name themselves, since the compiler
 // synthesizes the call.
 library midAssign
 

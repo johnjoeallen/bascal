@@ -258,7 +258,7 @@
 2570             ' 7, returning to the interpreter's command prompt
 2580             ' rather than exiting to DOS) -- dropped here: a
 2590             ' compiled program has no interpreter to return to,
-2600             ' so it was never anything but a second spelling of
+2600             ' so it was never anything but a second syntax for
 2610             ' this same close-and-exit action.
 2620             ' inv.close()
 2630             CLOSE #1
